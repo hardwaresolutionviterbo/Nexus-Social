@@ -24,6 +24,7 @@ Future<void> _loadFonts() async {
   // Testi senza famiglia esplicita: nei test usano il carattere «FlutterTest» (quadratini).
   // Sul telefono è Roboto: qui lo si registra anche con quel nome.
   final FontLoader fallback = FontLoader('FlutterTest');
+  final FontLoader ahem = FontLoader('Ahem');
   final FontLoader icons = FontLoader('MaterialIcons');
   for (final FileSystemEntity f in dir.listSync()) {
     final String name = f.uri.pathSegments.last;
@@ -32,11 +33,13 @@ Future<void> _loadFonts() async {
     if (name.startsWith('Roboto-') && name.endsWith('.ttf')) {
       roboto.addFont(data);
       fallback.addFont(data);
+      ahem.addFont(data);
     }
     if (name.startsWith('MaterialIcons-Regular')) icons.addFont(data);
   }
   await roboto.load();
   await fallback.load();
+  await ahem.load();
   await icons.load();
 }
 
