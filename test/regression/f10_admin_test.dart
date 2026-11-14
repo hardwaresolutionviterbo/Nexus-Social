@@ -90,7 +90,7 @@ void main() {
 
   // Elenco chiuso dei file che navigano: ogni aggiunta va rivista e approvata qui.
   // Fase 1: diagnostica push del Profilo. Fase 2: profilo (Blocco 2), Privacy e blocchi
-  // (Blocco 3). Nessuno di questi apre l'anteprima admin (vedi il test precedente).
+  // (Blocco 3), sicurezza dell'account (Blocco 4). Nessuno apre l'anteprima admin.
   test('F10 · navigazione esplicita solo nei file rivisti (Profilo e Privacy)', () {
     final List<String> users = <String>[
       for (final File file in dartSources())
@@ -101,6 +101,7 @@ void main() {
       'lib/features/privacy/privacy_sections.dart',
       'lib/features/profile/profile_screen.dart',
       'lib/features/profile/public_profile_screen.dart',
+      'lib/features/security/security_screens.dart',
     ]);
   });
 }

@@ -24,6 +24,9 @@ dependencies:
   image: ^4.3.0
   # Apertura dei social del profilo nell'app del social o nel browser.
   url_launcher: ^6.3.1
+  # Fase 2, Blocco 4: codice del telefono nella memoria protetta; sblocco con impronta o volto.
+  flutter_secure_storage: ^10.0.0
+  local_auth: ^2.3.0
 
 dev_dependencies:
   flutter_test:

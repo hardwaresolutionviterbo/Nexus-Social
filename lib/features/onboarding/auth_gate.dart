@@ -9,6 +9,9 @@ import '../privacy/privacy_checkup_screen.dart';
 import '../privacy/privacy_controller.dart';
 import '../privacy/privacy_repository.dart';
 import '../profile/profile_form_screen.dart';
+import '../security/app_lock.dart';
+import '../security/security_repository.dart';
+import '../security/security_screens.dart';
 import '../profile/profile_models.dart';
 import '../profile/profile_repository.dart';
 import '../shell/app_shell.dart';
@@ -31,6 +34,8 @@ class AuthGate extends StatefulWidget {
     this.profiles,
     this.pickImage = pickFromGallery,
     this.privacy,
+    this.security,
+    this.biometricLock,
   });
 
   final AuthGateway gateway;
@@ -41,6 +46,12 @@ class AuthGate extends StatefulWidget {
 
   /// Impostazioni privacy (Blocco 3): con il server collegato.
   final PrivacyRepository? privacy;
+
+  /// Verifica in due passaggi (Blocco 4): con il server collegato.
+  final SecurityRepository? security;
+
+  /// Sblocco con impronta o volto (Blocco 4), solo sul telefono.
+  final BiometricLock? biometricLock;
   final BackendStatus backend;
   final DateTime Function()? today;
 
@@ -50,7 +61,7 @@ class AuthGate extends StatefulWidget {
 
 enum _Link { checking, linked, failed }
 
-enum _Profile { loading, missing, ready, failed }
+enum _Profile { loading, needsPin, missing, ready, failed }
 
 class _AuthGateState extends State<AuthGate> {
   StreamSubscription<String?>? _subscription;
@@ -62,6 +73,7 @@ class _AuthGateState extends State<AuthGate> {
 
   /// Controllo privacy proposto alla fine della registrazione (P14).
   PrivacyController? _checkup;
+  SecurityStatus? _securityStatus;
 
   @override
   void initState() {
@@ -143,6 +155,20 @@ class _AuthGateState extends State<AuthGate> {
       });
     }
     try {
+      // Telefono nuovo con il PIN attivo: prima il PIN, altrimenti il server non riconosce
+      // l'utente e il profilo sembrerebbe mancante.
+      final SecurityRepository? security = widget.security;
+      if (security != null) {
+        final SecurityStatus status = await security.status();
+        if (!mounted) return;
+        if (status.needsPin) {
+          setState(() {
+            _securityStatus = status;
+            _profileState = _Profile.needsPin;
+          });
+          return;
+        }
+      }
       final MyProfile? mine = await repo.fetchMine();
       if (!mounted) return;
       setState(() {
@@ -167,6 +193,9 @@ class _AuthGateState extends State<AuthGate> {
   }
 
   Future<void> _signOut() async {
+    // Uscita sicura: questo telefono non resta attendibile e lo sblocco con impronta si spegne.
+    await widget.security?.forgetThisDevice();
+    await widget.biometricLock?.setEnabled(false);
     _profile = null;
     _profileState = _Profile.loading;
     RegistrationDraftStore.current = null;
@@ -191,6 +220,13 @@ class _AuthGateState extends State<AuthGate> {
         switch (_profileState) {
           case _Profile.loading:
             return const _LinkScreen(title: 'Carichiamo il tuo profilo…', busy: true);
+          case _Profile.needsPin:
+            return PinEntryScreen(
+              repository: widget.security!,
+              initialStatus: _securityStatus ?? const SecurityStatus(),
+              onVerified: _loadProfile,
+              onSignOut: _signOut,
+            );
           case _Profile.failed:
             return _LinkScreen(
               title: 'Profilo non caricato',
@@ -217,14 +253,18 @@ class _AuthGateState extends State<AuthGate> {
                 onDone: _closeCheckup,
               );
             }
-            return AppShell(
+            final Widget shell = AppShell(
               backend: widget.backend,
               onSignOut: _signOut,
               profile: _profile,
               profiles: repo,
               onProfileChanged: _loadProfile,
               privacy: widget.privacy,
+              security: widget.security,
+              biometricLock: widget.biometricLock,
             );
+            final BiometricLock? lock = widget.biometricLock;
+            return lock == null ? shell : AppLockGate(lock: lock, child: shell);
         }
       case _Link.checking:
         return const _LinkScreen(

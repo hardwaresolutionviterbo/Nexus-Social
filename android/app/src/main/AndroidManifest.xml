@@ -3,6 +3,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Notifiche push: su Android 13+ il consenso viene chiesto a runtime. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Fase 2, Blocco 4: sblocco facoltativo con impronta o volto. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <application
         android:label="Piazly"
         android:name="${applicationName}"

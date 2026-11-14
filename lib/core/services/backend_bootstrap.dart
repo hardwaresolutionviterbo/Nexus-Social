@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/app_config.dart';
+import 'device_identity.dart';
 
 /// Stato di un servizio esterno mostrato nel Profilo.
 enum ServiceState { notConfigured, connected, failed }
@@ -51,9 +52,12 @@ abstract final class BackendBootstrap {
 
     if (AppConfig.hasSupabase) {
       try {
+        // Codice di questo telefono per la verifica in due passaggi (Blocco 4).
+        final String deviceId = await DeviceIdentity.load();
         await Supabase.initialize(
           url: AppConfig.supabaseUrl,
           publishableKey: AppConfig.supabaseKey,
+          headers: <String, String>{'x-device-id': deviceId},
           // Fase 2: Supabase riconosce l'utente dal token Firebase (Third-Party Auth).
           // Senza utente collegato si usa solo la chiave pubblica, come prima.
           accessToken:

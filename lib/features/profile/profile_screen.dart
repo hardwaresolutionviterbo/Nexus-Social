@@ -7,6 +7,9 @@ import '../../core/theme/app_theme.dart';
 import '../../core/widgets/nexus_ui.dart';
 import '../privacy/privacy_repository.dart';
 import '../privacy/privacy_screen.dart';
+import '../security/app_lock.dart';
+import '../security/security_repository.dart';
+import '../security/security_screens.dart';
 import 'avatar_view.dart';
 import 'profile_form_screen.dart';
 import 'profile_models.dart';
@@ -23,6 +26,8 @@ class ProfileScreen extends StatelessWidget {
     this.profiles,
     this.onProfileChanged,
     this.privacy,
+    this.security,
+    this.biometricLock,
   });
 
   final BackendStatus backend;
@@ -34,6 +39,10 @@ class ProfileScreen extends StatelessWidget {
 
   /// Pagina Privacy (Blocco 3): presente quando il server è collegato.
   final PrivacyRepository? privacy;
+
+  /// Sicurezza dell'account (Blocco 4).
+  final SecurityRepository? security;
+  final BiometricLock? biometricLock;
 
   /// Presente solo con un utente collegato (Fase 2): mostra «Esci».
   final Future<void> Function()? onSignOut;
@@ -92,6 +101,17 @@ class ProfileScreen extends StatelessWidget {
           profile: profile,
           onChanged: () => onProfileChanged?.call(),
         ),
+      ),
+    );
+  }
+
+  void _openSecurity(BuildContext context) {
+    final SecurityRepository? repo = security;
+    final BiometricLock? lock = biometricLock;
+    if (repo == null || lock == null) return;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SecuritySettingsScreen(repository: repo, lock: lock),
       ),
     );
   }
@@ -249,6 +269,17 @@ class ProfileScreen extends StatelessWidget {
                     subtitle: const Text('Numero, profilo, persone bloccate e autorizzazioni'),
                     trailing: const Icon(Icons.chevron_right_rounded),
                     onTap: () => _openPrivacy(context),
+                  ),
+                ],
+                if (security != null && biometricLock != null) ...[
+                  const Divider(height: 1),
+                  ListTile(
+                    key: const ValueKey<String>('apri_sicurezza'),
+                    leading: const Icon(Icons.shield_outlined),
+                    title: const Text('Sicurezza dell\'account'),
+                    subtitle: const Text('PIN di verifica e sblocco con impronta o volto'),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => _openSecurity(context),
                   ),
                 ],
               ],

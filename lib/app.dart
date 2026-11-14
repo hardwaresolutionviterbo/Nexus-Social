@@ -7,6 +7,8 @@ import 'core/theme/app_theme.dart';
 import 'features/onboarding/auth_gate.dart';
 import 'features/privacy/privacy_repository.dart';
 import 'features/profile/profile_repository.dart';
+import 'features/security/app_lock.dart';
+import 'features/security/security_repository.dart';
 import 'features/shell/app_shell.dart';
 
 class NexusApp extends StatelessWidget {
@@ -16,6 +18,8 @@ class NexusApp extends StatelessWidget {
     this.authGateway,
     this.profiles,
     this.privacy,
+    this.security,
+    this.biometricLock,
   });
 
   /// Stato dei servizi collegati all'avvio (Firebase, Supabase).
@@ -30,6 +34,10 @@ class NexusApp extends StatelessWidget {
 
   /// Impostazioni privacy e blocchi (Blocco 3): null finché il server non è collegato.
   final PrivacyRepository? privacy;
+
+  /// Verifica in due passaggi e sblocco con impronta (Blocco 4).
+  final SecurityRepository? security;
+  final BiometricLock? biometricLock;
 
   @override
   Widget build(BuildContext context) {
@@ -49,6 +57,8 @@ class NexusApp extends StatelessWidget {
               backend: backend,
               profiles: profiles,
               privacy: privacy,
+              security: security,
+              biometricLock: biometricLock,
             ),
     );
   }

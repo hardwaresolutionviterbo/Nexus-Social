@@ -8,6 +8,8 @@ import '../chat/chat_screen.dart';
 import '../listings/listings_screen.dart';
 import '../map/map_screen.dart';
 import '../privacy/privacy_repository.dart';
+import '../security/app_lock.dart';
+import '../security/security_repository.dart';
 import '../profile/profile_models.dart';
 import '../profile/profile_repository.dart';
 import '../profile/profile_screen.dart';
@@ -26,6 +28,8 @@ class AppShell extends StatefulWidget {
     this.profiles,
     this.onProfileChanged,
     this.privacy,
+    this.security,
+    this.biometricLock,
   });
 
   final BackendStatus backend;
@@ -35,6 +39,8 @@ class AppShell extends StatefulWidget {
   final ProfileRepository? profiles;
   final Future<void> Function()? onProfileChanged;
   final PrivacyRepository? privacy;
+  final SecurityRepository? security;
+  final BiometricLock? biometricLock;
 
   /// Uscita dall'account (presente solo con un utente collegato).
   final Future<void> Function()? onSignOut;
@@ -68,6 +74,8 @@ class _AppShellState extends State<AppShell> {
       profiles: widget.profiles,
       onProfileChanged: widget.onProfileChanged,
       privacy: widget.privacy,
+      security: widget.security,
+      biometricLock: widget.biometricLock,
     ),
   ];
 

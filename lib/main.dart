@@ -12,6 +12,8 @@ import 'core/services/backend_bootstrap.dart';
 import 'core/services/firebase_services.dart';
 import 'features/privacy/privacy_repository.dart';
 import 'features/profile/profile_repository.dart';
+import 'features/security/app_lock.dart';
+import 'features/security/security_repository.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -47,6 +49,8 @@ Future<void> main() async {
             )
           : null,
       privacy: profilesReady ? SupabasePrivacyRepository(Supabase.instance.client) : null,
+      security: profilesReady ? SupabaseSecurityRepository(Supabase.instance.client) : null,
+      biometricLock: profilesReady ? DeviceBiometricLock() : null,
     ),
   );
 }
