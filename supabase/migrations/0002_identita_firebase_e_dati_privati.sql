@@ -1,9 +1,9 @@
--- Nexus Social · Migrazione 0002 (Fase 1, passaggio 1.7) — PROPOSTA
+-- Nexus Social · Migrazione 0002 (Fase 1, passaggio 1.7)
 --
--- ⚠️ NON applicare al database reale senza l'autorizzazione esplicita del titolare.
---    Il file sta in supabase/proposte/ e non in supabase/migrations/ proprio perché
---    nessuna integrazione lo applichi da sola. I test lo eseguono solo su un database
---    temporaneo dentro GitHub Actions (workflow «Supabase RLS»).
+-- ✅ APPLICATA al database reale il 14 novembre 2026, su autorizzazione del titolare, dall'editor
+--    SQL di Supabase (come la 0001). Verifica in sola lettura: 10 controlli su 10 OK.
+--    Le migrazioni successive vanno applicate solo con autorizzazione esplicita del titolare.
+--    I test la eseguono anche su un database temporaneo in GitHub Actions («Supabase RLS»).
 --
 -- Cosa cambia rispetto a 0001:
 --  1. Identità Firebase: gli utenti sono identificati dal loro uid Firebase (testo), letto

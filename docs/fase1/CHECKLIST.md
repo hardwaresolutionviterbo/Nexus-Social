@@ -51,7 +51,7 @@ Rami (ognuno contiene il precedente):
 | 1.4 | ✅ | Barra A1, apertura su Chat |
 | 1.5 | ✅ | Stile del mockup, chiaro e scuro |
 | 1.6 | ✅ | Servizi verificati dai log della build, senza schermate nuove |
-| 1.7 | ✅ | Schema 0002 **proposto**, in `supabase/proposte/`, testato solo su database temporaneo |
+| 1.7 | ✅ | Schema 0002 testato su database temporaneo, poi **applicato al database reale** il 14/11/2026 su autorizzazione (`supabase/migrations/`) |
 | 1.8 | ✅ | Regole Firestore invariate (già coerenti con lo schema 0002); un test in più |
 | 1.9 | ✅ | `codemagic.yaml` solo iPhone; collegamento a cura del titolare, su autorizzazione |
 | 1.10 | ✅ | Questa checklist |
@@ -59,7 +59,8 @@ Rami (ognuno contiene il precedente):
 ## 4. Punti aperti (decisioni del titolare)
 
 1. ~~Merge su `main` dei rami della Fase 1~~ — **fatto** il 14/11/2026 (`main` a `7bfc835`).
-2. **Applicazione dello schema 0002 al database Supabase reale.** Prima di applicarlo:
+2. ~~Applicazione dello schema 0002 al database Supabase reale~~ — **fatta** (vedi sotto). Prima
+   di applicarlo:
    - verificare in sola lettura se il database reale contiene già dati, perché lo schema
      converte gli identificativi;
    - inserire l'identificativo del progetto Firebase in `private.settings`;
@@ -81,6 +82,18 @@ Rami (ognuno contiene il precedente):
    Esito: il database reale non contiene dati, quindi lo schema `0002` si può applicare senza
    conversione di dati esistenti. L'applicazione richiede comunque l'autorizzazione esplicita
    del titolare.
+
+   **✅ Schema `0002` applicato il 14/11/2026** su autorizzazione del titolare:
+   - applicato dall'editor SQL di Supabase;
+   - identificativo del progetto Firebase inserito in `private.settings`, non nel repository;
+   - verifica in sola lettura: **10 controlli su 10 OK** (tabella e regole dei dati privati,
+     nome completo tolto dai profili pubblici, identità Firebase, modalità P9, 7 regole
+     restrittive, progetto impostato, funzioni, database vuoto).
+
+   Il file è stato spostato in `supabase/migrations/`.
+
+   Resta per la Fase 2: collegare Firebase come provider in Supabase (Third-Party Auth),
+   insieme al ruolo `authenticated` (punto 3).
 3. **Ruolo `authenticated` nei token Firebase (Fase 2).** Supabase accetta i token Firebase
    solo se ogni utente ha il claim personalizzato `role: authenticated`. Va assegnato lato
    server:

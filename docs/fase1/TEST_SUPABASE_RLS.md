@@ -30,9 +30,9 @@ database reale.**
   scrivere i test, se la simulazione non fosse stata fedele. La soluzione è stata applicata
   direttamente e viene sottoposta al titolare con l'esito del Blocco 3.
 
-Lo schema in prova è `supabase/proposte/0002_identita_firebase_e_dati_privati.sql`. Il
-workflow «Supabase RLS» lo copia nel database temporaneo; non è nella cartella delle
-migrazioni applicabili.
+Lo schema in prova è `supabase/migrations/0002_identita_firebase_e_dati_privati.sql`, applicato al database reale il 14/11/2026. Il
+workflow «Supabase RLS» applica le migrazioni approvate a un database temporaneo e si ferma se
+ne compaiono di non approvate.
 
 **Controprova:** tre database temporanei, ciascuno con un difetto introdotto apposta:
 - dati privati aperti → il caso B1 deve fallire;

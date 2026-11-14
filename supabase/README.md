@@ -3,24 +3,32 @@
 Qui vivono **annunci, ricerca per distanza, foto, segnalazioni e gestionale**.
 Chat, chiamate e notifiche restano su Firebase (vedi `../firebase/`).
 
-## Schema proposto 0002 (NON applicato)
+## Schema 0002 (applicato il 14 novembre 2026)
 
-`proposte/0002_identita_firebase_e_dati_privati.sql` contiene lo schema della Fase 1, passaggio
+`migrations/0002_identita_firebase_e_dati_privati.sql` contiene lo schema della Fase 1, passaggio
 1.7:
 - identità Firebase;
 - dati privati in `profile_private`;
 - modalità di posizione per annuncio (P9);
 - policy restrittive.
 
-Sta **fuori** da `migrations/` perché nessuna integrazione lo applichi da sola. Si applica al
-database reale solo con l'autorizzazione esplicita del titolare, seguendo i punti aperti di
-`docs/fase1/CHECKLIST.md`. I test (`tests/rls_test.py`, workflow «Supabase RLS») lo eseguono su
-un database temporaneo in GitHub Actions.
+Applicazione al database reale:
+- fatta dall'editor SQL su autorizzazione del titolare, dopo un controllo in sola lettura che ha
+  trovato il database vuoto;
+- seguita da una verifica in sola lettura: 10 controlli su 10 OK;
+- dopo l'applicazione va inserito l'identificativo del progetto Firebase in `private.settings`.
+  È già fatto, e non sta nel repository.
+
+Le migrazioni si applicano **solo a mano e solo con l'autorizzazione del titolare**: il registro
+della Supabase CLI non è in uso. Il workflow «Supabase RLS» blocca migrazioni non approvate e
+prova lo schema su un database temporaneo in GitHub Actions (`tests/rls_test.py`).
 
 ## Applicare lo schema
 
 1. Crea il progetto su [supabase.com](https://supabase.com) (piano gratuito per iniziare).
-2. Apri **SQL Editor**, incolla il contenuto di `migrations/0001_init.sql` e premi **Run**.
+2. Apri **SQL Editor**, incolla il contenuto di `migrations/0001_init.sql` e premi **Run**; poi
+   fai lo stesso con `migrations/0002_identita_firebase_e_dati_privati.sql` e inserisci
+   l'identificativo del progetto Firebase in `private.settings` (chiave `firebase_project_id`).
 3. In **Project Settings → API** copia `Project URL` e la chiave pubblica del progetto
    (`anon public key`, oppure `publishable key` nei progetti nuovi): servono all'app tramite
    `--dart-define` (mai scritti nel repository).

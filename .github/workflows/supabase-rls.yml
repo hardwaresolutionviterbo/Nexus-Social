@@ -2,7 +2,7 @@ name: Supabase RLS
 
 # Test di sicurezza dello schema Supabase (regola R3) su un database TEMPORANEO creato qui
 # con la Supabase CLI. Nessun secret, nessun collegamento al progetto reale, nessun deploy.
-# La migrazione proposta (supabase/proposte/) viene copiata solo nel progetto temporaneo.
+# Le migrazioni di supabase/migrations/ vengono applicate solo al progetto temporaneo.
 on:
   push:
     paths:
@@ -23,14 +23,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      # La 0002 non deve finire nella cartella delle migrazioni applicabili senza autorizzazione.
-      - name: Migrazioni applicabili invariate
+      # Elenco atteso: solo le migrazioni già applicate al database reale con autorizzazione
+      # del titolare (0001, 0002 il 14/11/2026). Una nuova migrazione va aggiunta qui
+      # consapevolmente, dopo l'autorizzazione.
+      - name: Migrazioni approvate
         run: |
           set -euo pipefail
-          found=$(ls supabase/migrations)
-          echo "Migrazioni applicabili: ${found}"
-          if [ "${found}" != "0001_init.sql" ]; then
-            echo "::error::supabase/migrations deve contenere solo 0001_init.sql finché il titolare non autorizza la 0002."
+          found=$(ls supabase/migrations | tr '\n' ' ')
+          expected="0001_init.sql 0002_identita_firebase_e_dati_privati.sql "
+          echo "Migrazioni: ${found}"
+          if [ "${found}" != "${expected}" ]; then
+            echo "::error::supabase/migrations contiene migrazioni non approvate dal titolare."
             exit 1
           fi
 
@@ -47,9 +50,7 @@ jobs:
           cd "${work}"
           supabase init < /dev/null
           mkdir -p supabase/migrations
-          cp "${GITHUB_WORKSPACE}/supabase/migrations/0001_init.sql" supabase/migrations/0001_init.sql
-          cp "${GITHUB_WORKSPACE}/supabase/proposte/0002_identita_firebase_e_dati_privati.sql" \
-            supabase/migrations/0002_identita_firebase_e_dati_privati.sql
+          cp "${GITHUB_WORKSPACE}"/supabase/migrations/*.sql supabase/migrations/
           ls supabase/migrations
           echo "SB_WORKDIR=${work}" >> "${GITHUB_ENV}"
 
@@ -107,9 +108,7 @@ jobs:
           mkdir -p "${work}" && cd "${work}"
           supabase init < /dev/null
           mkdir -p supabase/migrations
-          cp "${GITHUB_WORKSPACE}/supabase/migrations/0001_init.sql" supabase/migrations/0001_init.sql
-          cp "${GITHUB_WORKSPACE}/supabase/proposte/0002_identita_firebase_e_dati_privati.sql" \
-            supabase/migrations/0002_identita_firebase_e_dati_privati.sql
+          cp "${GITHUB_WORKSPACE}"/supabase/migrations/*.sql supabase/migrations/
           cp "${GITHUB_WORKSPACE}/supabase/tests/controprove/${{ matrix.difetto }}.sql" \
             supabase/migrations/0003_difetto_di_prova.sql
           supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor,postgres-meta,realtime,mailpit
