@@ -1,6 +1,7 @@
 # Fase 2 · Blocco 4: sicurezza dell'account · esito dello sviluppo
 
-Ramo `fase2/blocco4` (parte dal Blocco 3). Stato: **in attesa della verifica del titolare**.
+Ramo `fase2/blocco4` (parte dal Blocco 3). Stato: **approvato dal titolare il 14/11/2026** per la parte provata con i test automatici;
+prova sul telefono quando Blaze sarà attivo.
 
 ## Cosa è stato fatto
 
@@ -31,7 +32,7 @@ Keychain iPhone), inviato al server come `x-device-id`; il server conserva solo 
   (H3: PIN ignorato).
 - App: **111 test superati**.
 
-## Scelte di dettaglio da confermare
+## Scelte di dettaglio (confermate dal titolare il 14/11/2026)
 
 1. Attese dopo 5 errori: 1 ora, poi 4, poi 24.
 2. PIN dimenticato: ripristino dopo 7 giorni dalla richiesta.
