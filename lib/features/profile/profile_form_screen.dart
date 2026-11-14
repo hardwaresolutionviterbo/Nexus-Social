@@ -416,7 +416,7 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
                           decoration: _decoration(
                             'ragione_sociale',
                             'Ragione sociale',
-                            helper: 'Visibile nel profilo pubblico',
+                            helper: 'Privata: la vedete solo tu e l\'amministratore',
                           ),
                         ),
                         const SizedBox(height: 14),

@@ -10,7 +10,8 @@
 --     il server nasconde ciò che l'utente ha spento (P2). Social solo come nome utente.
 --  3. Foto profilo su Supabase Storage (S5): foto e miniatura nella cartella dell'utente,
 --     leggibili solo dagli utenti autenticati (R2.10).
---  4. Dati Azienda (S4): ragione sociale pubblica, partita IVA privata, stato «in verifica».
+--  4. Dati Azienda (S4): ragione sociale e partita IVA private (P4: protette fino alla
+--     decisione della Fase 6), stato «in verifica».
 --  5. Scritture dirette sulle tabelle del profilo chiuse: si passa dalle funzioni.
 
 -- ------------------------------------------------------------ controlli comuni
@@ -105,9 +106,7 @@ alter table public.profiles
   add column avatar_path text,
   add column avatar_thumb_path text,
   add column show_bio boolean not null default true,
-  add column show_social boolean not null default true,
-  add column business_name text
-    check (business_name is null or char_length(btrim(business_name)) between 2 and 100);
+  add column show_social boolean not null default true;
 
 alter table public.profiles
   add constraint profiles_social_links_valid check (public.valid_social_links(social_links)),
@@ -118,16 +117,15 @@ alter table public.profiles
   add constraint profiles_avatar_thumb_path_own check (
     avatar_thumb_path is null
     or avatar_thumb_path ~ ('^' || id || '/thumb-[A-Za-z0-9]{8,40}\.jpg$')
-  ),
-  add constraint profiles_business_name_only_business check (
-    account_type = 'business' or business_name is null
   );
 
--- Dati Azienda privati (S4). Il badge di verifica lo assegna solo l'admin (Fase 7).
+-- Dati Azienda privati (S4, P4): ragione sociale e partita IVA visibili solo all'azienda e
+-- all'admin fino alla decisione della Fase 6. Il badge lo assegna solo l'admin (Fase 7).
 create type public.business_status as enum ('pending', 'verified', 'rejected');
 
 create table public.business_private (
   id text primary key references public.profiles (id) on delete cascade,
+  business_name text not null check (char_length(btrim(business_name)) between 2 and 100),
   vat_number text not null check (public.valid_partita_iva(vat_number)),
   status public.business_status not null default 'pending',
   created_at timestamptz not null default now(),
@@ -171,7 +169,7 @@ $$;
 revoke all on public.profiles from anon, authenticated;
 grant select (id) on public.profiles to anon;
 grant select (
-  id, account_type, username, public_name, business_name, avatar_path, avatar_thumb_path,
+  id, account_type, username, public_name, avatar_path, avatar_thumb_path,
   rating_avg, rating_count, created_at, updated_at
 ) on public.profiles to authenticated;
 
@@ -255,16 +253,13 @@ begin
   v_name := public.normalize_username(p_username);
 
   perform set_config('nexus.internal', 'on', true);
-  insert into public.profiles (id, username, account_type, business_name)
-  values (
-    v_uid, v_name, coalesce(p_account_type, 'private'),
-    case when p_account_type = 'business' then btrim(p_business_name) end
-  );
+  insert into public.profiles (id, username, account_type)
+  values (v_uid, v_name, coalesce(p_account_type, 'private'));
   insert into public.profile_private (id, full_name, birth_date)
   values (v_uid, regexp_replace(btrim(p_full_name), '\s+', ' ', 'g'), p_birth_date);
   if p_account_type = 'business' then
-    insert into public.business_private (id, vat_number)
-    values (v_uid, btrim(p_vat_number));
+    insert into public.business_private (id, business_name, vat_number)
+    values (v_uid, btrim(p_business_name), btrim(p_vat_number));
   end if;
   perform set_config('nexus.internal', 'off', true);
 end;
@@ -293,8 +288,10 @@ begin
   if v_uid is null then
     raise exception 'Autenticazione richiesta' using errcode = '42501';
   end if;
-  select account_type, business_name into v_type, v_old_business
-  from public.profiles where id = v_uid;
+  select p.account_type, bp.business_name into v_type, v_old_business
+  from public.profiles p
+  left join public.business_private bp on bp.id = p.id
+  where p.id = v_uid;
   if v_type is null then
     raise exception 'Profilo non trovato' using errcode = '42501';
   end if;
@@ -320,8 +317,7 @@ begin
       bio = v_bio,
       social_links = coalesce(p_social_links, '{}'::jsonb),
       show_bio = coalesce(p_show_bio, true),
-      show_social = coalesce(p_show_social, true),
-      business_name = case when v_type = 'business' then btrim(p_business_name) end
+      show_social = coalesce(p_show_social, true)
   where id = v_uid;
 
   update public.profile_private
@@ -331,9 +327,9 @@ begin
 
   -- Cambiare la ragione sociale rimette l'Azienda «in verifica».
   if v_type = 'business' and btrim(p_business_name) is distinct from v_old_business then
-    perform set_config('nexus.internal', 'on', true);
-    update public.business_private set status = 'pending' where id = v_uid;
-    perform set_config('nexus.internal', 'off', true);
+    update public.business_private
+    set business_name = btrim(p_business_name), status = 'pending'
+    where id = v_uid;
   end if;
 end;
 $$;
@@ -374,13 +370,13 @@ end;
 $$;
 
 -- Profilo pubblico (R2.10): solo utenti autenticati; bio e social secondo gli interruttori.
+-- Nessun dato aziendale (P4).
 create or replace function public.get_public_profile(p_id text)
 returns table (
   id text,
   account_type public.account_type,
   username text,
   public_name text,
-  business_name text,
   avatar_path text,
   avatar_thumb_path text,
   bio text,
@@ -399,7 +395,6 @@ as $$
     p.account_type,
     p.username::text,
     p.public_name,
-    p.business_name,
     p.avatar_path,
     p.avatar_thumb_path,
     case when p.show_bio then p.bio end,
@@ -424,7 +419,7 @@ as $$
     'account_type', p.account_type,
     'username', p.username::text,
     'public_name', p.public_name,
-    'business_name', p.business_name,
+    'business_name', bp.business_name,
     'avatar_path', p.avatar_path,
     'avatar_thumb_path', p.avatar_thumb_path,
     'bio', p.bio,

@@ -13,7 +13,7 @@ prova sul telefono quando Blaze sarà attivo (come il Blocco 1).
 | R2.4, S5 foto | Scelta dalla galleria, ritagliata quadrata; foto 512 px e miniatura 128 px in JPEG, senza metadati (posizione GPS); Supabase Storage privato, visibile solo agli utenti autenticati |
 | R2.4, P3 bio e social | Bio fino a 300 caratteri; social solo come nome utente su 6 reti (niente link liberi); interruttori «Mostra nel profilo pubblico» accesi di partenza, applicati dal server |
 | R2.10 profilo pubblico | Nome abbreviato, @username, foto, bio e social secondo gli interruttori; anteprima «Come ti vedono gli altri» nel Profilo |
-| S4 Azienda | Ragione sociale (pubblica), partita IVA con cifra di controllo (privata), stato «in verifica»; il badge resta all'admin (Fase 7) |
+| S4 Azienda | Ragione sociale e partita IVA (con cifra di controllo) private, come chiede P4 fino alla Fase 6; stato «in verifica»; il badge resta all'admin (Fase 7) |
 | D1, M2, M6 | Età minima 14 anni e Azienda solo 18+ ricontrollate dal server; la data di nascita non si cambia dopo la creazione |
 
 ## Test automatici
@@ -33,7 +33,9 @@ prova sul telefono quando Blaze sarà attivo (come il Blocco 1).
 
 ## Scelte di dettaglio (confermate dal titolare il 14/11/2026)
 
-1. La **ragione sociale** dell'Azienda compare nel profilo pubblico (la partita IVA no).
+1. ~~La **ragione sociale** dell'Azienda compare nel profilo pubblico.~~ **Corretta il 14/11/2026:**
+   contrastava con la decisione **P4** della Fase 0 (ragione sociale e partita IVA protette fino
+   alla Fase 6). Ora la ragione sociale è privata; renderla pubblica richiede una modifica a P4.
 2. **Nomi utente riservati** (admin, piazly…, assistenza, staff…) per evitare falsi account ufficiali.
 3. **Social come nome utente** su Instagram, TikTok, Facebook, X, YouTube, LinkedIn: niente link
    liberi, per evitare link ingannevoli.

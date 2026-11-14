@@ -10,8 +10,7 @@ import 'profile_repository.dart';
 /// Profilo sociale come lo vedono gli altri utenti autenticati (R2.10).
 ///
 /// Mostra solo: nome abbreviato, @username, foto, bio e social secondo gli interruttori
-/// (P3), ragione sociale per le Aziende. Mai nome completo, numero, data di nascita o
-/// partita IVA.
+/// (P3). Mai nome completo, numero, data di nascita o dati aziendali (P4).
 /// Apre un link fuori dall'app: l'app del social se installata, altrimenti il browser.
 typedef OpenLink = Future<bool> Function(Uri uri);
 
@@ -63,9 +62,7 @@ class PublicProfileView extends StatelessWidget {
         ),
         const SizedBox(height: 14),
         Text(
-          profile.isBusiness && profile.businessName != null
-              ? profile.businessName!
-              : profile.publicName,
+          profile.publicName,
           key: const ValueKey<String>('nome_pubblico'),
           textAlign: TextAlign.center,
           style: theme.textTheme.headlineSmall,
@@ -78,10 +75,10 @@ class PublicProfileView extends StatelessWidget {
         ),
         if (profile.isBusiness) ...[
           const SizedBox(height: 10),
-          Center(
+          const Center(
             child: Chip(
-              avatar: const Icon(Icons.storefront_outlined, size: 18),
-              label: Text('Azienda · ${profile.publicName}'),
+              avatar: Icon(Icons.storefront_outlined, size: 18),
+              label: Text('Azienda'),
             ),
           ),
         ],

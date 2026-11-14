@@ -37,7 +37,7 @@ UID_D = "utenteDprova0000000000000004"  # Azienda
 UID_E = "utenteEprova0000000000000005"  # usato per i rifiuti (mai creato)
 
 PUBLIC_PROFILE_KEYS = {
-    "id", "account_type", "username", "public_name", "business_name", "avatar_path",
+    "id", "account_type", "username", "public_name", "avatar_path",
     "avatar_thumb_path", "bio", "social_links", "rating_avg", "rating_count", "created_at",
 }
 VALID_VAT = "01234567897"  # partita IVA inventata con cifra di controllo corretta
@@ -410,9 +410,10 @@ def check_profile_block2() -> None:
     pub_d = rows(rpc("get_public_profile", {"p_id": UID_D}, ta))
     bp_other = get(f"/rest/v1/business_private?id=eq.{UID_D}", ta)
     s, mine_d = rpc("get_my_profile", {}, td)
-    check("F2", "Azienda: ragione sociale visibile, partita IVA solo al titolare, stato «in verifica»",
-          len(pub_d) == 1 and pub_d[0]["business_name"] == "Bottega Verdi Srl"
-          and VALID_VAT not in json.dumps(pub_d) and denied(bp_other)
+    check("F2", "Azienda (P4): ragione sociale e partita IVA solo al titolare, stato «in verifica»",
+          len(pub_d) == 1 and pub_d[0]["account_type"] == "business"
+          and VALID_VAT not in json.dumps(pub_d) and "Bottega" not in json.dumps(pub_d)
+          and denied(bp_other) and mine_d.get("business_name") == "Bottega Verdi Srl"
           and s == 200 and isinstance(mine_d, dict) and mine_d.get("vat_number") == VALID_VAT
           and mine_d.get("business_status") == "pending")
 
@@ -492,6 +493,82 @@ def check_profile_block2() -> None:
           n1[0] >= 400 and n2[0] >= 400, f"HTTP {n1[0]}, {n2[0]}")
 
 
+def check_privacy_block3() -> None:
+    """G · Privacy e blocchi (Fase 2, Blocco 3)."""
+    ta, tb, tc = token(UID_A), token(UID_B), token(UID_C)
+
+    # G1 · Scelte di partenza (P5, P8, P3)
+    s, pa = rpc("get_my_privacy", {}, ta)
+    check("G1", "Partenza: numero ai contatti riconosciuti, «trovarmi» spento, bio e social visibili",
+          s == 200 and isinstance(pa, dict) and pa.get("phone_visibility") == "contacts"
+          and pa.get("discoverable") is False and pa.get("show_bio") is True
+          and pa.get("show_social") is True and pa.get("blocked_count") == 0, str(pa))
+
+    # G2 · Ogni scelta si salva subito ed è privata
+    r1 = rpc("set_phone_visibility", {"p_value": "nobody"}, ta)
+    r2 = rpc("set_profile_visibility", {"p_show_bio": False, "p_show_social": True}, ta)
+    s, pa = rpc("get_my_privacy", {}, ta)
+    other = get(f"/rest/v1/privacy_settings?id=eq.{UID_A}", tb)
+    direct = request("PATCH", f"/rest/v1/privacy_settings?id=eq.{UID_A}", jwt=ta,
+                     prefer="return=representation", body={"discoverable": True})
+    check("G2", "Le scelte si salvano subito; nessuno legge o scrive direttamente quelle altrui",
+          r1[0] in (200, 204) and r2[0] in (200, 204) and pa.get("phone_visibility") == "nobody"
+          and pa.get("show_bio") is False and denied(other) and direct[0] >= 400
+          and rpc("get_my_privacy", {}, ta)[1].get("discoverable") is False,
+          f"HTTP {r1[0]}, {r2[0]}, {direct[0]}")
+    bad = rpc("set_phone_visibility", {"p_value": "everyone"}, ta)
+    check("G3", "Nessuna opzione per mostrare il numero a tutti", bad[0] >= 400, f"HTTP {bad[0]}")
+    rpc("set_phone_visibility", {"p_value": "contacts"}, ta)
+    rpc("set_profile_visibility", {"p_show_bio": True, "p_show_social": True}, ta)
+
+    # G4 · A blocca B: B non vede più profilo e foto di A, e non lo scopre
+    rb = rpc("block_user", {"p_user_id": UID_B}, ta)
+    pub = rows(rpc("get_public_profile", {"p_id": UID_A}, tb))
+    direct_b = rows(get(f"/rest/v1/profiles?id=eq.{UID_A}&select=id,username", tb))
+    photo_b = storage("GET", f"authenticated/avatars/{UID_A}/thumb-provaA0001.jpg", tb)
+    seen_by_b = rows(get(f"/rest/v1/user_blocks?blocked_id=eq.{UID_B}", tb))
+    a_sees_b = rows(rpc("get_public_profile", {"p_id": UID_B}, ta))
+    c_sees_a = rows(rpc("get_public_profile", {"p_id": UID_A}, tc))
+    check("G4", "Bloccato: niente profilo né foto di chi l'ha bloccato, e nessun avviso",
+          rb[0] in (200, 204) and pub == [] and direct_b == [] and photo_b >= 400
+          and seen_by_b == [] and len(a_sees_b) == 1 and len(c_sees_a) == 1,
+          f"HTTP {rb[0]}, foto {photo_b}")
+
+    # G5 · Elenco dei bloccati: solo dati pubblici
+    lst = rows(rpc("my_blocked_users", {}, ta))
+    text = json.dumps(lst)
+    check("G5", "Elenco dei bloccati con soli dati pubblici («Laura B.», @utente_b)",
+          len(lst) == 1 and lst[0]["public_name"] == "Laura B." and "Bianchi" not in text
+          and "birth" not in text and rows(rpc("my_blocked_users", {}, tb)) == [])
+
+    # G6 · Blocchi non validi o falsificati
+    self_b = rpc("block_user", {"p_user_id": UID_A}, ta)
+    ghost = rpc("block_user", {"p_user_id": "utenteInesistente000000001"}, ta)
+    again = rpc("block_user", {"p_user_id": UID_B}, ta)
+    forged = request("POST", "/rest/v1/user_blocks", jwt=tb,
+                     body={"blocker_id": UID_A, "blocked_id": UID_D})
+    undo = request("DELETE", f"/rest/v1/user_blocks?blocker_id=eq.{UID_A}", jwt=tb,
+                   prefer="return=representation")
+    check("G6", "Non si blocca sé stessi o utenti inesistenti; nessun blocco a nome di altri",
+          self_b[0] >= 400 and ghost[0] >= 400 and again[0] in (200, 204)
+          and forged[0] >= 400 and denied(undo)
+          and len(rows(rpc("my_blocked_users", {}, ta))) == 1,
+          f"HTTP {self_b[0]}, {ghost[0]}, {again[0]}, {forged[0]}")
+
+    # G7 · Sblocco: tutto torna visibile
+    ru = rpc("unblock_user", {"p_user_id": UID_B}, ta)
+    check("G7", "Dopo lo sblocco B rivede il profilo e la foto di A",
+          ru[0] in (200, 204) and len(rows(rpc("get_public_profile", {"p_id": UID_A}, tb))) == 1
+          and storage("GET", f"authenticated/avatars/{UID_A}/thumb-provaA0001.jpg", tb) == 200,
+          f"HTTP {ru[0]}")
+
+    # G8 · Senza token
+    n1 = rpc("get_my_privacy", {})
+    n2 = rpc("block_user", {"p_user_id": UID_B})
+    check("G8", "Senza token: impostazioni privacy e blocchi non disponibili",
+          n1[0] >= 400 and n2[0] >= 400, f"HTTP {n1[0]}, {n2[0]}")
+
+
 def main() -> int:
     try:
         ids = setup()
@@ -500,6 +577,7 @@ def main() -> int:
         return 1
     run(ids)
     check_profile_block2()
+    check_privacy_block3()
     failed = [r for r in results if not r[2]]
     print(f"{'Caso':6} {'Esito':9} Descrizione")
     for case, desc, ok, detail in results:

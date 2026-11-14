@@ -126,14 +126,14 @@ Map<String, String> socialToJson(Map<SocialNetwork, String> links) => <String, S
     if (e.value.isNotEmpty) e.key.key: e.value,
 };
 
-/// Profilo visto dagli altri (R2.10): mai nome completo, data di nascita o partita IVA.
+/// Profilo visto dagli altri (R2.10): mai nome completo, data di nascita o dati aziendali
+/// (P4: ragione sociale e partita IVA protette fino alla decisione della Fase 6).
 class PublicProfile {
   const PublicProfile({
     required this.id,
     required this.isBusiness,
     required this.username,
     required this.publicName,
-    this.businessName,
     this.avatarPath,
     this.avatarThumbPath,
     this.bio,
@@ -145,7 +145,6 @@ class PublicProfile {
     isBusiness: json['account_type'] == 'business',
     username: json['username'] as String,
     publicName: (json['public_name'] as String?) ?? '',
-    businessName: json['business_name'] as String?,
     avatarPath: json['avatar_path'] as String?,
     avatarThumbPath: json['avatar_thumb_path'] as String?,
     bio: json['bio'] as String?,
@@ -156,7 +155,6 @@ class PublicProfile {
   final bool isBusiness;
   final String username;
   final String publicName;
-  final String? businessName;
   final String? avatarPath;
   final String? avatarThumbPath;
 
@@ -234,7 +232,6 @@ class MyProfile {
     isBusiness: isBusiness,
     username: username,
     publicName: publicName,
-    businessName: businessName,
     avatarPath: avatarPath,
     avatarThumbPath: avatarThumbPath,
     bio: showBio ? bio : null,
