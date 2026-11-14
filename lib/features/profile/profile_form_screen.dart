@@ -276,9 +276,13 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
         children: [
           NexusBackdrop(isDark: theme.brightness == Brightness.dark),
           SafeArea(
-            child: ListView(
+            // Colonna scorrevole (non ListView): tutti i campi esistono sempre, anche quelli
+            // fuori schermo, così nessun dato inserito si perde scorrendo.
+            child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
-              children: [
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
                 if (!_editing) ...[
                   Text(
                     'Ultimo passo: scegli come ti vedranno gli altri.',
@@ -521,7 +525,8 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
                         )
                       : Text(_editing ? 'Salva' : 'Crea il profilo'),
                 ),
-              ],
+                ],
+              ),
             ),
           ),
         ],

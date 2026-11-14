@@ -76,7 +76,14 @@ class _AvatarViewState extends State<AvatarView> {
       ),
     );
     Widget image(Uint8List data) => ClipOval(
-      child: Image.memory(data, width: s, height: s, fit: BoxFit.cover, gaplessPlayback: true),
+      child: Image.memory(
+        data,
+        width: s,
+        height: s,
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+        errorBuilder: (_, _, _) => fallback(),
+      ),
     );
 
     final Widget inner;

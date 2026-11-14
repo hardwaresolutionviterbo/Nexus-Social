@@ -32,9 +32,14 @@ void main() {
     expect(find.text('Completa il profilo'), findsOneWidget);
     expect(find.byType(NavigationBar), findsNothing);
 
-    await tester.enterText(find.byKey(const ValueKey<String>('nascita')), '01/01/1990');
-    await tester.enterText(find.byKey(const ValueKey<String>('username')), 'carlo_r');
-    await tester.enterText(find.byKey(const ValueKey<String>('nome')), 'Carlo Rossi');
+    for (final (String key, String text) in <(String, String)>[
+      ('nascita', '01/01/1990'),
+      ('username', 'carlo_r'),
+      ('nome', 'Carlo Rossi'),
+    ]) {
+      await tester.ensureVisible(find.byKey(ValueKey<String>(key)));
+      await tester.enterText(find.byKey(ValueKey<String>(key)), text);
+    }
     await tester.ensureVisible(find.byKey(const ValueKey<String>('salva_profilo')));
     await tester.tap(find.byKey(const ValueKey<String>('salva_profilo')));
     await tester.pumpAndSettle();
