@@ -21,15 +21,22 @@ Future<void> _loadFonts() async {
   final String root = Platform.environment['FLUTTER_ROOT'] ?? '';
   final Directory dir = Directory('$root/bin/cache/artifacts/material_fonts');
   final FontLoader roboto = FontLoader('Roboto');
+  // Testi senza famiglia esplicita: nei test usano il carattere «FlutterTest» (quadratini).
+  // Sul telefono è Roboto: qui lo si registra anche con quel nome.
+  final FontLoader fallback = FontLoader('FlutterTest');
   final FontLoader icons = FontLoader('MaterialIcons');
   for (final FileSystemEntity f in dir.listSync()) {
     final String name = f.uri.pathSegments.last;
     final Future<ByteData> data =
         File(f.path).readAsBytes().then((Uint8List b) => ByteData.view(b.buffer));
-    if (name.startsWith('Roboto-') && name.endsWith('.ttf')) roboto.addFont(data);
+    if (name.startsWith('Roboto-') && name.endsWith('.ttf')) {
+      roboto.addFont(data);
+      fallback.addFont(data);
+    }
     if (name.startsWith('MaterialIcons-Regular')) icons.addFont(data);
   }
   await roboto.load();
+  await fallback.load();
   await icons.load();
 }
 
@@ -86,7 +93,7 @@ void main() {
     fullName: 'Laura Bianchi',
     avatarPath: 'demo/avatar-esempio0001.jpg',
     avatarThumbPath: 'demo/thumb-esempio0001.jpg',
-    bio: 'Amo i mercatini dell\'usato e il caffè al bar sotto casa ☕',
+    bio: 'Amo i mercatini dell\'usato e il caffè al bar sotto casa.',
     social: <SocialNetwork, String>{
       SocialNetwork.instagram: 'laura.b',
       SocialNetwork.tiktok: 'laurab',
