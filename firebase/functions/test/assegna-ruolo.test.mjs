@@ -84,11 +84,12 @@ describe('assegnaRuolo', () => {
     assert.equal(res.body.error.status, 'UNAUTHENTICATED');
   });
 
-  test('token falso o alterato: rifiutato', async () => {
-    const { idToken } = await accediConTelefono('+393000000101');
-    const [h, p] = idToken.split('.');
-    const res = await chiama(`${h}.${p}.firma-falsa`);
+  // L'emulatore non verifica la firma dei token (lo fa Firebase reale): qui si prova un
+  // token malformato. La verifica della firma vera si prova con il numero di prova reale.
+  test('token malformato: rifiutato, nessun ruolo assegnato', async () => {
+    const res = await chiama('questo-non-e-un-token');
     assert.equal(res.status, 401);
+    assert.equal(res.body.error.status, 'UNAUTHENTICATED');
   });
 
   test('accesso con telefono: ruolo authenticated assegnato al solo chiamante', async () => {
