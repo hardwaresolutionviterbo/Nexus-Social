@@ -19,6 +19,9 @@ dependencies:
   flutter_local_notifications: ^22.3.3
   supabase_flutter: ^2.18.3
   material_ui: ^1.11.0
+  # Fase 2, Blocco 2: foto profilo dalla galleria, ridotta e ricodificata sul telefono.
+  image_picker: ^1.1.2
+  image: ^4.3.0
 
 dev_dependencies:
   flutter_test:

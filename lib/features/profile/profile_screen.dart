@@ -5,6 +5,11 @@ import '../../core/config/app_config.dart';
 import '../../core/services/backend_bootstrap.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/nexus_ui.dart';
+import 'avatar_view.dart';
+import 'profile_form_screen.dart';
+import 'profile_models.dart';
+import 'profile_repository.dart';
+import 'public_profile_screen.dart';
 import 'push_diagnostics_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
@@ -12,9 +17,17 @@ class ProfileScreen extends StatelessWidget {
     super.key,
     this.backend = const BackendStatus.unconfigured(),
     this.onSignOut,
+    this.profile,
+    this.profiles,
+    this.onProfileChanged,
   });
 
   final BackendStatus backend;
+
+  /// Profilo completo (Blocco 2): presente quando il server è collegato.
+  final MyProfile? profile;
+  final ProfileRepository? profiles;
+  final Future<void> Function()? onProfileChanged;
 
   /// Presente solo con un utente collegato (Fase 2): mostra «Esci».
   final Future<void> Function()? onSignOut;
@@ -44,10 +57,39 @@ class ProfileScreen extends StatelessWidget {
     if (ok == true) await onSignOut?.call();
   }
 
+  void _openEditor(BuildContext context) {
+    final MyProfile? p = profile;
+    final ProfileRepository? repo = profiles;
+    if (p == null || repo == null) return;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (BuildContext route) => ProfileFormScreen(
+          repository: repo,
+          initial: p,
+          onSaved: () {
+            Navigator.of(route).pop();
+            onProfileChanged?.call();
+          },
+        ),
+      ),
+    );
+  }
+
+  void _openPreview(BuildContext context) {
+    final MyProfile? p = profile;
+    if (p == null) return;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => PublicProfileScreen(profile: p.asSeenByOthers(), repository: profiles),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     final ColorScheme scheme = theme.colorScheme;
+    final MyProfile? me = profile;
 
     return ListView(
       padding: AppSpacing.pagePadding,
@@ -70,6 +112,14 @@ class ProfileScreen extends StatelessWidget {
             child: Row(
               children: [
                 // Avatar con anello arancio luminoso.
+                if (me != null)
+                  AvatarView(
+                    name: me.publicName.isEmpty ? me.username : me.publicName,
+                    repository: profiles,
+                    path: me.avatarThumbPath,
+                    size: 64,
+                  )
+                else
                 Container(
                   padding: const EdgeInsets.all(3),
                   decoration: BoxDecoration(
@@ -102,6 +152,22 @@ class ProfileScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      if (me != null) ...[
+                        Text(
+                          me.isBusiness && me.businessName != null
+                              ? me.businessName!
+                              : me.publicName,
+                          key: const ValueKey<String>('mio_nome_pubblico'),
+                          style: theme.textTheme.titleMedium?.copyWith(color: Colors.white),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '@${me.username}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: Colors.white.withValues(alpha: 0.85),
+                          ),
+                        ),
+                      ] else ...[
                       Text(
                         _signedIn ? 'Accesso effettuato' : 'Profilo non configurato',
                         style: theme.textTheme.titleMedium?.copyWith(
@@ -120,6 +186,7 @@ class ProfileScreen extends StatelessWidget {
                           color: Colors.white.withValues(alpha: 0.85),
                         ),
                       ),
+                      ],
                       const SizedBox(height: 10),
                       const PhaseChip(phase: 2, onAccent: true),
                     ],
@@ -129,6 +196,33 @@ class ProfileScreen extends StatelessWidget {
             ),
           ),
         ),
+        if (me != null) ...[
+          const SizedBox(height: AppSpacing.md),
+          SectionCard(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            child: Column(
+              children: [
+                ListTile(
+                  key: const ValueKey<String>('modifica_profilo'),
+                  leading: const Icon(Icons.edit_outlined),
+                  title: const Text('Modifica profilo'),
+                  subtitle: const Text('Foto, nome utente, bio e social'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => _openEditor(context),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  key: const ValueKey<String>('anteprima_profilo'),
+                  leading: const Icon(Icons.visibility_outlined),
+                  title: const Text('Come ti vedono gli altri'),
+                  subtitle: const Text('Anteprima del profilo pubblico'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => _openPreview(context),
+                ),
+              ],
+            ),
+          ),
+        ],
         if (_signedIn) ...[
           const SizedBox(height: AppSpacing.md),
           SectionCard(

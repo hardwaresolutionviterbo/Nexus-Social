@@ -261,7 +261,7 @@ begin
     case when p_account_type = 'business' then btrim(p_business_name) end
   );
   insert into public.profile_private (id, full_name, birth_date)
-  values (v_uid, btrim(p_full_name), p_birth_date);
+  values (v_uid, regexp_replace(btrim(p_full_name), '\s+', ' ', 'g'), p_birth_date);
   if p_account_type = 'business' then
     insert into public.business_private (id, vat_number)
     values (v_uid, btrim(p_vat_number));
@@ -325,8 +325,9 @@ begin
   where id = v_uid;
 
   update public.profile_private
-  set full_name = btrim(p_full_name)
-  where id = v_uid and full_name is distinct from btrim(p_full_name);
+  set full_name = regexp_replace(btrim(p_full_name), '\s+', ' ', 'g')
+  where id = v_uid
+    and full_name is distinct from regexp_replace(btrim(p_full_name), '\s+', ' ', 'g');
 
   -- Cambiare la ragione sociale rimette l'Azienda «in verifica».
   if v_type = 'business' and btrim(p_business_name) is distinct from v_old_business then

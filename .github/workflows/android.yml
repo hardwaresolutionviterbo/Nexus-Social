@@ -104,6 +104,20 @@ jobs:
       - name: Dipendenze
         run: flutter pub get
 
+      # Se pubspec.lock non è allineato al pubspec (nuove dipendenze), lo stampa in base64
+      # per poterlo salvare nel repository. Nessun dato sensibile: solo versioni dei pacchetti.
+      - name: Controllo pubspec.lock
+        run: |
+          if git diff --quiet -- pubspec.lock; then
+            echo "pubspec.lock allineato."
+          else
+            echo "::warning::pubspec.lock aggiornato da flutter pub get: va salvato nel repository."
+            echo "PUBSPEC_LOCK_BASE64_START"
+            base64 -w0 pubspec.lock
+            echo
+            echo "PUBSPEC_LOCK_BASE64_END"
+          fi
+
       - name: Analisi statica
         run: flutter analyze
 

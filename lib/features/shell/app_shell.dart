@@ -7,6 +7,8 @@ import '../../core/widgets/nexus_ui.dart';
 import '../chat/chat_screen.dart';
 import '../listings/listings_screen.dart';
 import '../map/map_screen.dart';
+import '../profile/profile_models.dart';
+import '../profile/profile_repository.dart';
 import '../profile/profile_screen.dart';
 import '../sale/sale_screen.dart';
 
@@ -19,9 +21,17 @@ class AppShell extends StatefulWidget {
     super.key,
     this.backend = const BackendStatus.unconfigured(),
     this.onSignOut,
+    this.profile,
+    this.profiles,
+    this.onProfileChanged,
   });
 
   final BackendStatus backend;
+
+  /// Profilo dell'utente (Blocco 2), presente quando il server è collegato.
+  final MyProfile? profile;
+  final ProfileRepository? profiles;
+  final Future<void> Function()? onProfileChanged;
 
   /// Uscita dall'account (presente solo con un utente collegato).
   final Future<void> Function()? onSignOut;
@@ -43,12 +53,18 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> {
-  late final List<Widget> _screens = <Widget>[
+  List<Widget> get _screens => <Widget>[
     const ChatScreen(),
     const MapScreen(),
     const ListingsScreen(),
     const SaleScreen(),
-    ProfileScreen(backend: widget.backend, onSignOut: widget.onSignOut),
+    ProfileScreen(
+      backend: widget.backend,
+      onSignOut: widget.onSignOut,
+      profile: widget.profile,
+      profiles: widget.profiles,
+      onProfileChanged: widget.onProfileChanged,
+    ),
   ];
 
   int _index = AppShell.initialIndex;
