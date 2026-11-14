@@ -22,6 +22,7 @@ import 'package:nexus_social/features/security/security_repository.dart';
 import 'package:nexus_social/features/security/security_screens.dart';
 import 'package:nexus_social/features/shell/app_shell.dart';
 
+import '../../test/support/fake_contacts.dart';
 import '../../test/support/fake_privacy_repository.dart';
 import '../../test/support/fake_profile_repository.dart';
 import '../../test/support/fake_security.dart';
@@ -315,5 +316,57 @@ void main() {
       ..succeed = false;
     await shoot(tester, '13_app_bloccata',
         AppLockGate(lock: lock, child: const Scaffold(body: Text('app'))));
+  });
+
+  Future<void> openContacts(WidgetTester tester) async {
+    await tester.tap(find.byKey(const ValueKey<String>('sezione_contacts')));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('14 · rubrica non attiva', (tester) async {
+    final FakePrivacyRepository p = FakePrivacyRepository();
+    await shoot(tester, '14_rubrica_spenta',
+        PrivacyScreen(repository: p, contacts: FakeContactsRepository(p)),
+        before: () => openContacts(tester));
+  });
+
+  testWidgets('15 · consenso alla rubrica', (tester) async {
+    final FakePrivacyRepository p = FakePrivacyRepository();
+    await shoot(
+      tester,
+      '15_consenso_rubrica',
+      PrivacyScreen(repository: p, contacts: FakeContactsRepository(p)),
+      before: () async {
+        await openContacts(tester);
+        await tester.tap(find.byKey(const ValueKey<String>('attiva_rubrica')));
+        await tester.pumpAndSettle();
+      },
+    );
+  });
+
+  testWidgets('16 · rubrica attiva', (tester) async {
+    final FakePrivacyRepository p = FakePrivacyRepository();
+    final FakeContactsRepository c = FakeContactsRepository(p);
+    await c.enable();
+    await c.sync();
+    await shoot(tester, '16_rubrica_attiva', PrivacyScreen(repository: p, contacts: c),
+        before: () => openContacts(tester));
+  });
+
+  testWidgets('17 · contatti su Piazly', (tester) async {
+    final FakePrivacyRepository p = FakePrivacyRepository();
+    final FakeContactsRepository c = FakeContactsRepository(p);
+    await c.enable();
+    await c.sync();
+    await shoot(
+      tester,
+      '17_contatti',
+      PrivacyScreen(repository: p, contacts: c),
+      before: () async {
+        await openContacts(tester);
+        await tester.tap(find.byKey(const ValueKey<String>('contatti_riconosciuti')));
+        await tester.pumpAndSettle();
+      },
+    );
   });
 }
