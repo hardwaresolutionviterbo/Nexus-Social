@@ -5,6 +5,7 @@ import 'core/services/auth_gateway.dart';
 import 'core/services/backend_bootstrap.dart';
 import 'core/theme/app_theme.dart';
 import 'features/onboarding/auth_gate.dart';
+import 'features/privacy/privacy_repository.dart';
 import 'features/profile/profile_repository.dart';
 import 'features/shell/app_shell.dart';
 
@@ -14,6 +15,7 @@ class NexusApp extends StatelessWidget {
     this.backend = const BackendStatus.unconfigured(),
     this.authGateway,
     this.profiles,
+    this.privacy,
   });
 
   /// Stato dei servizi collegati all'avvio (Firebase, Supabase).
@@ -25,6 +27,9 @@ class NexusApp extends StatelessWidget {
 
   /// Profilo su Supabase (Fase 2, Blocco 2): null finché il server non è collegato.
   final ProfileRepository? profiles;
+
+  /// Impostazioni privacy e blocchi (Blocco 3): null finché il server non è collegato.
+  final PrivacyRepository? privacy;
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +44,12 @@ class NexusApp extends StatelessWidget {
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
       home: authGateway == null
           ? AppShell(backend: backend)
-          : AuthGate(gateway: authGateway!, backend: backend, profiles: profiles),
+          : AuthGate(
+              gateway: authGateway!,
+              backend: backend,
+              profiles: profiles,
+              privacy: privacy,
+            ),
     );
   }
 }

@@ -7,6 +7,7 @@ import '../../core/widgets/nexus_ui.dart';
 import '../chat/chat_screen.dart';
 import '../listings/listings_screen.dart';
 import '../map/map_screen.dart';
+import '../privacy/privacy_repository.dart';
 import '../profile/profile_models.dart';
 import '../profile/profile_repository.dart';
 import '../profile/profile_screen.dart';
@@ -24,6 +25,7 @@ class AppShell extends StatefulWidget {
     this.profile,
     this.profiles,
     this.onProfileChanged,
+    this.privacy,
   });
 
   final BackendStatus backend;
@@ -32,6 +34,7 @@ class AppShell extends StatefulWidget {
   final MyProfile? profile;
   final ProfileRepository? profiles;
   final Future<void> Function()? onProfileChanged;
+  final PrivacyRepository? privacy;
 
   /// Uscita dall'account (presente solo con un utente collegato).
   final Future<void> Function()? onSignOut;
@@ -64,6 +67,7 @@ class _AppShellState extends State<AppShell> {
       profile: widget.profile,
       profiles: widget.profiles,
       onProfileChanged: widget.onProfileChanged,
+      privacy: widget.privacy,
     ),
   ];
 

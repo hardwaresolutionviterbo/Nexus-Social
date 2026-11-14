@@ -123,6 +123,7 @@ class PublicProfileScreen extends StatelessWidget {
     this.repository,
     this.title = 'Come ti vedono gli altri',
     this.openLink = openExternally,
+    this.onBlock,
   });
 
   final PublicProfile profile;
@@ -130,11 +131,64 @@ class PublicProfileScreen extends StatelessWidget {
   final String title;
   final OpenLink openLink;
 
+  /// Profilo di un altro utente: «Blocca» (R2.7). Assente nell'anteprima del proprio profilo.
+  final Future<void> Function()? onBlock;
+
+  Future<void> _confirmBlock(BuildContext context) async {
+    final bool? ok = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: Text('Bloccare ${profile.publicName}?'),
+        content: const Text(
+          'Non vedrà più il tuo profilo e non potrà scriverti, chiamarti o commentare i tuoi '
+          'annunci. Non riceverà nessun avviso. Puoi sbloccarlo da Privacy.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Annulla'),
+          ),
+          FilledButton(
+            key: const ValueKey<String>('conferma_blocco'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Blocca'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    final NavigatorState nav = Navigator.of(context);
+    final ScaffoldMessengerState? messenger = ScaffoldMessenger.maybeOf(context);
+    try {
+      await onBlock!();
+      messenger?.showSnackBar(SnackBar(content: Text('${profile.publicName} è bloccato.')));
+      nav.pop();
+    } on ProfileFailure catch (f) {
+      messenger?.showSnackBar(SnackBar(content: Text(f.message)));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: Text(title)),
+      appBar: AppBar(
+        title: Text(title),
+        actions: [
+          if (onBlock != null)
+            PopupMenuButton<String>(
+              key: const ValueKey<String>('menu_profilo'),
+              onSelected: (_) => _confirmBlock(context),
+              itemBuilder: (_) => const <PopupMenuEntry<String>>[
+                PopupMenuItem<String>(
+                  key: ValueKey<String>('blocca_utente'),
+                  value: 'blocca',
+                  child: Text('Blocca'),
+                ),
+              ],
+            ),
+        ],
+      ),
       body: Stack(
         children: [
           NexusBackdrop(isDark: theme.brightness == Brightness.dark),
@@ -144,6 +198,7 @@ class PublicProfileScreen extends StatelessWidget {
               children: [
                 PublicProfileView(profile: profile, repository: repository, openLink: openLink),
                 const SizedBox(height: 18),
+                if (onBlock == null)
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [

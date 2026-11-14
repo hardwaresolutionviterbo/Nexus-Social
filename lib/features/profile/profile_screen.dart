@@ -5,6 +5,8 @@ import '../../core/config/app_config.dart';
 import '../../core/services/backend_bootstrap.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/nexus_ui.dart';
+import '../privacy/privacy_repository.dart';
+import '../privacy/privacy_screen.dart';
 import 'avatar_view.dart';
 import 'profile_form_screen.dart';
 import 'profile_models.dart';
@@ -20,6 +22,7 @@ class ProfileScreen extends StatelessWidget {
     this.profile,
     this.profiles,
     this.onProfileChanged,
+    this.privacy,
   });
 
   final BackendStatus backend;
@@ -28,6 +31,9 @@ class ProfileScreen extends StatelessWidget {
   final MyProfile? profile;
   final ProfileRepository? profiles;
   final Future<void> Function()? onProfileChanged;
+
+  /// Pagina Privacy (Blocco 3): presente quando il server è collegato.
+  final PrivacyRepository? privacy;
 
   /// Presente solo con un utente collegato (Fase 2): mostra «Esci».
   final Future<void> Function()? onSignOut;
@@ -70,6 +76,21 @@ class ProfileScreen extends StatelessWidget {
             Navigator.of(route).pop();
             onProfileChanged?.call();
           },
+        ),
+      ),
+    );
+  }
+
+  void _openPrivacy(BuildContext context) {
+    final PrivacyRepository? repo = privacy;
+    if (repo == null) return;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => PrivacyScreen(
+          repository: repo,
+          profiles: profiles,
+          profile: profile,
+          onChanged: () => onProfileChanged?.call(),
         ),
       ),
     );
@@ -219,6 +240,17 @@ class ProfileScreen extends StatelessWidget {
                   trailing: const Icon(Icons.chevron_right_rounded),
                   onTap: () => _openPreview(context),
                 ),
+                if (privacy != null) ...[
+                  const Divider(height: 1),
+                  ListTile(
+                    key: const ValueKey<String>('apri_privacy'),
+                    leading: const Icon(Icons.lock_outline_rounded),
+                    title: const Text('Privacy'),
+                    subtitle: const Text('Numero, profilo, persone bloccate e autorizzazioni'),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => _openPrivacy(context),
+                  ),
+                ],
               ],
             ),
           ),

@@ -10,6 +10,7 @@ import 'core/config/app_config.dart';
 import 'core/services/auth_gateway.dart';
 import 'core/services/backend_bootstrap.dart';
 import 'core/services/firebase_services.dart';
+import 'features/privacy/privacy_repository.dart';
 import 'features/profile/profile_repository.dart';
 
 Future<void> main() async {
@@ -45,6 +46,7 @@ Future<void> main() async {
               uid: () => FirebaseAuth.instance.currentUser?.uid ?? '',
             )
           : null,
+      privacy: profilesReady ? SupabasePrivacyRepository(Supabase.instance.client) : null,
     ),
   );
 }

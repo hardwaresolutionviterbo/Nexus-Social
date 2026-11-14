@@ -5,6 +5,9 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/services/auth_gateway.dart';
 import '../../core/services/backend_bootstrap.dart';
 import '../../core/widgets/nexus_ui.dart';
+import '../privacy/privacy_checkup_screen.dart';
+import '../privacy/privacy_controller.dart';
+import '../privacy/privacy_repository.dart';
 import '../profile/profile_form_screen.dart';
 import '../profile/profile_models.dart';
 import '../profile/profile_repository.dart';
@@ -27,6 +30,7 @@ class AuthGate extends StatefulWidget {
     this.today,
     this.profiles,
     this.pickImage = pickFromGallery,
+    this.privacy,
   });
 
   final AuthGateway gateway;
@@ -34,6 +38,9 @@ class AuthGate extends StatefulWidget {
   /// Profilo su Supabase: null finché il collegamento al server è in pausa (S1).
   final ProfileRepository? profiles;
   final PickImage pickImage;
+
+  /// Impostazioni privacy (Blocco 3): con il server collegato.
+  final PrivacyRepository? privacy;
   final BackendStatus backend;
   final DateTime Function()? today;
 
@@ -52,6 +59,9 @@ class _AuthGateState extends State<AuthGate> {
   String? _failure;
   _Profile _profileState = _Profile.loading;
   MyProfile? _profile;
+
+  /// Controllo privacy proposto alla fine della registrazione (P14).
+  PrivacyController? _checkup;
 
   @override
   void initState() {
@@ -75,8 +85,21 @@ class _AuthGateState extends State<AuthGate> {
     });
   }
 
+  void _profileCreated() {
+    final PrivacyRepository? privacy = widget.privacy;
+    if (privacy != null) _checkup = PrivacyController(privacy)..load();
+    _loadProfile();
+  }
+
+  void _closeCheckup() {
+    final PrivacyController? c = _checkup;
+    setState(() => _checkup = null);
+    c?.dispose();
+  }
+
   @override
   void dispose() {
+    _checkup?.dispose();
     _subscription?.cancel();
     super.dispose();
   }
@@ -179,18 +202,28 @@ class _AuthGateState extends State<AuthGate> {
             return ProfileFormScreen(
               repository: repo,
               draft: RegistrationDraftStore.current,
-              onSaved: _loadProfile,
+              onSaved: _profileCreated,
               onSignOut: _signOut,
               pickImage: widget.pickImage,
               today: widget.today,
             );
           case _Profile.ready:
+            final PrivacyController? checkup = _checkup;
+            if (checkup != null) {
+              return PrivacyCheckupScreen(
+                controller: checkup,
+                profiles: repo,
+                offeredAfterSignUp: true,
+                onDone: _closeCheckup,
+              );
+            }
             return AppShell(
               backend: widget.backend,
               onSignOut: _signOut,
               profile: _profile,
               profiles: repo,
               onProfileChanged: _loadProfile,
+              privacy: widget.privacy,
             );
         }
       case _Link.checking:

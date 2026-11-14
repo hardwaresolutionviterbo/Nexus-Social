@@ -10,11 +10,16 @@ import 'package:image/image.dart' as img;
 import 'package:material_ui/material_ui.dart';
 import 'package:nexus_social/core/theme/app_theme.dart';
 import 'package:nexus_social/features/onboarding/registration_rules.dart';
+import 'package:nexus_social/features/privacy/privacy_checkup_screen.dart';
+import 'package:nexus_social/features/privacy/privacy_controller.dart';
+import 'package:nexus_social/features/privacy/privacy_repository.dart';
+import 'package:nexus_social/features/privacy/privacy_screen.dart';
 import 'package:nexus_social/features/profile/profile_form_screen.dart';
 import 'package:nexus_social/features/profile/profile_models.dart';
 import 'package:nexus_social/features/profile/public_profile_screen.dart';
 import 'package:nexus_social/features/shell/app_shell.dart';
 
+import '../../test/support/fake_privacy_repository.dart';
 import '../../test/support/fake_profile_repository.dart';
 
 Future<void> _loadFonts() async {
@@ -195,6 +200,65 @@ void main() {
       '5_modifica_scuro',
       ProfileFormScreen(repository: repo, initial: laura, onSaved: () {}),
       theme: AppTheme.dark,
+    );
+  });
+
+  FakePrivacyRepository privacyDemo() => FakePrivacyRepository()
+    ..blocked = <BlockedUser>[
+      const BlockedUser(id: 'x1', username: 'marco_t', publicName: 'Marco T.'),
+    ];
+
+  testWidgets('6 · pagina Privacy', (tester) async {
+    await shoot(tester, '6_privacy', PrivacyScreen(repository: privacyDemo()));
+  });
+
+  testWidgets('7 · chi vede il numero', (tester) async {
+    await shoot(
+      tester,
+      '7_numero',
+      PrivacyScreen(repository: privacyDemo()),
+      before: () async {
+        await tester.tap(find.byKey(const ValueKey<String>('sezione_phone')));
+        await tester.pumpAndSettle();
+      },
+    );
+  });
+
+  testWidgets('8 · persone bloccate', (tester) async {
+    await shoot(
+      tester,
+      '8_bloccati',
+      PrivacyScreen(repository: privacyDemo()),
+      before: () async {
+        await tester.tap(find.byKey(const ValueKey<String>('sezione_blocked')));
+        await tester.pumpAndSettle();
+      },
+    );
+  });
+
+  testWidgets('9 · Controllo privacy, primo passo', (tester) async {
+    final PrivacyController c = PrivacyController(privacyDemo());
+    addTearDown(c.dispose);
+    await c.load();
+    await shoot(tester, '9_controllo_passo1',
+        PrivacyCheckupScreen(controller: c, onDone: () {}, offeredAfterSignUp: true,
+            onPreview: () {}));
+  });
+
+  testWidgets('10 · Controllo privacy, riepilogo', (tester) async {
+    final PrivacyController c = PrivacyController(privacyDemo());
+    addTearDown(c.dispose);
+    await c.load();
+    await shoot(
+      tester,
+      '10_controllo_riepilogo',
+      PrivacyCheckupScreen(controller: c, onDone: () {}),
+      before: () async {
+        for (int i = 0; i < 7; i++) {
+          await tester.tap(find.byKey(const ValueKey<String>('avanti_controllo')));
+          await tester.pumpAndSettle();
+        }
+      },
     );
   });
 }
