@@ -33,11 +33,15 @@ OTHER_PROJECT = "altro-progetto-firebase"
 UID_A = "utenteAprova0000000000000001"
 UID_B = "utenteBprova0000000000000002"
 UID_C = "utenteCprova0000000000000003"
+UID_D = "utenteDprova0000000000000004"  # Azienda
+UID_E = "utenteEprova0000000000000005"  # usato per i rifiuti (mai creato)
 
 PUBLIC_PROFILE_KEYS = {
-    "id", "account_type", "username", "public_name", "avatar_url", "bio",
-    "social_links", "rating_avg", "rating_count", "created_at", "updated_at",
+    "id", "account_type", "username", "public_name", "business_name", "avatar_path",
+    "avatar_thumb_path", "bio", "social_links", "rating_avg", "rating_count", "created_at",
 }
+VALID_VAT = "01234567897"  # partita IVA inventata con cifra di controllo corretta
+JPEG = bytes.fromhex("ffd8ffe000104a46494600010100000100010000ffd9")  # JPEG minimo
 
 results: list[tuple[str, str, bool, str]] = []
 
@@ -136,16 +140,23 @@ def setup() -> dict:
     )
     ta, tb = token(UID_A), token(UID_B)
     ids = {}
-    for uid, tok, username, full_name, birth in (
-        (UID_A, ta, "utente_a", "Mario Rossi", "1990-05-01"),
-        (UID_B, tb, "utente_b", "Laura Bianchi", "1985-11-20"),
+    for tok, username, full_name, birth in (
+        (ta, "utente_a", "Mario Rossi", "1990-05-01"),
+        (tb, "utente_b", "Laura Bianchi", "1985-11-20"),
     ):
-        s, _ = request("POST", "/rest/v1/profiles", jwt=tok,
-                       body={"id": uid, "username": username})
-        assert s == 201, f"creazione profilo: HTTP {s}"
-        s, _ = request("POST", "/rest/v1/profile_private", jwt=tok,
-                       body={"id": uid, "full_name": full_name, "birth_date": birth})
-        assert s == 201, f"creazione dati privati: HTTP {s}"
+        s, _ = rpc("create_my_profile", {"p_username": username, "p_full_name": full_name,
+                                         "p_birth_date": birth}, tok)
+        assert s in (200, 204), f"creazione profilo: HTTP {s}"
+    s, _ = rpc("create_my_profile", {
+        "p_username": "bottega_d", "p_full_name": "Paolo Verdi", "p_birth_date": "1980-03-03",
+        "p_account_type": "business", "p_business_name": "Bottega Verdi Srl",
+        "p_vat_number": VALID_VAT}, token(UID_D))
+    assert s in (200, 204), f"creazione Azienda: HTTP {s}"
+    s, _ = rpc("update_my_profile", {
+        "p_username": "utente_b", "p_full_name": "Laura Bianchi", "p_bio": "Bio segreta di B",
+        "p_social_links": {"instagram": "laura.b"}, "p_show_bio": False,
+        "p_show_social": True}, tb)
+    assert s in (200, 204), f"aggiornamento profilo B: HTTP {s}"
     # Annunci di A: uno senza modalità (predefinita), uno preciso.
     s, ids["a_default"] = rpc("create_listing", {
         "p_kind": "social", "p_title": "Annuncio predefinito", "p_description": "",
@@ -189,7 +200,7 @@ def run(ids: dict) -> None:
     mine = rows(get(f"/rest/v1/profile_private?id=eq.{UID_A}", ta))
     check("A1", "A legge i propri dati privati",
           len(mine) == 1 and mine[0]["full_name"] == "Mario Rossi")
-    pub_b = rows(get(f"/rest/v1/profiles?id=eq.{UID_B}", ta))
+    pub_b = rows(rpc("get_public_profile", {"p_id": UID_B}, ta))
     check("A2", "A legge il profilo pubblico di B, solo campi pubblici",
           len(pub_b) == 1 and set(pub_b[0]) <= PUBLIC_PROFILE_KEYS, str(pub_b and sorted(pub_b[0])))
     text = json.dumps(pub_b)
@@ -222,7 +233,7 @@ def run(ids: dict) -> None:
           ins1[0] >= 400 and ins2[0] >= 400, f"HTTP {ins1[0]}, {ins2[0]}")
     sw = request("PATCH", f"/rest/v1/profiles?id=eq.{UID_A}", jwt=ta,
                  prefer="return=representation", body={"id": UID_B})
-    still = rows(get(f"/rest/v1/profiles?id=eq.{UID_A}", ta))
+    still = rows(get(f"/rest/v1/profiles?id=eq.{UID_A}&select=id", ta))
     check("B5", "A non può cambiare il proprio identificativo in quello di B",
           sw[0] >= 400 and len(still) == 1, f"HTTP {sw[0]}")
     near_items = near(41.9028, 12.4964, tb)
@@ -358,6 +369,129 @@ def run(ids: dict) -> None:
                   {"p_listing_id": ids["b_listing"], "p_mode": "precise"}, ta)[0] >= 400)
 
 
+def storage(method: str, path: str, jwt: str | None, data: bytes | None = None) -> int:
+    """Chiamata allo Storage temporaneo; restituisce solo lo stato HTTP."""
+    headers = {"apikey": ANON, "Content-Type": "image/jpeg"}
+    if jwt is not None:
+        headers["Authorization"] = f"Bearer {jwt}"
+    req = urllib.request.Request(f"{API}/storage/v1/object/{path}", data=data,
+                                 method=method, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            resp.read()
+            return resp.status
+    except urllib.error.HTTPError as err:
+        err.read()
+        return err.code
+
+
+def check_profile_block2() -> None:
+    """F · Profilo completo (Fase 2, Blocco 2)."""
+    ta, tb, td, te = token(UID_A), token(UID_B), token(UID_D), token(UID_E)
+    young = f"{time.gmtime().tm_year - 13}-01-01"
+    teen = f"{time.gmtime().tm_year - 16}-01-01"
+
+    # F1 · Età minima e Azienda solo maggiorenni, controllate dal server
+    r1 = rpc("create_my_profile", {"p_username": "troppo_giovane", "p_full_name": "Tizio Primo",
+                                   "p_birth_date": young}, te)
+    r2 = rpc("create_my_profile", {"p_username": "azienda_minore", "p_full_name": "Tizio Primo",
+                                   "p_birth_date": teen, "p_account_type": "business",
+                                   "p_business_name": "Minore Srl", "p_vat_number": VALID_VAT}, te)
+    r3 = rpc("create_my_profile", {"p_username": "azienda_iva_errata",
+                                   "p_full_name": "Tizio Primo", "p_birth_date": "1980-01-01",
+                                   "p_account_type": "business", "p_business_name": "Errata Srl",
+                                   "p_vat_number": "01234567890"}, te)
+    none_e = rows(get(f"/rest/v1/profiles?id=eq.{UID_E}&select=id", ta))
+    check("F1", "Sotto i 14 anni, Azienda minorenne o partita IVA errata: profilo rifiutato",
+          r1[0] >= 400 and r2[0] >= 400 and r3[0] >= 400 and none_e == [],
+          f"HTTP {r1[0]}, {r2[0]}, {r3[0]}")
+
+    # F2 · Dati Azienda: ragione sociale pubblica, partita IVA privata, stato in verifica
+    pub_d = rows(rpc("get_public_profile", {"p_id": UID_D}, ta))
+    bp_other = get(f"/rest/v1/business_private?id=eq.{UID_D}", ta)
+    s, mine_d = rpc("get_my_profile", {}, td)
+    check("F2", "Azienda: ragione sociale visibile, partita IVA solo al titolare, stato «in verifica»",
+          len(pub_d) == 1 and pub_d[0]["business_name"] == "Bottega Verdi Srl"
+          and VALID_VAT not in json.dumps(pub_d) and denied(bp_other)
+          and s == 200 and isinstance(mine_d, dict) and mine_d.get("vat_number") == VALID_VAT
+          and mine_d.get("business_status") == "pending")
+
+    # F3 · Interruttori del profilo pubblico (P3), applicati dal server
+    pub_b = rows(rpc("get_public_profile", {"p_id": UID_B}, ta))
+    s, mine_b = rpc("get_my_profile", {}, tb)
+    direct = get(f"/rest/v1/profiles?id=eq.{UID_B}&select=bio,social_links", ta)
+    check("F3", "Bio nascosta da B: gli altri non la vedono (né con letture dirette), B sì",
+          len(pub_b) == 1 and pub_b[0]["bio"] is None
+          and pub_b[0]["social_links"] == {"instagram": "laura.b"}
+          and "Bio segreta" not in json.dumps(direct[1]) and direct[0] >= 400
+          and s == 200 and mine_b.get("bio") == "Bio segreta di B")
+
+    # F4 · Social solo come nome utente su reti note
+    bad1 = rpc("update_my_profile", {"p_username": "utente_a", "p_full_name": "Mario Rossi",
+                                     "p_bio": None, "p_social_links": {"sito": "esempio"},
+                                     "p_show_bio": True, "p_show_social": True}, ta)
+    bad2 = rpc("update_my_profile", {"p_username": "utente_a", "p_full_name": "Mario Rossi",
+                                     "p_bio": None,
+                                     "p_social_links": {"instagram": "javascript:alert(1)"},
+                                     "p_show_bio": True, "p_show_social": True}, ta)
+    check("F4", "Social non validi (rete sconosciuta o link) rifiutati",
+          bad1[0] >= 400 and bad2[0] >= 400, f"HTTP {bad1[0]}, {bad2[0]}")
+
+    # F5 · @username univoco, normalizzato, nomi riservati esclusi
+    taken = rpc("username_available", {"p_username": "UTENTE_B"}, ta)
+    reserved = rpc("username_available", {"p_username": "piazly_ufficiale"}, ta)
+    free = rpc("username_available", {"p_username": "nome_libero"}, ta)
+    own = rpc("username_available", {"p_username": "utente_a"}, ta)
+    dup = rpc("update_my_profile", {"p_username": "Utente_B", "p_full_name": "Mario Rossi",
+                                    "p_bio": None, "p_social_links": {}, "p_show_bio": True,
+                                    "p_show_social": True}, ta)
+    check("F5", "@username: già preso (anche con maiuscole) o riservato non disponibile",
+          taken[1] is False and reserved[1] is False and free[1] is True and own[1] is True
+          and dup[0] >= 400, f"HTTP {dup[0]}")
+
+    # F6 · Scritture dirette e campi bloccati
+    w1 = request("PATCH", f"/rest/v1/profiles?id=eq.{UID_A}", jwt=ta,
+                 prefer="return=representation", body={"bio": "diretta"})
+    w2 = request("PATCH", f"/rest/v1/profile_private?id=eq.{UID_A}", jwt=ta,
+                 prefer="return=representation", body={"birth_date": "2015-01-01"})
+    w3 = request("POST", "/rest/v1/business_private", jwt=ta,
+                 body={"id": UID_A, "vat_number": VALID_VAT})
+    priv_a = rows(get(f"/rest/v1/profile_private?id=eq.{UID_A}", ta))
+    check("F6", "Niente scritture dirette; la data di nascita non si cambia",
+          w1[0] >= 400 and w2[0] >= 400 and w3[0] >= 400
+          and priv_a and priv_a[0]["birth_date"] == "1990-05-01",
+          f"HTTP {w1[0]}, {w2[0]}, {w3[0]}")
+
+    # F7 · Foto profilo nella propria cartella, leggibili solo da utenti autenticati
+    up_own_a = storage("POST", f"avatars/{UID_A}/avatar-provaA0001.jpg", ta, JPEG)
+    up_own_t = storage("POST", f"avatars/{UID_A}/thumb-provaA0001.jpg", ta, JPEG)
+    up_other = storage("POST", f"avatars/{UID_B}/avatar-intruso0001.jpg", ta, JPEG)
+    set_other = rpc("set_my_avatar", {"p_avatar_path": f"{UID_B}/avatar-provaB0001.jpg",
+                                      "p_thumb_path": f"{UID_B}/thumb-provaB0001.jpg"}, ta)
+    set_missing = rpc("set_my_avatar", {"p_avatar_path": f"{UID_A}/avatar-mancante01.jpg",
+                                        "p_thumb_path": f"{UID_A}/thumb-mancante01.jpg"}, ta)
+    set_ok = rpc("set_my_avatar", {"p_avatar_path": f"{UID_A}/avatar-provaA0001.jpg",
+                                   "p_thumb_path": f"{UID_A}/thumb-provaA0001.jpg"}, ta)
+    read_b = storage("GET", f"authenticated/avatars/{UID_A}/thumb-provaA0001.jpg", tb)
+    read_anon = storage("GET", f"authenticated/avatars/{UID_A}/thumb-provaA0001.jpg", None)
+    read_public = storage("GET", f"public/avatars/{UID_A}/thumb-provaA0001.jpg", None)
+    pub_a = rows(rpc("get_public_profile", {"p_id": UID_A}, tb))
+    check("F7", "Foto: caricate solo nella propria cartella, viste solo da utenti autenticati",
+          up_own_a == 200 and up_own_t == 200 and up_other >= 400 and set_other[0] >= 400
+          and set_missing[0] >= 400 and set_ok[0] in (200, 204) and read_b == 200
+          and read_anon >= 400 and read_public >= 400
+          and pub_a and pub_a[0]["avatar_thumb_path"] == f"{UID_A}/thumb-provaA0001.jpg",
+          f"HTTP {up_own_a}, {up_own_t}, {up_other}, {set_other[0]}, {set_missing[0]}, "
+          f"{set_ok[0]}, {read_b}, {read_anon}, {read_public}")
+
+    # F8 · Senza token: nessun profilo né funzione del profilo
+    n1 = rpc("get_public_profile", {"p_id": UID_A})
+    n2 = rpc("create_my_profile", {"p_username": "anonimo", "p_full_name": "Anonimo Uno",
+                                   "p_birth_date": "1990-01-01"})
+    check("F8", "Senza token: funzioni del profilo non disponibili",
+          n1[0] >= 400 and n2[0] >= 400, f"HTTP {n1[0]}, {n2[0]}")
+
+
 def main() -> int:
     try:
         ids = setup()
@@ -365,6 +499,7 @@ def main() -> int:
         print(f"::error::Preparazione dei dati di prova fallita: {exc}")
         return 1
     run(ids)
+    check_profile_block2()
     failed = [r for r in results if not r[2]]
     print(f"{'Caso':6} {'Esito':9} Descrizione")
     for case, desc, ok, detail in results:

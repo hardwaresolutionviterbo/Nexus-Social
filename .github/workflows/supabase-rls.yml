@@ -23,14 +23,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      # Elenco atteso: solo le migrazioni già applicate al database reale con autorizzazione
-      # del titolare (0001, 0002 il 14/11/2026). Una nuova migrazione va aggiunta qui
-      # consapevolmente, dopo l'autorizzazione.
+      # Elenco atteso: migrazioni applicate al database reale con autorizzazione del titolare
+      # (0001, 0002 il 14/11/2026) più quelle del blocco in corso, provate SOLO qui sul
+      # database temporaneo (0003, Fase 2 Blocco 2: in attesa di autorizzazione per il reale).
+      # Una nuova migrazione va aggiunta qui consapevolmente.
       - name: Migrazioni approvate
         run: |
           set -euo pipefail
           found=$(ls supabase/migrations | tr '\n' ' ')
-          expected="0001_init.sql 0002_identita_firebase_e_dati_privati.sql "
+          expected="0001_init.sql 0002_identita_firebase_e_dati_privati.sql 0003_profilo_completo.sql "
           echo "Migrazioni: ${found}"
           if [ "${found}" != "${expected}" ]; then
             echo "::error::supabase/migrations contiene migrazioni non approvate dal titolare."
@@ -42,7 +43,7 @@ jobs:
         with:
           version: latest
 
-      - name: Progetto temporaneo con 0001 e 0002
+      - name: Progetto temporaneo con le migrazioni
         run: |
           set -euo pipefail
           work="${RUNNER_TEMP}/supabase-temporaneo"
@@ -66,7 +67,7 @@ jobs:
           done
           echo "Supabase temporaneo pronto."
 
-      - name: Test di sicurezza (A, B, C, D, D2, E)
+      - name: Test di sicurezza (A, B, C, D, D2, E, F)
         run: |
           set -euo pipefail
           read_env() { grep -E "^$1=" "${RUNNER_TEMP}/sb.env" | head -1 | cut -d= -f2- | tr -d '"'; }
@@ -91,6 +92,10 @@ jobs:
             caso: C4
           - difetto: posizione_esatta_esposta
             caso: D2.1
+          - difetto: bio_nascosta_esposta
+            caso: F3
+          - difetto: eta_non_controllata
+            caso: F1
 
     steps:
       - name: Checkout
@@ -110,7 +115,7 @@ jobs:
           mkdir -p supabase/migrations
           cp "${GITHUB_WORKSPACE}"/supabase/migrations/*.sql supabase/migrations/
           cp "${GITHUB_WORKSPACE}/supabase/tests/controprove/${{ matrix.difetto }}.sql" \
-            supabase/migrations/0003_difetto_di_prova.sql
+            supabase/migrations/9999_difetto_di_prova.sql
           supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor,postgres-meta,realtime,mailpit
           supabase status -o env > "${RUNNER_TEMP}/sb.env"
           for k in API_URL ANON_KEY JWT_SECRET DB_URL SERVICE_ROLE_KEY; do
