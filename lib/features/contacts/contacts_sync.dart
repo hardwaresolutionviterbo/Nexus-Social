@@ -3,8 +3,10 @@ import 'dart:io';
 
 import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuth, User;
 import 'package:firebase_core/firebase_core.dart' show Firebase;
+import 'package:crypto/crypto.dart' show sha256;
 import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter_contacts/flutter_contacts.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException, SupabaseClient;
 
 import '../../core/crypto/p256_oprf.dart';
@@ -16,7 +18,27 @@ abstract final class ContactsLimits {
   static const int maxNumbers = 2000;
   static const int syncsPerDay = 3;
   static const Duration expiry = Duration(days: 30);
+
+  /// Aggiornamento automatico: subito se la rubrica è cambiata, altrimenti una volta al giorno.
+  static const Duration autoInterval = Duration(hours: 24);
 }
+
+/// Decide se aggiornare la rubrica da sola, come WhatsApp (solo con il consenso attivo).
+bool shouldAutoSync({
+  required bool enabled,
+  required bool contactsChanged,
+  required DateTime? lastSync,
+  required DateTime now,
+}) {
+  if (!enabled) return false;
+  if (contactsChanged || lastSync == null) return true;
+  return now.difference(lastSync) >= ContactsLimits.autoInterval;
+}
+
+/// Impronta dei numeri in rubrica: serve solo a capire se la rubrica è cambiata.
+/// Resta sul telefono, nella memoria protetta; dall'impronta non si risale ai numeri.
+String contactsFingerprint(List<String> normalized) =>
+    sha256.convert(utf8.encode(normalized.join(','))).toString();
 
 /// Numeri della rubrica in formato internazionale, senza doppioni (solo cellulari italiani, L3).
 List<String> normalizeContactNumbers(Iterable<String> raw) {
@@ -34,11 +56,22 @@ abstract class ContactsReader {
   Future<bool> requestPermission();
 
   Future<List<String>> phoneNumbers();
+
+  /// Avvisa quando la rubrica del telefono cambia (contatto aggiunto o modificato).
+  void addListener(void Function() listener);
+
+  void removeListener(void Function() listener);
 }
 
 class DeviceContactsReader implements ContactsReader {
   @override
   Future<bool> requestPermission() => FlutterContacts.requestPermission(readonly: true);
+
+  @override
+  void addListener(void Function() listener) => FlutterContacts.addListener(listener);
+
+  @override
+  void removeListener(void Function() listener) => FlutterContacts.removeListener(listener);
 
   @override
   Future<List<String>> phoneNumbers() async {
@@ -90,6 +123,15 @@ abstract class ContactsRepository {
 
   /// «Revoca e cancella»: stop e cancellazione dei dati derivati.
   Future<void> revoke();
+
+  /// Aggiornamento automatico all'apertura e quando la rubrica cambia: solo con il consenso
+  /// attivo, subito se la rubrica è cambiata, altrimenti al massimo una volta al giorno.
+  /// Restituisce true se ha sincronizzato. Gli errori non disturbano l'utente.
+  Future<bool> autoSyncIfNeeded();
+
+  void watchContacts(void Function() onChange);
+
+  void unwatchContacts(void Function() onChange);
 }
 
 /// Lavoro pesante (curve ellittiche) fuori dal thread dell'interfaccia.
@@ -112,6 +154,9 @@ class SupabaseContactsRepository implements ContactsRepository {
   final FirebaseAuth _auth;
 
   static const String region = 'europe-west1';
+  static const FlutterSecureStorage _storage = FlutterSecureStorage();
+  static const String _fingerprintKey = 'piazly_contacts_fingerprint';
+  bool _autoRunning = false;
 
   static Future<T> _guard<T>(Future<T> Function() body) async {
     try {
@@ -187,6 +232,7 @@ class SupabaseContactsRepository implements ContactsRepository {
     final List<String> numbers = normalizeContactNumbers(await _reader.phoneNumbers());
     if (numbers.isEmpty) {
       await _client.rpc('match_contacts', params: <String, Object?>{'p_tags': <String>[]});
+      await _saveFingerprint(numbers);
       onProgress?.call(1);
       return const <RecognizedContact>[];
     }
@@ -201,9 +247,60 @@ class SupabaseContactsRepository implements ContactsRepository {
     final List<String> tags = await compute(_finalizeAll, (blinded, values));
     onProgress?.call(0.9);
     await _client.rpc('match_contacts', params: <String, Object?>{'p_tags': tags});
+    await _saveFingerprint(numbers);
     onProgress?.call(1);
     return contacts();
   });
+
+  Future<void> _saveFingerprint(List<String> numbers) async {
+    try {
+      await _storage.write(key: _fingerprintKey, value: contactsFingerprint(numbers));
+    } catch (_) {
+      // Senza impronta si aggiorna comunque una volta al giorno.
+    }
+  }
+
+  @override
+  Future<bool> autoSyncIfNeeded() async {
+    if (_autoRunning) return false;
+    _autoRunning = true;
+    try {
+      final Object? status = await _client.rpc('get_my_privacy');
+      if (status is! Map<String, dynamic> || status['contacts_enabled'] != true) return false;
+      final Object? synced = status['contacts_synced_at'];
+      final DateTime? lastSync = synced is String ? DateTime.tryParse(synced) : null;
+      if (!await _reader.requestPermission()) return false;
+      final List<String> numbers = normalizeContactNumbers(await _reader.phoneNumbers());
+      String? stored;
+      try {
+        stored = await _storage.read(key: _fingerprintKey);
+      } catch (_) {
+        stored = null;
+      }
+      final bool changed = stored != null && stored != contactsFingerprint(numbers);
+      if (!shouldAutoSync(
+        enabled: true,
+        contactsChanged: changed,
+        lastSync: lastSync,
+        now: DateTime.now(),
+      )) {
+        return false;
+      }
+      await sync();
+      return true;
+    } catch (_) {
+      // Limite giornaliero, rete assente…: si riprova alla prossima apertura.
+      return false;
+    } finally {
+      _autoRunning = false;
+    }
+  }
+
+  @override
+  void watchContacts(void Function() onChange) => _reader.addListener(onChange);
+
+  @override
+  void unwatchContacts(void Function() onChange) => _reader.removeListener(onChange);
 
   @override
   Future<List<RecognizedContact>> contacts() => _guard(() async {
@@ -223,5 +320,10 @@ class SupabaseContactsRepository implements ContactsRepository {
   @override
   Future<void> revoke() => _guard(() async {
     await _client.rpc('revoke_contacts');
+    try {
+      await _storage.delete(key: _fingerprintKey);
+    } catch (_) {
+      // L'impronta locale è facoltativa.
+    }
   });
 }

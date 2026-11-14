@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:nexus_social/core/theme/app_theme.dart';
+import 'package:nexus_social/features/contacts/contacts_auto_sync.dart';
 import 'package:nexus_social/features/contacts/contacts_sync.dart';
 import 'package:nexus_social/features/privacy/privacy_screen.dart';
 
@@ -109,5 +110,55 @@ void main() {
     await tapKey(tester, 'conferma_revoca_rubrica');
     expect(contacts.calls.last, 'revoke');
     expect(key('nessun_consenso'), findsOneWidget);
+  });
+
+  group('aggiornamento automatico, come WhatsApp', () {
+    final DateTime now = DateTime(2026, 11, 15, 12);
+
+    test('senza consenso: mai', () {
+      expect(shouldAutoSync(enabled: false, contactsChanged: true, lastSync: null, now: now),
+          isFalse);
+    });
+
+    test('nuovo contatto in rubrica: subito', () {
+      expect(shouldAutoSync(enabled: true, contactsChanged: true,
+          lastSync: now.subtract(const Duration(minutes: 5)), now: now), isTrue);
+    });
+
+    test('rubrica uguale: al massimo una volta al giorno', () {
+      expect(shouldAutoSync(enabled: true, contactsChanged: false,
+          lastSync: now.subtract(const Duration(hours: 3)), now: now), isFalse);
+      expect(shouldAutoSync(enabled: true, contactsChanged: false,
+          lastSync: now.subtract(const Duration(hours: 25)), now: now), isTrue);
+    });
+
+    test('impronta della rubrica: cambia se cambia un numero, non contiene i numeri', () {
+      final String a = contactsFingerprint(<String>['+393000000001', '+393000000002']);
+      final String b = contactsFingerprint(<String>['+393000000001', '+393000000003']);
+      expect(a, isNot(b));
+      expect(a.contains('3000000001'), isFalse);
+    });
+
+    testWidgets('controlla all\'apertura, al ritorno nell\'app e quando la rubrica cambia',
+        (tester) async {
+      await tester.pumpWidget(
+        ContactsAutoSync(
+          repository: contacts,
+          debounce: const Duration(milliseconds: 100),
+          child: const SizedBox(),
+        ),
+      );
+      expect(contacts.autoChecks, 1);
+      contacts.simulateContactsChange();
+      contacts.simulateContactsChange();
+      await tester.pump(const Duration(milliseconds: 150));
+      expect(contacts.autoChecks, 2);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(contacts.autoChecks, 3);
+      await tester.pumpWidget(const SizedBox());
+      expect(contacts.listeners, isEmpty);
+    });
   });
 }

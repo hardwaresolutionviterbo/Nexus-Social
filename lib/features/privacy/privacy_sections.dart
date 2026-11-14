@@ -494,9 +494,13 @@ Future<bool> askContactsConsent(BuildContext context) async {
               point(Icons.person_search_outlined,
                   'Scopri quali tuoi contatti usano Piazly. Chi ha il tuo numero potrà '
                   'trovarti: puoi spegnerlo in qualsiasi momento.'),
+              point(Icons.sync_rounded,
+                  'La rubrica si aggiorna da sola quando salvi un nuovo contatto o apri l\'app '
+                  '(al massimo 3 volte al giorno, 2.000 numeri): chi usa Piazly viene '
+                  'riconosciuto subito.'),
               point(Icons.timer_outlined,
-                  'Al massimo 3 sincronizzazioni al giorno e 2.000 numeri. Senza una nuova '
-                  'sincronizzazione i dati ricavati si cancellano dopo 30 giorni.'),
+                  'Se smetti di usare l\'app, i dati ricavati dalla rubrica si cancellano da '
+                  'soli dopo 30 giorni.'),
               point(Icons.undo_rounded,
                   'Puoi revocare in ogni momento: i dati ricavati dalla rubrica vengono '
                   'cancellati subito.'),
@@ -614,8 +618,9 @@ class _LiveContactsBody extends StatelessWidget {
             Text('Protezione dei numeri in corso…', style: theme.textTheme.bodySmall),
           ],
           const _Note(
-            'I numeri non vengono mai inviati in chiaro. Al massimo 3 sincronizzazioni al '
-            'giorno; senza una nuova sincronizzazione i dati si cancellano dopo 30 giorni.',
+            'Si aggiorna da sola quando salvi un nuovo contatto o apri l\'app. I numeri non '
+            'vengono mai inviati in chiaro. Se smetti di usare l\'app, i dati si cancellano '
+            'dopo 30 giorni.',
             icon: Icons.lock_outline_rounded,
           ),
         ],

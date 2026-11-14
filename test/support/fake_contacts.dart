@@ -15,6 +15,27 @@ class FakeContactsRepository implements ContactsRepository {
     const RecognizedContact(id: 'u3', username: 'marco_t', publicName: 'Marco T.'),
   ];
   List<RecognizedContact> current = <RecognizedContact>[];
+  int autoChecks = 0;
+  final List<void Function()> listeners = <void Function()>[];
+
+  /// Simula il salvataggio di un nuovo contatto nella rubrica del telefono.
+  void simulateContactsChange() {
+    for (final void Function() l in List<void Function()>.of(listeners)) {
+      l();
+    }
+  }
+
+  @override
+  Future<bool> autoSyncIfNeeded() async {
+    autoChecks++;
+    return false;
+  }
+
+  @override
+  void watchContacts(void Function() onChange) => listeners.add(onChange);
+
+  @override
+  void unwatchContacts(void Function() onChange) => listeners.remove(onChange);
 
   void _update({required bool enabled, DateTime? synced}) {
     final PrivacySettings s = privacy.settings;

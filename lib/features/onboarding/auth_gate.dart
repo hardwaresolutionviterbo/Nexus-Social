@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/services/auth_gateway.dart';
 import '../../core/services/backend_bootstrap.dart';
 import '../../core/widgets/nexus_ui.dart';
+import '../contacts/contacts_auto_sync.dart';
 import '../contacts/contacts_sync.dart';
 import '../privacy/privacy_checkup_screen.dart';
 import '../privacy/privacy_controller.dart';
@@ -271,8 +272,12 @@ class _AuthGateState extends State<AuthGate> {
               biometricLock: widget.biometricLock,
               contacts: widget.contacts,
             );
+            final ContactsRepository? contacts = widget.contacts;
+            final Widget synced = contacts == null
+                ? shell
+                : ContactsAutoSync(repository: contacts, child: shell);
             final BiometricLock? lock = widget.biometricLock;
-            return lock == null ? shell : AppLockGate(lock: lock, child: shell);
+            return lock == null ? synced : AppLockGate(lock: lock, child: synced);
         }
       case _Link.checking:
         return const _LinkScreen(
