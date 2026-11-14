@@ -66,6 +66,14 @@ class _PhotoRepo extends FakeProfileRepository {
   Future<Uint8List?> downloadAvatar(String path) async => photo;
 }
 
+/// Sul telefono i testi delle liste usano Roboto; nei test va indicato esplicitamente.
+ThemeData _withRoboto(ThemeData t) => t.copyWith(
+  listTileTheme: t.listTileTheme.copyWith(
+    titleTextStyle: t.listTileTheme.titleTextStyle?.copyWith(fontFamily: 'Roboto'),
+    subtitleTextStyle: t.listTileTheme.subtitleTextStyle?.copyWith(fontFamily: 'Roboto'),
+  ),
+);
+
 void main() {
   setUpAll(_loadFonts);
 
@@ -76,7 +84,7 @@ void main() {
     addTearDown(tester.view.reset);
     await tester.pumpWidget(MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: theme ?? AppTheme.light,
+      theme: _withRoboto(theme ?? AppTheme.light),
       home: home,
     ));
     await tester.pumpAndSettle();
