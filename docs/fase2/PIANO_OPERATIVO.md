@@ -3,7 +3,22 @@
 Stato:
 - **decisioni S1-S7 prese dal titolare** il 14/11/2026 (sezione 4);
 - **piano approvato dal titolare** il 14/11/2026;
-- Blocco 1 autorizzato.
+- Blocco 1 autorizzato;
+- **S1 in pausa** dal 14/11/2026 (vedi sotto).
+
+> **S1 in pausa.** L'attivazione di Blaze richiede un pagamento anticipato di 30 $, non
+> possibile per ora.
+>
+> Decisione del titolare: si prosegue con tutte le altre funzioni e il collegamento lato
+> server si implementa appena possibile.
+>
+> Conseguenze:
+> - la Cloud Function `assegnaRuolo` è pronta e testata, ma non pubblicata;
+> - l'app usa l'interruttore `SERVER_LINK_ENABLED=false`: l'utente entra con il numero e il
+>   collegamento a Supabase resta «in attesa»;
+> - le funzioni che salvano dati su Supabase (profilo, privacy, blocchi, rubrica) si
+>   costruiscono e si provano con i test automatici; la prova completa sul telefono si fa quando
+>   il server è attivo.
 
 Riferimento: `Nexus_Social_Piano_di_Lavoro_COMPLETO_AGGIORNATO.pdf`, «FASE 2 – Account,
 profili e privacy» (SHA-256 `7da25d52…b8561eb`).
