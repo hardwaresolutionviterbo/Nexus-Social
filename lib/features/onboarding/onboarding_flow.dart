@@ -191,7 +191,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
                     children: [
                       const NexusMark(size: 36),
                       const SizedBox(width: 12),
-                      const NexusWordmark(),
+                      const Flexible(child: NexusWordmark()),
                       const Spacer(),
                       if (_step != _Step.welcome && _step != _Step.blocked)
                         TextButton(
@@ -319,9 +319,12 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
               children: [
                 Icon(Icons.shield_rounded, size: 15, color: muted),
                 const SizedBox(width: 6),
-                Text(
-                  'Il tuo numero resta privato. Sempre.',
-                  style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                Flexible(
+                  child: Text(
+                    'Il tuo numero resta privato. Sempre.',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                  ),
                 ),
               ],
             ),
