@@ -66,7 +66,10 @@ void main() {
     expect(privacy.calls, contains('setPhoneVisibility:nobody'));
     await tester.pageBack();
     await tester.pumpAndSettle();
-    expect(find.text('Nessuno'), findsOneWidget);
+    expect(
+      find.descendant(of: key('sezione_phone'), matching: find.text('Nessuno')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('P15 · salvataggio non riuscito: la scelta torna com\'era, con messaggio', (tester) async {

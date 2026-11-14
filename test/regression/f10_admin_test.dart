@@ -88,11 +88,19 @@ void main() {
     }
   });
 
-  test('F10 · l\'unica navigazione esplicita è la diagnostica push del Profilo', () {
+  // Elenco chiuso dei file che navigano: ogni aggiunta va rivista e approvata qui.
+  // Fase 1: diagnostica push del Profilo. Fase 2: profilo (Blocco 2), Privacy e blocchi
+  // (Blocco 3). Nessuno di questi apre l'anteprima admin (vedi il test precedente).
+  test('F10 · navigazione esplicita solo nei file rivisti (Profilo e Privacy)', () {
     final List<String> users = <String>[
       for (final File file in dartSources())
         if (file.readAsStringSync().contains('Navigator.')) rel(file),
-    ];
-    expect(users, <String>['lib/features/profile/profile_screen.dart']);
+    ]..sort();
+    expect(users, <String>[
+      'lib/features/privacy/privacy_screen.dart',
+      'lib/features/privacy/privacy_sections.dart',
+      'lib/features/profile/profile_screen.dart',
+      'lib/features/profile/public_profile_screen.dart',
+    ]);
   });
 }
