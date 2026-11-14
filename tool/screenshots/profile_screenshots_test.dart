@@ -73,6 +73,20 @@ class _PhotoRepo extends FakeProfileRepository {
 
 /// Sul telefono i testi delle liste usano Roboto; nei test va indicato esplicitamente.
 ThemeData _withRoboto(ThemeData t) => t.copyWith(
+  filledButtonTheme: FilledButtonThemeData(
+    style: t.filledButtonTheme.style?.copyWith(
+      textStyle: const WidgetStatePropertyAll<TextStyle>(
+        TextStyle(fontFamily: 'Roboto', fontWeight: FontWeight.w800),
+      ),
+    ),
+  ),
+  outlinedButtonTheme: OutlinedButtonThemeData(
+    style: t.outlinedButtonTheme.style?.copyWith(
+      textStyle: const WidgetStatePropertyAll<TextStyle>(
+        TextStyle(fontFamily: 'Roboto', fontWeight: FontWeight.w700),
+      ),
+    ),
+  ),
   listTileTheme: t.listTileTheme.copyWith(
     titleTextStyle: t.listTileTheme.titleTextStyle?.copyWith(fontFamily: 'Roboto'),
     subtitleTextStyle: t.listTileTheme.subtitleTextStyle?.copyWith(fontFamily: 'Roboto'),
