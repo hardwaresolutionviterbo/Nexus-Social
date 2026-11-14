@@ -25,13 +25,13 @@ jobs:
 
       # Elenco atteso: migrazioni applicate al database reale con autorizzazione del titolare
       # (0001, 0002 il 14/11/2026) più quelle del blocco in corso, provate SOLO qui sul
-      # database temporaneo (0003-0004, Fase 2 Blocchi 2-3: in attesa di autorizzazione per il reale).
+      # database temporaneo (0003-0005, Fase 2 Blocchi 2-4: in attesa di autorizzazione per il reale).
       # Una nuova migrazione va aggiunta qui consapevolmente.
       - name: Migrazioni approvate
         run: |
           set -euo pipefail
           found=$(ls supabase/migrations | tr '\n' ' ')
-          expected="0001_init.sql 0002_identita_firebase_e_dati_privati.sql 0003_profilo_completo.sql 0004_privacy_e_blocchi.sql "
+          expected="0001_init.sql 0002_identita_firebase_e_dati_privati.sql 0003_profilo_completo.sql 0004_privacy_e_blocchi.sql 0005_sicurezza_account.sql "
           echo "Migrazioni: ${found}"
           if [ "${found}" != "${expected}" ]; then
             echo "::error::supabase/migrations contiene migrazioni non approvate dal titolare."
@@ -67,7 +67,7 @@ jobs:
           done
           echo "Supabase temporaneo pronto."
 
-      - name: Test di sicurezza (A, B, C, D, D2, E, F, G)
+      - name: Test di sicurezza (A, B, C, D, D2, E, F, G, H)
         run: |
           set -euo pipefail
           read_env() { grep -E "^$1=" "${RUNNER_TEMP}/sb.env" | head -1 | cut -d= -f2- | tr -d '"'; }
@@ -98,6 +98,8 @@ jobs:
             caso: F1
           - difetto: blocco_ignorato
             caso: G4
+          - difetto: pin_ignorato
+            caso: H3
 
     steps:
       - name: Checkout

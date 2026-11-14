@@ -77,8 +77,10 @@ def token(sub: str | None = UID_A, *, project: str = PROJECT, role: str = "authe
 
 
 def request(method: str, path: str, *, jwt: str | None = None, body=None,
-            prefer: str | None = None) -> tuple[int, object]:
+            prefer: str | None = None, device: str | None = None) -> tuple[int, object]:
     headers = {"apikey": ANON, "Content-Type": "application/json"}
+    if device is not None:
+        headers["x-device-id"] = device
     if jwt is not None:
         headers["Authorization"] = f"Bearer {jwt}"
     if prefer:
@@ -101,8 +103,8 @@ def get(path, jwt=None):
     return request("GET", path, jwt=jwt)
 
 
-def rpc(name, args, jwt=None):
-    return request("POST", f"/rest/v1/rpc/{name}", jwt=jwt, body=args)
+def rpc(name, args, jwt=None, device=None):
+    return request("POST", f"/rest/v1/rpc/{name}", jwt=jwt, body=args, device=device)
 
 
 def sql(statement: str) -> str:
@@ -369,9 +371,12 @@ def run(ids: dict) -> None:
                   {"p_listing_id": ids["b_listing"], "p_mode": "precise"}, ta)[0] >= 400)
 
 
-def storage(method: str, path: str, jwt: str | None, data: bytes | None = None) -> int:
+def storage(method: str, path: str, jwt: str | None, data: bytes | None = None,
+            device: str | None = None) -> int:
     """Chiamata allo Storage temporaneo; restituisce solo lo stato HTTP."""
     headers = {"apikey": ANON, "Content-Type": "image/jpeg"}
+    if device is not None:
+        headers["x-device-id"] = device
     if jwt is not None:
         headers["Authorization"] = f"Bearer {jwt}"
     req = urllib.request.Request(f"{API}/storage/v1/object/{path}", data=data,
@@ -569,6 +574,101 @@ def check_privacy_block3() -> None:
           n1[0] >= 400 and n2[0] >= 400, f"HTTP {n1[0]}, {n2[0]}")
 
 
+def check_security_block4() -> None:
+    """H · Verifica in due passaggi con PIN (Fase 2, Blocco 4). Utente C, creato qui."""
+    tc = token(UID_C)
+    dev1 = "telefonoUno_" + "a" * 32
+    dev2 = "telefonoDue_" + "b" * 32
+    s, _ = rpc("create_my_profile", {"p_username": "utente_c", "p_full_name": "Carla Neri",
+                                     "p_birth_date": "1992-02-02"}, tc, dev1)
+    assert s in (200, 204), f"creazione profilo C: HTTP {s}"
+
+    # H1 · PIN di 6 cifre, salvato solo come hash
+    bad = [rpc("set_pin", {"p_new_pin": p}, tc, dev1)[0] for p in ("12345", "1234567", "abcdef")]
+    ok = rpc("set_pin", {"p_new_pin": "482913"}, tc, dev1)
+    stored = sql(f"select pin_hash from private.account_security where id = '{UID_C}';")
+    check("H1", "PIN solo di 6 cifre; sul server c'è solo l'hash, mai il PIN",
+          all(b >= 400 for b in bad) and ok[0] in (200, 204) and stored.startswith("$2")
+          and "482913" not in stored, f"HTTP {bad}, {ok[0]}")
+
+    # H2 · Telefono attendibile: tutto normale
+    s1, me1 = rpc("get_my_profile", {}, tc, dev1)
+    s2, st1 = rpc("security_status", {}, tc, dev1)
+    check("H2", "Dal telefono su cui è stato impostato il PIN l'utente vede i propri dati",
+          s1 == 200 and isinstance(me1, dict) and me1.get("username") == "utente_c"
+          and st1.get("pin_enabled") is True and st1.get("device_trusted") is True)
+
+    # H3 · Telefono nuovo (o nessun codice): nessun accesso ai dati finché non c'è il PIN
+    s3, me2 = rpc("get_my_profile", {}, tc, dev2)
+    s4, me3 = rpc("get_my_profile", {}, tc)
+    priv = rows(get(f"/rest/v1/profile_private?id=eq.{UID_C}", tc))
+    upd = rpc("update_my_profile", {"p_username": "rubato", "p_full_name": "Carla Neri",
+                                    "p_bio": None, "p_social_links": {}, "p_show_bio": True,
+                                    "p_show_social": True}, tc, dev2)
+    chg = rpc("set_pin", {"p_new_pin": "111111"}, tc, dev2)
+    _, st2 = rpc("security_status", {}, tc, dev2)
+    check("H3", "Da un telefono nuovo, senza PIN: nessun dato letto o modificato",
+          me2 is None and me3 is None and priv == [] and upd[0] >= 400 and chg[0] >= 400
+          and st2.get("pin_enabled") is True and st2.get("device_trusted") is False,
+          f"HTTP {s3}, {s4}, {upd[0]}, {chg[0]}")
+
+    # H4 · PIN sbagliato: niente accesso; 5 errori bloccano i tentativi
+    wrong = [rpc("verify_pin", {"p_pin": "000000"}, tc, dev2)[1] for _ in range(5)]
+    locked = rpc("verify_pin", {"p_pin": "482913"}, tc, dev2)
+    _, st3 = rpc("security_status", {}, tc, dev2)
+    check("H4", "PIN errato: nessun accesso; dopo 5 errori anche il PIN giusto deve aspettare",
+          wrong == [False] * 5 and locked[0] >= 400 and st3.get("locked_until") is not None
+          and st3.get("device_trusted") is False, f"{wrong}, HTTP {locked[0]}")
+    sql(f"update private.account_security set locked_until = null where id = '{UID_C}';")
+
+    # H5 · PIN giusto: il telefono nuovo diventa attendibile
+    right = rpc("verify_pin", {"p_pin": "482913"}, tc, dev2)
+    s5, me4 = rpc("get_my_profile", {}, tc, dev2)
+    check("H5", "PIN corretto: il telefono nuovo vede di nuovo i propri dati",
+          right[1] is True and s5 == 200 and isinstance(me4, dict))
+
+    # H6 · Cambiare o togliere il PIN richiede quello attuale
+    c1 = rpc("set_pin", {"p_new_pin": "222222", "p_current_pin": "999999"}, tc, dev1)
+    c2 = rpc("disable_pin", {"p_pin": "999999"}, tc, dev1)
+    c3 = rpc("set_pin", {"p_new_pin": "735102", "p_current_pin": "482913"}, tc, dev1)
+    check("H6", "Cambio o disattivazione del PIN solo con il PIN attuale",
+          c1[0] >= 400 and c2[0] >= 400 and c3[0] in (200, 204),
+          f"HTTP {c1[0]}, {c2[0]}, {c3[0]}")
+
+    # H7 · Uscita sicura: il telefono non è più attendibile
+    rpc("forget_this_device", {}, tc, dev2)
+    _, me5 = rpc("get_my_profile", {}, tc, dev2)
+    _, me6 = rpc("get_my_profile", {}, tc, dev1)
+    check("H7", "Dopo l'uscita sicura quel telefono richiede di nuovo il PIN; gli altri no",
+          me5 is None and isinstance(me6, dict))
+
+    # H8 · PIN dimenticato: ripristino solo dopo 7 giorni
+    early = rpc("complete_pin_reset", {}, tc, dev2)
+    s6, avail = rpc("request_pin_reset", {}, tc, dev2)
+    still = rpc("complete_pin_reset", {}, tc, dev2)
+    sql(f"update private.account_security set reset_requested_at = now() - interval '8 days' "
+        f"where id = '{UID_C}';")
+    done = rpc("complete_pin_reset", {}, tc, dev2)
+    _, me7 = rpc("get_my_profile", {}, tc, dev2)
+    _, st4 = rpc("security_status", {}, tc, dev2)
+    check("H8", "PIN dimenticato: ripristino possibile solo dopo 7 giorni dalla richiesta",
+          early[0] >= 400 and s6 == 200 and avail is not None and still[0] >= 400
+          and done[0] in (200, 204) and isinstance(me7, dict) and st4.get("pin_enabled") is False,
+          f"HTTP {early[0]}, {still[0]}, {done[0]}")
+
+    # H9 · Nessuno rende attendibile un telefono per altri o legge i dati del PIN
+    t1 = rpc("trust_this_device", {"p_uid": UID_A}, tc, dev2)
+    t2 = get("/rest/v1/account_security", tc)
+    t3 = rpc("current_uid_raw", {}, tc, dev2)
+    check("H9", "Funzioni interne e dati del PIN non raggiungibili dall'app",
+          t1[0] >= 400 and t2[0] >= 400 and t3[0] >= 400, f"HTTP {t1[0]}, {t2[0]}, {t3[0]}")
+
+    # H10 · Gli utenti senza PIN non cambiano comportamento
+    s7, me8 = rpc("get_my_profile", {}, token(UID_A))
+    check("H10", "Senza PIN tutto funziona come prima, anche senza codice del telefono",
+          s7 == 200 and isinstance(me8, dict) and me8.get("username") == "utente_a")
+
+
 def main() -> int:
     try:
         ids = setup()
@@ -578,6 +678,7 @@ def main() -> int:
     run(ids)
     check_profile_block2()
     check_privacy_block3()
+    check_security_block4()
     failed = [r for r in results if not r[2]]
     print(f"{'Caso':6} {'Esito':9} Descrizione")
     for case, desc, ok, detail in results:
