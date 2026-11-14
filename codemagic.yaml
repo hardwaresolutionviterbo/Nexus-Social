@@ -19,6 +19,9 @@
 #    Istruzioni passo passo: docs/fase1/FIREBASE_IOS.md.
 # 3. Avvio solo manuale («Start new build»): nessuna build automatica a ogni push.
 #
+# Dipendenze iOS: SOLO Swift Package Manager (Flutter 3.50). Tutti i plugin, Firebase compreso,
+# sono pacchetti Swift: niente Podfile, niente CocoaPods (vedi docs/fase1/FIREBASE_IOS.md, sez. 5).
+#
 # Per installare l'app su un iPhone serve l'account sviluppatore Apple (Fasi 9-10): questa
 # build senza firma verifica che il progetto iOS compili con Firebase configurato.
 
@@ -33,12 +36,27 @@ workflows:
         - nexus_social
       flutter: 3.50.0
       xcode: latest
-      cocoapods: default
     cache:
       cache_paths:
         - $HOME/.pub-cache
-        - $HOME/Library/Caches/CocoaPods
     scripts:
+      # Integrazione unica: Swift Package Manager. Se ricomparisse un Podfile, Flutter
+      # tornerebbe a integrare CocoaPods nel progetto Xcode (integrazione mista).
+      - name: Swift Package Manager (senza CocoaPods)
+        script: |
+          set -e
+          flutter config --enable-swift-package-manager
+          for f in ios/Podfile ios/Podfile.lock ios/Pods; do
+            if [ -e "${f}" ]; then
+              echo "${f} presente: il progetto iOS usa solo Swift Package Manager."
+              exit 1
+            fi
+          done
+          if grep -qE '\[CP\]|Pods_Runner|Pods-Runner' ios/Runner.xcodeproj/project.pbxproj; then
+            echo "Il progetto Xcode contiene integrazione CocoaPods."
+            exit 1
+          fi
+          echo "Dipendenze iOS: solo Swift Package Manager."
       - name: Dipendenze
         script: flutter pub get
       - name: Analisi statica
@@ -107,10 +125,32 @@ workflows:
         script: |
           set -e
           app=build/ios/iphoneos/Runner.app
+          # 1. File di configurazione dentro l'app, valido e della nostra app.
           if [ ! -f "${app}/GoogleService-Info.plist" ]; then
             echo "GoogleService-Info.plist non è nel bundle dell'app."
             exit 1
           fi
-          echo "GoogleService-Info.plist incluso nel bundle Runner.app."
+          plutil -lint "${app}/GoogleService-Info.plist" > /dev/null
+          bundle=$(/usr/libexec/PlistBuddy -c 'Print :BUNDLE_ID' "${app}/GoogleService-Info.plist")
+          [ "${bundle}" = "com.nexussocial.app" ] || { echo "Plist nel bundle con BUNDLE_ID errato."; exit 1; }
+          echo "GoogleService-Info.plist incluso in Runner.app (com.nexussocial.app)."
+          # 2. Firebase abilitato nell'app (FIREBASE_ENABLED=true passato alla build).
+          if [ "${FIREBASE_ENABLED:-false}" != "true" ]; then
+            echo "FIREBASE_ENABLED non è true: Firebase resterebbe spento su iPhone."
+            exit 1
+          fi
+          echo "FIREBASE_ENABLED=true."
+          # 3. SDK Firebase collegato all'app tramite Swift Package Manager.
+          if ! grep -rqa "FIRApp" "${app}"; then
+            echo "SDK Firebase (FirebaseCore) non trovato in Runner.app."
+            exit 1
+          fi
+          echo "SDK Firebase presente in Runner.app."
+          # 4. Nessuna integrazione CocoaPods comparsa durante la build.
+          if [ -e ios/Pods ] || grep -qE '\[CP\]|Pods_Runner' ios/Runner.xcodeproj/project.pbxproj; then
+            echo "Durante la build è comparsa un'integrazione CocoaPods."
+            exit 1
+          fi
+          echo "Build iOS solo con Swift Package Manager."
     artifacts:
       - build/ios/iphoneos/Runner.app

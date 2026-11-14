@@ -46,6 +46,35 @@ void main() {
     expect(resources, contains('${build!.group(1)} /* GoogleService-Info.plist in Resources */'));
   });
 
+  test('iOS · dipendenze solo con Swift Package Manager, nessun CocoaPods', () {
+    // Un Podfile farebbe integrare CocoaPods da Flutter accanto a SPM (integrazione mista).
+    expect(File('ios/Podfile').existsSync(), isFalse);
+    expect(File('ios/Podfile.lock').existsSync(), isFalse);
+    expect(pbxproj, isNot(contains('[CP]')));
+    expect(pbxproj, isNot(contains('Pods_Runner')));
+    expect(pbxproj, isNot(contains('Pods-Runner')));
+    for (final String config in <String>['Debug', 'Release']) {
+      expect(
+        File('ios/Flutter/$config.xcconfig').readAsStringSync(),
+        isNot(contains('Pods')),
+        reason: config,
+      );
+    }
+    // Pacchetto Swift generato da Flutter collegato al target Runner.
+    expect(
+      pbxproj,
+      contains(
+        'XCLocalSwiftPackageReference "Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage"',
+      ),
+    );
+    expect(pbxproj, contains('FlutterGeneratedPluginSwiftPackage in Frameworks'));
+    // Versione minima iOS 15 (prima indicata nel Podfile).
+    final Set<String> targets = RegExp(
+      r'IPHONEOS_DEPLOYMENT_TARGET = ([0-9.]+);',
+    ).allMatches(pbxproj).map((Match m) => m.group(1)!).toSet();
+    expect(targets, <String>{'15.0'});
+  });
+
   test('iOS · Bundle ID dell\'app: com.nexussocial.app (come in Firebase)', () {
     final Iterable<String> ids = RegExp(
       r'PRODUCT_BUNDLE_IDENTIFIER = ([^;]+);',

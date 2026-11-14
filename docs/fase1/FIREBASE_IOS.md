@@ -57,7 +57,7 @@ Il file non va mai incollato su GitHub, né nei commit, né nelle issue.
 | Avvio di Firebase | ✅ L'app usa `Firebase.initializeApp()` senza opzioni: su iOS legge `GoogleService-Info.plist` dal bundle. Nessun codice Swift aggiuntivo |
 | `AppDelegate.swift` | ✅ Nessuna modifica necessaria |
 | Firestore | ✅ Nessuna configurazione iOS aggiuntiva |
-| Versione minima iOS | ⚠️ 15.0 (Podfile e Xcode), non verificata contro le versioni attuali di Firebase. Se Firebase ne chiedesse una più alta, lo dirà la prima build Codemagic (`pod install`) |
+| Versione minima iOS | 15.0 nel progetto Xcode. Nella prima build Codemagic le dipendenze Firebase sono state scaricate e compilate senza errori di versione minima |
 
 ## 4. Ancora da completare (richiede account Apple Developer o Mac)
 
@@ -70,3 +70,48 @@ Il file non va mai incollato su GitHub, né nei commit, né nelle issue.
 
 Queste configurazioni non sono state aggiunte ora, perché senza account Apple non funzionerebbero
 e non si potrebbero verificare.
+
+## 5. Dipendenze iOS: solo Swift Package Manager (14 novembre 2026)
+
+**Problema.** La prima build su Codemagic è fallita con «The sandbox is not in sync with the
+Podfile.lock».
+
+**Causa.**
+- Il progetto Xcode del repository era già configurato **solo con Swift Package Manager**:
+  il pacchetto `FlutterGeneratedPluginSwiftPackage` è collegato al target Runner e non ci sono
+  fasi o riferimenti CocoaPods. Tutti i plugin, Firebase compreso, sono pacchetti Swift.
+- Nel repository però era rimasto un `ios/Podfile` personalizzato, inutilizzato.
+- Per questo, durante la build, Flutter applicava anche CocoaPods al progetto: aggiungeva la
+  fase «[CP] Check Pods Manifest.lock», che confronta `Podfile.lock` con `Pods/Manifest.lock`.
+  Il messaggio «your project still has CocoaPods integration» lo indica.
+- Il controllo falliva, con ogni probabilità per due motivi (ricostruiti dai messaggi del log e
+  dai file del progetto, senza il log completo):
+  - i file `Flutter/Debug.xcconfig` e `Release.xcconfig` non includono le impostazioni
+    CocoaPods, quindi le cartelle confrontate dal controllo risultano vuote;
+  - non c'erano pod da installare.
+- Il risultato era un'integrazione mista, che non può funzionare.
+- Flutter non poteva sistemare tutto da solo perché il Podfile non era quello standard.
+
+**Correzione strutturale.**
+- Rimosso `ios/Podfile`. Non serviva `pod deintegrate`: il progetto Xcode del repository non
+  conteneva integrazione CocoaPods, e la versione minima iOS 15.0 resta impostata nel progetto
+  Xcode.
+- `codemagic.yaml`:
+  - attiva esplicitamente Swift Package Manager;
+  - si ferma se ricompaiono `Podfile`, `Podfile.lock`, `Pods` o fasi CocoaPods;
+  - non usa più la cache CocoaPods.
+- La cache di Codemagic conteneva solo le specifiche CocoaPods scaricate, non i file di
+  sincronizzazione: non era la causa. Rimossa comunque, perché inutile.
+- Il test automatico `test/ios_firebase_config_test.dart` verifica:
+  - assenza di Podfile e di integrazione CocoaPods;
+  - pacchetto Swift collegato;
+  - versione minima iOS 15.0.
+
+**Controlli finali della build iOS:**
+- `GoogleService-Info.plist` dentro `Runner.app`, valido e con Bundle ID corretto;
+- `FIREBASE_ENABLED=true`;
+- SDK Firebase presente nell'app;
+- nessuna integrazione CocoaPods comparsa durante la build.
+
+Se in futuro un plugin non supportasse Swift Package Manager, Flutter ricreerebbe da solo un
+Podfile standard: andrebbe valutato allora, insieme a questi controlli.
