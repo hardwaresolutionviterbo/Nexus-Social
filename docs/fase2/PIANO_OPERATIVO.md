@@ -2,9 +2,8 @@
 
 Stato:
 - **decisioni S1-S7 prese dal titolare** il 14/11/2026 (sezione 4);
-- piano in attesa di approvazione finale;
-- **nessun lavoro avviato**: codice, database e servizi restano invariati fino all'autorizzazione
-  del Blocco 1.
+- **piano approvato dal titolare** il 14/11/2026;
+- Blocco 1 autorizzato.
 
 Riferimento: `Nexus_Social_Piano_di_Lavoro_COMPLETO_AGGIORNATO.pdf`, «FASE 2 – Account,
 profili e privacy» (SHA-256 `7da25d52…b8561eb`).
@@ -79,10 +78,13 @@ profili e privacy» (SHA-256 `7da25d52…b8561eb`).
 ## 5. Flusso di registrazione proposto
 
 1. Benvenuto: «Registrati come Privato» / «Registrati come Azienda» (R2.1).
-2. Numero di telefono (+39) e codice SMS (R2.2).
-3. Data di nascita: sotto i 14 anni blocco senza salvare dati (M2); Azienda solo 18+ (M6).
-4. Avviso di sicurezza (D3, M3), con richiamo per i minorenni.
-5. Termini e Privacy (S7).
+2. Data di nascita, controllata **sul telefono, prima di creare l'account**: sotto i 14 anni
+   blocco senza salvare dati (M2); Azienda solo 18+ (M6).
+   Correzione del 14/11/2026: nella prima versione la data veniva chiesta dopo l'SMS, ma il login
+   con SMS crea già un account Firebase con il numero, e questo violerebbe M2.
+3. Avviso di sicurezza (D3, M3), con richiamo per i minorenni.
+4. Termini e Privacy (S7).
+5. Numero di telefono (+39) e codice SMS (R2.2).
 6. Profilo: @username univoco, nome e cognome, foto o avatar (A5), bio, social (R2.3, R2.4).
 7. Verifica in due passaggi (S2) e impronta (S3), saltabili.
 8. Controllo privacy (P14), saltabile.
@@ -98,7 +100,7 @@ Ogni blocco segue le regole della Fase 1:
 
 | Blocco | Contenuto | Prova sul telefono Android |
 |---|---|---|
-| **1 · Registrazione e accesso** | Componente lato server (S1) con ruolo `authenticated`; flusso dei punti 1-5; logout | Registrazione con un **numero di prova** e codice fisso; dopo l'accesso il Profilo mostra «Utente collegato»; sotto i 14 anni la registrazione si blocca |
+| **1 · Registrazione e accesso** | Componente lato server (S1) con ruolo `authenticated`; flusso dei punti 1-5; logout. La data di nascita resta sul telefono fino alla creazione del profilo (Blocco 2) | Registrazione con un **numero di prova** e codice fisso; dopo l'accesso il Profilo mostra «Utente collegato»; sotto i 14 anni la registrazione si blocca |
 | **2 · Profilo** | Migrazione `0003` (foto, social, Azienda); @username univoco; nome abbreviato; foto (S5) con miniatura; bio e social (P3); dati Azienda (S4); copia pubblica Firestore sincronizzata dal server | Completi il profilo; con un secondo numero di prova vedi solo «Carlo C.», @username, foto, bio e social |
 | **3 · Privacy e blocchi** | Pagina Privacy (7 sezioni) e Controllo privacy (8 passi) da `PRIVACY_IMPOSTAZIONI.md`; salvataggio immediato; blocco utenti applicato dal server (P12) | Cambi le impostazioni e le ritrovi dopo il riavvio; blocchi il secondo account e lui non vede più il tuo profilo |
 | **4 · Sicurezza dell'account** | 2FA (S2); impronta o volto (S3); uscita sicura | Attivi PIN e impronta; chiudi e riapri l'app: entri con l'impronta; su un nuovo accesso ti viene chiesto il PIN |
