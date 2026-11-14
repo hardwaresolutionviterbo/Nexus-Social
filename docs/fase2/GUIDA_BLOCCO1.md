@@ -2,7 +2,7 @@
 
 Ordine delle operazioni. Ognuna si fa solo dopo quella precedente.
 
-## A. Pannello Firebase (nessun pagamento)
+## A. Pannello Firebase (fatto; l'invio del codice richiede Blaze, vedi BLOCCO1_ESITO.md)
 
 1. **Authentication → Metodo di accesso** → **Telefono** → **Abilita**.
 2. **Numeri di telefono per i test**: `+39 300 000 0001` e `+39 300 000 0002`, ciascuno con un

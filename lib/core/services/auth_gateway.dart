@@ -206,9 +206,14 @@ class FirebaseAuthGateway implements AuthGateway {
       case 'network-request-failed':
         return const AuthFailure('Connessione assente. Riprova.');
       case 'billing-not-enabled':
+        return const AuthFailure(
+          'Accesso con SMS non disponibile: Firebase richiede il piano Blaze '
+          '(codice: billing-not-enabled).',
+        );
       case 'operation-not-allowed':
         return const AuthFailure(
-          'L\'accesso con numero di telefono non è ancora attivo sul server.',
+          'Accesso con numero di telefono non abilitato in Firebase '
+          '(codice: operation-not-allowed).',
         );
       default:
         return _generic;
