@@ -517,3 +517,75 @@ class _NotificationsSheet extends StatelessWidget {
     );
   }
 }
+
+/// Fondo con bagliori: blu elettrico in alto a sinistra, arancio in basso a destra.
+class NexusBackdrop extends StatelessWidget {
+  const NexusBackdrop({super.key, required this.isDark});
+
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final double strength = isDark ? 1 : 0.55;
+    return IgnorePointer(
+      child: Stack(
+        children: [
+          const SizedBox.expand(),
+          Positioned(
+            left: -140,
+            top: -120,
+            child: _GlowBlob(
+              color: AppColors.brandBlue,
+              size: 420,
+              alpha: 0.22 * strength,
+            ),
+          ),
+          Positioned(
+            right: -160,
+            bottom: 40,
+            child: _GlowBlob(
+              color: AppColors.brandOrange,
+              size: 440,
+              alpha: 0.16 * strength,
+            ),
+          ),
+          Positioned(
+            right: -80,
+            top: 160,
+            child: _GlowBlob(
+              color: AppColors.brandViolet,
+              size: 260,
+              alpha: 0.10 * strength,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GlowBlob extends StatelessWidget {
+  const _GlowBlob({
+    required this.color,
+    required this.size,
+    required this.alpha,
+  });
+
+  final Color color;
+  final double size;
+  final double alpha;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: RadialGradient(
+          colors: [color.withValues(alpha: alpha), color.withValues(alpha: 0)],
+        ),
+      ),
+    );
+  }
+}

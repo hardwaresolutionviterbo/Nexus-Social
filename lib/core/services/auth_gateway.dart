@@ -120,6 +120,8 @@ class FirebaseAuthGateway implements AuthGateway {
   Future<void> ensureLinked() async {
     final User? user = _auth.currentUser;
     if (user == null) throw const AuthFailure('Accesso non trovato: riprova.');
+    // S1 in pausa: senza server l'utente entra; il collegamento a Supabase si fa dopo.
+    if (!AppConfig.serverLinkEnabled) return;
 
     final IdTokenResult current = await user.getIdTokenResult();
     if (current.claims?['role'] != 'authenticated') {

@@ -56,7 +56,8 @@ abstract final class BackendBootstrap {
           publishableKey: AppConfig.supabaseKey,
           // Fase 2: Supabase riconosce l'utente dal token Firebase (Third-Party Auth).
           // Senza utente collegato si usa solo la chiave pubblica, come prima.
-          accessToken: firebase == ServiceState.connected
+          accessToken:
+              firebase == ServiceState.connected && AppConfig.serverLinkEnabled
               ? () async => FirebaseAuth.instance.currentUser?.getIdToken()
               : null,
         );

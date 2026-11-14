@@ -111,7 +111,10 @@ class ProfileScreen extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         _signedIn
-                            ? 'Nome, foto e bio si completano nel prossimo aggiornamento.'
+                            ? AppConfig.serverLinkEnabled
+                                  ? 'Nome, foto e bio si completano nel prossimo aggiornamento.'
+                                  : 'Collegamento al server in attesa. Nome, foto e bio '
+                                        'arriveranno nei prossimi aggiornamenti.'
                             : 'Registrati con il numero di telefono per iniziare.',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: Colors.white.withValues(alpha: 0.85),

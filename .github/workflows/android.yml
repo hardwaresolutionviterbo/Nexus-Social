@@ -212,7 +212,8 @@ jobs:
             --dart-define=GIT_BRANCH="${GIT_BRANCH}" \
             --dart-define=SUPABASE_URL="${SUPABASE_URL}" \
             --dart-define=SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY}" \
-            --dart-define=FIREBASE_ENABLED="${FIREBASE_ENABLED}"
+            --dart-define=FIREBASE_ENABLED="${FIREBASE_ENABLED}" \
+            --dart-define=SERVER_LINK_ENABLED=false
 
       # SHA-1/SHA-256 del certificato debug usato da questo APK. Con la cache
       # il keystore è riutilizzato tra le run; lo SHA-1 va comunque registrato
