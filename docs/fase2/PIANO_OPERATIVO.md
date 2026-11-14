@@ -1,8 +1,10 @@
 # Fase 2 · Piano operativo (proposta)
 
-Stato: **proposta da approvare. Nessun lavoro avviato.** Codice, database e servizi restano
-invariati finché il titolare non approva il piano e non risponde alle decisioni della
-sezione 4.
+Stato:
+- **decisioni S1-S7 prese dal titolare** il 14/11/2026 (sezione 4);
+- piano in attesa di approvazione finale;
+- **nessun lavoro avviato**: codice, database e servizi restano invariati fino all'autorizzazione
+  del Blocco 1.
 
 Riferimento: `Nexus_Social_Piano_di_Lavoro_COMPLETO_AGGIORNATO.pdf`, «FASE 2 – Account,
 profili e privacy» (SHA-256 `7da25d52…b8561eb`).
@@ -62,17 +64,17 @@ profili e privacy» (SHA-256 `7da25d52…b8561eb`).
 | Cloud Storage for Firebase richiede Blaze dal 3 febbraio 2026 | Foto profilo su Supabase Storage (decisione S5) |
 | Login SMS su iPhone: servono APNs o lo schema URL per la verifica reCAPTCHA; installazione solo con account Apple | In Fase 2 iOS solo compilato su Codemagic; prove sul telefono Android |
 
-## 4. Decisioni da prendere (domande al titolare)
+## 4. Decisioni prese (14 novembre 2026)
 
-| N. | Domanda | Opzione consigliata |
+| N. | Argomento | Decisione del titolare |
 |---|---|---|
-| S1 | Componente lato server (ruolo `authenticated`, sincronizzazione del profilo pubblico Firestore, rubrica) | **Cloud Functions di Firebase (Blaze anticipato, budget 10 €/mese)**: nessuna chiave amministrativa esportata. Alternativa: Edge Functions di Supabase (resta gratuito, ma una chiave di servizio Firebase va custodita nei segreti di Supabase) |
-| S2 | Verifica in due passaggi | **PIN di 6 cifre come WhatsApp**, chiesto alla registrazione di un nuovo telefono; gratuito. Alternativa: secondo SMS con Identity Platform (a pagamento) |
-| S3 | Accesso con impronta o volto | **Facoltativo**: l'utente lo attiva; protegge l'apertura dell'app |
-| S4 | Registrazione Azienda in Fase 2 | **Dati essenziali** (ragione sociale, partita IVA privata) e controllo della maggiore età (M6); stato «in verifica»; badge solo dall'admin (Fase 7), abbonamento in Fase 6 |
-| S5 | Dove salvare le foto profilo | **Supabase Storage** (gratuito, regole già impostate su Firebase uid), con miniatura per la mappa |
-| S6 | Rubrica | **OPRF standard (RFC 9497)** calcolata dal server con chiave segreta; limiti: 3 sincronizzazioni al giorno, 2.000 numeri; scadenza 30 giorni (P7) |
-| S7 | Termini d'uso e Privacy Policy alla registrazione | **Mostrare le bozze con la scritta «bozza non validata»** e chiedere l'accettazione nelle build di prova; testi definitivi in Fase 9 |
+| S1 | Componente lato server (ruolo `authenticated`, sincronizzazione del profilo pubblico Firestore, rubrica) | **Cloud Functions di Firebase.** Blaze si attiva già nel Blocco 1, con avviso di budget a 10 €/mese (L2). Nessuna chiave amministrativa esportata. **Modifica la tempistica di L1**: Blaze prima della prova del numero reale. Lo sviluppo resta con numeri di prova |
+| S2 | Verifica in due passaggi | **PIN di 6 cifre come WhatsApp**, chiesto quando si entra da un nuovo telefono |
+| S3 | Impronta o volto | **Facoltativo**: l'utente lo attiva; quando è attivo serve per aprire l'app |
+| S4 | Registrazione Azienda | **Dati essenziali** (ragione sociale, partita IVA privata), maggiore età obbligatoria (M6), stato «in verifica»; badge solo dall'admin (Fase 7); abbonamento in Fase 6 |
+| S5 | Foto profilo | **Supabase Storage**, miniatura compressa al caricamento (A5) |
+| S6 | Rubrica | **OPRF standard (RFC 9497)** con chiave segreta sul server; massimo 3 sincronizzazioni al giorno e 2.000 numeri; cancellazione dopo 30 giorni (P7) |
+| S7 | Termini e Privacy alla registrazione | **Bozze con la scritta «bozza non validata»** e accettazione; testi definitivi in Fase 9 |
 
 ## 5. Flusso di registrazione proposto
 
@@ -111,7 +113,7 @@ Ognuna si fa solo quando serve e con l'autorizzazione esplicita del titolare.
 |---|---|
 | Blocco 1 | Firebase Console: attivare l'accesso con telefono e aggiungere due **numeri di prova** con codice fisso |
 | Blocco 1 | Supabase: attivare **Third-Party Auth → Firebase** con l'identificativo del progetto |
-| Blocco 1 (se S1 = Cloud Functions) | Attivare **Blaze** con avviso di budget a 10 € (L2) |
+| Blocco 1 | Attivare **Blaze** con avviso di budget a 10 € (L2), per le Cloud Functions (S1) |
 | Blocchi 2-5 | Applicare dall'editor SQL le migrazioni nuove, dopo i test sul database temporaneo |
 | Blocco 6 | Prova con il numero reale (SMS solo verso +39, L3) |
 
