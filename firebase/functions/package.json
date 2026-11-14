@@ -9,11 +9,11 @@
   },
   "scripts": {
     "check": "node --check index.js && node --check test/assegna-ruolo.test.mjs",
-    "test": "firebase emulators:exec --config ../../firebase.json --only auth,functions --project demo-nexus-social \"node --test --test-reporter=spec test/\""
+    "test": "firebase emulators:exec --config ../../firebase.json --only auth,functions --project demo-nexus-social \"node --test --test-reporter=spec test/assegna-ruolo.test.mjs\""
   },
   "dependencies": {
     "firebase-admin": "^13.0.0",
-    "firebase-functions": "^6.1.0"
+    "firebase-functions": "^7.0.0"
   },
   "devDependencies": {
     "firebase-tools": "15.36.0"
