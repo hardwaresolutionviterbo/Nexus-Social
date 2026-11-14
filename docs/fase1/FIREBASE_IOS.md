@@ -3,8 +3,15 @@
 Stato al 14 novembre 2026:
 - l'app iOS `com.nexussocial.app` è registrata nello stesso progetto Firebase di Android;
 - il progetto Xcode è pronto;
-- **la build iOS non è ancora stata eseguita**: serve Codemagic (su Mac) collegato dal
-  titolare.
+- **build iOS su Codemagic riuscita** (14 novembre 2026, dal commit `3a97b9f`). Nel
+  passaggio «Verifica Firebase nell'app iOS» sono superati tutti e quattro i controlli:
+  1. `GoogleService-Info.plist` incluso in `Runner.app` (com.nexussocial.app);
+  2. `FIREBASE_ENABLED=true`;
+  3. SDK Firebase presente in `Runner.app`;
+  4. build iOS solo con Swift Package Manager.
+
+  Build senza firma: dimostra che il progetto compila con Firebase. Per installare l'app su un
+  iPhone servono la firma e l'account Apple (sezione 4).
 
 ## 1. Regola F10: nessun file Firebase nel repository
 
