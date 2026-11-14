@@ -7,6 +7,7 @@ import '../../core/widgets/nexus_ui.dart';
 import '../chat/chat_screen.dart';
 import '../listings/listings_screen.dart';
 import '../map/map_screen.dart';
+import '../contacts/contacts_sync.dart';
 import '../privacy/privacy_repository.dart';
 import '../security/app_lock.dart';
 import '../security/security_repository.dart';
@@ -30,6 +31,7 @@ class AppShell extends StatefulWidget {
     this.privacy,
     this.security,
     this.biometricLock,
+    this.contacts,
   });
 
   final BackendStatus backend;
@@ -41,6 +43,7 @@ class AppShell extends StatefulWidget {
   final PrivacyRepository? privacy;
   final SecurityRepository? security;
   final BiometricLock? biometricLock;
+  final ContactsRepository? contacts;
 
   /// Uscita dall'account (presente solo con un utente collegato).
   final Future<void> Function()? onSignOut;
@@ -76,6 +79,7 @@ class _AppShellState extends State<AppShell> {
       privacy: widget.privacy,
       security: widget.security,
       biometricLock: widget.biometricLock,
+      contacts: widget.contacts,
     ),
   ];
 

@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/nexus_ui.dart';
+import '../contacts/contacts_sync.dart';
 import '../profile/profile_models.dart';
 import '../profile/profile_repository.dart';
 import '../profile/public_profile_screen.dart';
@@ -20,9 +21,13 @@ class PrivacyScreen extends StatefulWidget {
     this.profiles,
     this.profile,
     this.onChanged,
+    this.contacts,
   });
 
   final PrivacyRepository repository;
+
+  /// Rubrica (Blocco 5).
+  final ContactsRepository? contacts;
   final ProfileRepository? profiles;
   final MyProfile? profile;
 
@@ -34,7 +39,10 @@ class PrivacyScreen extends StatefulWidget {
 }
 
 class _PrivacyScreenState extends State<PrivacyScreen> {
-  late final PrivacyController _controller = PrivacyController(widget.repository)
+  late final PrivacyController _controller = PrivacyController(
+    widget.repository,
+    contactsRepository: widget.contacts,
+  )
     ..addListener(_changed);
   PrivacySettings? _last;
 

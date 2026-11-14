@@ -5,6 +5,7 @@ import 'core/services/auth_gateway.dart';
 import 'core/services/backend_bootstrap.dart';
 import 'core/theme/app_theme.dart';
 import 'features/onboarding/auth_gate.dart';
+import 'features/contacts/contacts_sync.dart';
 import 'features/privacy/privacy_repository.dart';
 import 'features/profile/profile_repository.dart';
 import 'features/security/app_lock.dart';
@@ -20,6 +21,7 @@ class NexusApp extends StatelessWidget {
     this.privacy,
     this.security,
     this.biometricLock,
+    this.contacts,
   });
 
   /// Stato dei servizi collegati all'avvio (Firebase, Supabase).
@@ -38,6 +40,9 @@ class NexusApp extends StatelessWidget {
   /// Verifica in due passaggi e sblocco con impronta (Blocco 4).
   final SecurityRepository? security;
   final BiometricLock? biometricLock;
+
+  /// Rubrica (Blocco 5).
+  final ContactsRepository? contacts;
 
   @override
   Widget build(BuildContext context) {
@@ -59,6 +64,7 @@ class NexusApp extends StatelessWidget {
               privacy: privacy,
               security: security,
               biometricLock: biometricLock,
+              contacts: contacts,
             ),
     );
   }

@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/nexus_ui.dart';
+import '../contacts/contacts_sync.dart';
 import '../profile/avatar_view.dart';
 import '../profile/profile_repository.dart';
 import 'privacy_controller.dart';
@@ -30,7 +31,9 @@ enum PrivacySection {
       'Bio ${c.settings.showBio ? 'visibile' : 'nascosta'} · '
           'social ${c.settings.showSocial ? 'visibili' : 'nascosti'}',
     PrivacySection.phone => c.settings.phoneVisibility.label,
-    PrivacySection.contacts => 'Rubrica non attiva',
+    PrivacySection.contacts => c.settings.contactsEnabled
+        ? 'Attiva · ${c.contacts.length == 1 ? '1 contatto' : '${c.contacts.length} contatti'}'
+        : 'Rubrica non attiva',
     PrivacySection.location => 'Posizione esatta mai visibile',
     PrivacySection.gps => 'Spento · nessuna condivisione',
     PrivacySection.blocked => switch (c.blocked.length) {
@@ -64,11 +67,13 @@ class PrivacySectionBody extends StatelessWidget {
       builder: (BuildContext context, _) => switch (section) {
         PrivacySection.profile => _ProfileBody(controller: controller, onPreview: onPreview),
         PrivacySection.phone => _PhoneBody(controller: controller),
-        PrivacySection.contacts => const _ContactsBody(),
+        PrivacySection.contacts => controller.contactsRepository == null
+            ? const _ContactsBody()
+            : _LiveContactsBody(controller: controller, profiles: profiles),
         PrivacySection.location => const _LocationBody(),
         PrivacySection.gps => const _GpsBody(),
         PrivacySection.blocked => _BlockedBody(controller: controller, profiles: profiles),
-        PrivacySection.permissions => const _PermissionsBody(),
+        PrivacySection.permissions => _PermissionsBody(controller: controller),
       },
     );
   }
@@ -366,7 +371,9 @@ class _BlockedBody extends StatelessWidget {
 }
 
 class _PermissionsBody extends StatelessWidget {
-  const _PermissionsBody();
+  const _PermissionsBody({required this.controller});
+
+  final PrivacyController controller;
 
   @override
   Widget build(BuildContext context) {
@@ -387,22 +394,274 @@ class _PermissionsBody extends StatelessWidget {
               'Gestite nelle impostazioni del telefono'),
           row(Icons.photo_library_outlined, 'Foto',
               'Nessun accesso alla galleria: scegli tu ogni singola foto'),
-          row(Icons.contacts_outlined, 'Contatti', 'Non usato (servirà alla rubrica)'),
+          row(Icons.contacts_outlined, 'Contatti', 'Letti solo con la rubrica attiva, mai inviati in chiaro'),
           row(Icons.place_outlined, 'Posizione', 'Non usata (servirà alla Mappa, Fase 3)'),
           row(Icons.mic_none_rounded, 'Microfono', 'Non usato (vocali e chiamate, Fase 4)'),
           const Divider(height: 24),
           Text('Consensi dati nell\'app', style: theme.textTheme.titleSmall),
           const SizedBox(height: 6),
-          const Text(
-            'Nessun consenso attivo.',
-            key: ValueKey<String>('nessun_consenso'),
-          ),
+          if (controller.settings.contactsEnabled)
+            ListTile(
+              key: const ValueKey<String>('consenso_rubrica'),
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.contacts_outlined),
+              title: const Text('Rubrica'),
+              subtitle: Text(
+                controller.settings.contactsConsentAt == null
+                    ? 'Attivo'
+                    : 'Dal ${formatDay(controller.settings.contactsConsentAt!)}',
+              ),
+              trailing: TextButton(
+                onPressed: controller.saving ? null : () => confirmRevokeContacts(context, controller),
+                child: const Text('Revoca'),
+              ),
+            )
+          else
+            const Text(
+              'Nessun consenso attivo.',
+              key: ValueKey<String>('nessun_consenso'),
+            ),
           const _Note(
             'Qui compariranno, con la data e il pulsante «Revoca», i consensi per la rubrica, '
             'il GPS in tempo reale e le notifiche delle promozioni vicine.',
           ),
         ],
       ),
+    );
+  }
+}
+
+
+String formatDay(DateTime d) =>
+    '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+
+Future<void> confirmRevokeContacts(BuildContext context, PrivacyController controller) async {
+  final bool? ok = await showDialog<bool>(
+    context: context,
+    builder: (BuildContext context) => AlertDialog(
+      title: const Text('Revocare la rubrica?'),
+      content: const Text(
+        'La sincronizzazione si ferma e i dati ricavati dalla tua rubrica vengono cancellati '
+        'subito dal server. Potrai riattivarla quando vuoi.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Annulla'),
+        ),
+        FilledButton(
+          key: const ValueKey<String>('conferma_revoca_rubrica'),
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('Revoca e cancella'),
+        ),
+      ],
+    ),
+  );
+  if (ok == true) await controller.revokeContacts();
+}
+
+/// Consenso esplicito alla rubrica (R2.6, P7, P13): cosa succede ai numeri, prima del
+/// permesso del sistema.
+Future<bool> askContactsConsent(BuildContext context) async {
+  final bool? ok = await showModalBottomSheet<bool>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (BuildContext context) {
+      final ThemeData theme = Theme.of(context);
+      Widget point(IconData icon, String text) => Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 20, color: AppColors.brandOrange),
+            const SizedBox(width: 12),
+            Expanded(child: Text(text)),
+          ],
+        ),
+      );
+      return SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Trova i contatti iscritti', style: theme.textTheme.titleLarge),
+              const SizedBox(height: 16),
+              point(Icons.lock_outline_rounded,
+                  'I numeri della tua rubrica non vengono mai inviati in chiaro: il telefono '
+                  'li trasforma in codici protetti prima di inviarli.'),
+              point(Icons.person_search_outlined,
+                  'Scopri quali tuoi contatti usano Piazly. Chi ha il tuo numero potrà '
+                  'trovarti: puoi spegnerlo in qualsiasi momento.'),
+              point(Icons.timer_outlined,
+                  'Al massimo 3 sincronizzazioni al giorno e 2.000 numeri. Senza una nuova '
+                  'sincronizzazione i dati ricavati si cancellano dopo 30 giorni.'),
+              point(Icons.undo_rounded,
+                  'Puoi revocare in ogni momento: i dati ricavati dalla rubrica vengono '
+                  'cancellati subito.'),
+              const SizedBox(height: 8),
+              FilledButton(
+                key: const ValueKey<String>('accetta_rubrica'),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(52),
+                  backgroundColor: AppColors.brandOrange,
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Accetto e continua'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Non ora'),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+  return ok ?? false;
+}
+
+class _LiveContactsBody extends StatelessWidget {
+  const _LiveContactsBody({required this.controller, this.profiles});
+
+  final PrivacyController controller;
+  final ProfileRepository? profiles;
+
+  Future<void> _activate(BuildContext context) async {
+    if (await askContactsConsent(context)) await controller.enableContacts();
+  }
+
+  void _openList(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ContactsListScreen(contacts: controller.contacts, profiles: profiles),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final PrivacySettings s = controller.settings;
+    final double? progress = controller.syncProgress;
+    return SectionCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (!s.contactsEnabled) ...[
+            const Text(
+              'Attiva la rubrica per scoprire quali tuoi contatti usano Piazly. È facoltativa '
+              'e puoi revocarla quando vuoi.',
+            ),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              key: const ValueKey<String>('attiva_rubrica'),
+              onPressed: controller.saving ? null : () => _activate(context),
+              icon: const Icon(Icons.contacts_outlined),
+              label: const Text('Trova i contatti iscritti'),
+            ),
+          ] else ...[
+            ListTile(
+              key: const ValueKey<String>('contatti_riconosciuti'),
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.people_alt_outlined),
+              title: Text(
+                controller.contacts.length == 1
+                    ? '1 contatto su Piazly'
+                    : '${controller.contacts.length} contatti su Piazly',
+              ),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => _openList(context),
+            ),
+            if (s.contactsSyncedAt != null)
+              Text(
+                'Ultima sincronizzazione: ${formatDay(s.contactsSyncedAt!)}'
+                '${s.contactsExpireAt != null ? ' · i dati scadono il ${formatDay(s.contactsExpireAt!)}' : ''}',
+                key: const ValueKey<String>('date_rubrica'),
+                style: theme.textTheme.bodySmall,
+              ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              key: const ValueKey<String>('sincronizza_ora'),
+              onPressed: controller.saving ? null : controller.syncContacts,
+              icon: const Icon(Icons.sync_rounded),
+              label: const Text('Sincronizza ora'),
+            ),
+            SwitchListTile(
+              key: const ValueKey<String>('permetti_trovarmi'),
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Permetti a chi ha il mio numero di trovarmi'),
+              value: s.discoverable,
+              onChanged: controller.saving ? null : controller.setDiscoverable,
+            ),
+            TextButton(
+              key: const ValueKey<String>('revoca_rubrica'),
+              onPressed: controller.saving ? null : () => confirmRevokeContacts(context, controller),
+              child: const Text('Revoca e cancella'),
+            ),
+          ],
+          if (progress != null) ...[
+            const SizedBox(height: 10),
+            LinearProgressIndicator(
+              key: const ValueKey<String>('avanzamento_rubrica'),
+              value: progress,
+              color: AppColors.brandOrange,
+            ),
+            const SizedBox(height: 4),
+            Text('Protezione dei numeri in corso…', style: theme.textTheme.bodySmall),
+          ],
+          const _Note(
+            'I numeri non vengono mai inviati in chiaro. Al massimo 3 sincronizzazioni al '
+            'giorno; senza una nuova sincronizzazione i dati si cancellano dopo 30 giorni.',
+            icon: Icons.lock_outline_rounded,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Contatti della rubrica che usano Piazly: dati pubblici, e il numero solo se consentito.
+class ContactsListScreen extends StatelessWidget {
+  const ContactsListScreen({super.key, required this.contacts, this.profiles});
+
+  final List<RecognizedContact> contacts;
+  final ProfileRepository? profiles;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Contatti su Piazly')),
+      body: contacts.isEmpty
+          ? const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Text(
+                  'Nessun tuo contatto usa ancora Piazly, oppure non vuole farsi trovare.',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            )
+          : ListView(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              children: [
+                for (final RecognizedContact c in contacts)
+                  ListTile(
+                    key: ValueKey<String>('contatto_${c.id}'),
+                    leading: AvatarView(
+                      name: c.publicName,
+                      repository: profiles,
+                      path: c.avatarThumbPath,
+                      size: 44,
+                    ),
+                    title: Text(c.publicName),
+                    subtitle: Text(c.phone == null ? '@${c.username}' : '@${c.username} · ${c.phone}'),
+                  ),
+              ],
+            ),
     );
   }
 }

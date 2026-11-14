@@ -24,6 +24,11 @@ class PrivacySettings {
     this.showBio = true,
     this.showSocial = true,
     this.blockedCount = 0,
+    this.contactsEnabled = false,
+    this.contactsConsentAt,
+    this.contactsSyncedAt,
+    this.contactsExpireAt,
+    this.contactsCount = 0,
   });
 
   factory PrivacySettings.fromJson(Map<String, dynamic> json) => PrivacySettings(
@@ -32,7 +37,14 @@ class PrivacySettings {
     showBio: json['show_bio'] as bool? ?? true,
     showSocial: json['show_social'] as bool? ?? true,
     blockedCount: (json['blocked_count'] as num?)?.toInt() ?? 0,
+    contactsEnabled: json['contacts_enabled'] as bool? ?? false,
+    contactsConsentAt: _date(json['contacts_consent_at']),
+    contactsSyncedAt: _date(json['contacts_synced_at']),
+    contactsExpireAt: _date(json['contacts_expire_at']),
+    contactsCount: (json['contacts_count'] as num?)?.toInt() ?? 0,
   );
+
+  static DateTime? _date(Object? v) => v is String ? DateTime.tryParse(v)?.toLocal() : null;
 
   final PhoneVisibility phoneVisibility;
 
@@ -42,17 +54,30 @@ class PrivacySettings {
   final bool showSocial;
   final int blockedCount;
 
+  /// Rubrica (Blocco 5): consenso attivo, date di sincronizzazione e scadenza (P7, P13).
+  final bool contactsEnabled;
+  final DateTime? contactsConsentAt;
+  final DateTime? contactsSyncedAt;
+  final DateTime? contactsExpireAt;
+  final int contactsCount;
+
   PrivacySettings copyWith({
     PhoneVisibility? phoneVisibility,
+    bool? discoverable,
     bool? showBio,
     bool? showSocial,
     int? blockedCount,
   }) => PrivacySettings(
     phoneVisibility: phoneVisibility ?? this.phoneVisibility,
-    discoverable: discoverable,
+    discoverable: discoverable ?? this.discoverable,
     showBio: showBio ?? this.showBio,
     showSocial: showSocial ?? this.showSocial,
     blockedCount: blockedCount ?? this.blockedCount,
+    contactsEnabled: contactsEnabled,
+    contactsConsentAt: contactsConsentAt,
+    contactsSyncedAt: contactsSyncedAt,
+    contactsExpireAt: contactsExpireAt,
+    contactsCount: contactsCount,
   );
 }
 

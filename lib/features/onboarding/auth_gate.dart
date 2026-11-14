@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/services/auth_gateway.dart';
 import '../../core/services/backend_bootstrap.dart';
 import '../../core/widgets/nexus_ui.dart';
+import '../contacts/contacts_sync.dart';
 import '../privacy/privacy_checkup_screen.dart';
 import '../privacy/privacy_controller.dart';
 import '../privacy/privacy_repository.dart';
@@ -36,6 +37,7 @@ class AuthGate extends StatefulWidget {
     this.privacy,
     this.security,
     this.biometricLock,
+    this.contacts,
   });
 
   final AuthGateway gateway;
@@ -52,6 +54,9 @@ class AuthGate extends StatefulWidget {
 
   /// Sblocco con impronta o volto (Blocco 4), solo sul telefono.
   final BiometricLock? biometricLock;
+
+  /// Rubrica (Blocco 5): con il server collegato.
+  final ContactsRepository? contacts;
   final BackendStatus backend;
   final DateTime Function()? today;
 
@@ -99,7 +104,9 @@ class _AuthGateState extends State<AuthGate> {
 
   void _profileCreated() {
     final PrivacyRepository? privacy = widget.privacy;
-    if (privacy != null) _checkup = PrivacyController(privacy)..load();
+    if (privacy != null) {
+      _checkup = PrivacyController(privacy, contactsRepository: widget.contacts)..load();
+    }
     _loadProfile();
   }
 
@@ -262,6 +269,7 @@ class _AuthGateState extends State<AuthGate> {
               privacy: widget.privacy,
               security: widget.security,
               biometricLock: widget.biometricLock,
+              contacts: widget.contacts,
             );
             final BiometricLock? lock = widget.biometricLock;
             return lock == null ? shell : AppLockGate(lock: lock, child: shell);

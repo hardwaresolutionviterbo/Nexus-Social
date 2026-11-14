@@ -5,6 +5,7 @@ import '../../core/config/app_config.dart';
 import '../../core/services/backend_bootstrap.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/nexus_ui.dart';
+import '../contacts/contacts_sync.dart';
 import '../privacy/privacy_repository.dart';
 import '../privacy/privacy_screen.dart';
 import '../security/app_lock.dart';
@@ -28,6 +29,7 @@ class ProfileScreen extends StatelessWidget {
     this.privacy,
     this.security,
     this.biometricLock,
+    this.contacts,
   });
 
   final BackendStatus backend;
@@ -43,6 +45,9 @@ class ProfileScreen extends StatelessWidget {
   /// Sicurezza dell'account (Blocco 4).
   final SecurityRepository? security;
   final BiometricLock? biometricLock;
+
+  /// Rubrica (Blocco 5).
+  final ContactsRepository? contacts;
 
   /// Presente solo con un utente collegato (Fase 2): mostra «Esci».
   final Future<void> Function()? onSignOut;
@@ -100,6 +105,7 @@ class ProfileScreen extends StatelessWidget {
           profiles: profiles,
           profile: profile,
           onChanged: () => onProfileChanged?.call(),
+          contacts: contacts,
         ),
       ),
     );
