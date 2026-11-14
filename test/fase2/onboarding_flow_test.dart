@@ -19,6 +19,10 @@ void main() {
   tearDown(() => gateway.close());
 
   Future<void> pumpFlow(WidgetTester tester) async {
+    // Schermo di un telefono reale (circa 392×851 punti), come quello del titolare.
+    tester.view.physicalSize = const Size(1080, 2340);
+    tester.view.devicePixelRatio = 2.75;
+    addTearDown(tester.view.reset);
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.light,
@@ -111,6 +115,8 @@ void main() {
     await pumpFlow(tester);
     await tapText(tester, 'Registrati come Privato');
     await enterBirthDate(tester, '24/05/2001');
+    await tester.ensureVisible(find.byKey(const ValueKey<String>('accetto')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey<String>('accetto')));
     await tester.pumpAndSettle();
     await tapText(tester, 'Accetta e continua');
@@ -144,6 +150,8 @@ void main() {
     await pumpFlow(tester);
     await tapText(tester, 'Registrati come Privato');
     await enterBirthDate(tester, '24/05/2001');
+    await tester.ensureVisible(find.byKey(const ValueKey<String>('accetto')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey<String>('accetto')));
     await tester.pumpAndSettle();
     await tapText(tester, 'Accetta e continua');
