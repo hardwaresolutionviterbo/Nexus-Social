@@ -1,6 +1,7 @@
 # Fase 2 · Blocco 5: rubrica · esito dello sviluppo
 
-Ramo `fase2/blocco5` (parte dal Blocco 4). Stato: **in attesa della verifica del titolare**.
+Ramo `fase2/blocco5` (parte dal Blocco 4). Stato: **approvato dal titolare il 15/11/2026** per la parte provata con i test automatici, con
+il limite di 3 aggiornamenti al giorno (S6) invariato; prova sul telefono quando Blaze sarà attivo.
 Strada scelta dal titolare: **S1, Cloud Functions** (si attivano con Blaze).
 
 ## Cosa è stato fatto
