@@ -17,7 +17,7 @@ void main() {
   });
 
   test('le costanti descrivono la Fase 1', () {
-    expect(AppInfo.name, 'VoxLine');
+    expect(AppInfo.name, 'Piazly');
     expect(AppInfo.phase, 1);
     expect(AppInfo.version, isNotEmpty);
   });

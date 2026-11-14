@@ -15,9 +15,9 @@ enum PushRegistrationState { idle, registering, registered, failed }
 /// autenticato è gestita da `PushDeviceRegistry`.
 abstract final class PushNotifications {
   static const String channelId = 'nexus_social_default';
-  static const String channelName = 'Notifiche VoxLine';
+  static const String channelName = 'Notifiche Piazly';
   static const String channelDescription =
-      'Messaggi, chat e aggiornamenti di VoxLine';
+      'Messaggi, chat e aggiornamenti di Piazly';
 
   static final ValueNotifier<String?> installationId = ValueNotifier<String?>(
     null,
@@ -179,7 +179,7 @@ abstract final class PushNotifications {
   /// sullo stesso canale usato dai messaggi in background.
   static Future<void> _showForeground(RemoteMessage message) async {
     final RemoteNotification? notification = message.notification;
-    final String title = _clean(notification?.title) ?? 'VoxLine';
+    final String title = _clean(notification?.title) ?? 'Piazly';
     final String body =
         _clean(notification?.body) ?? 'Hai ricevuto un nuovo messaggio.';
 
@@ -219,7 +219,7 @@ abstract final class PushNotifications {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
     await _local.show(
       id: 9001,
-      title: 'VoxLine',
+      title: 'Piazly',
       body: 'Notifica locale di prova: canale e visualizzazione configurati.',
       notificationDetails: _details,
     );

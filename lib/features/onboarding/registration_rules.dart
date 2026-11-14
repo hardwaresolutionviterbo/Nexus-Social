@@ -6,7 +6,7 @@ library;
 enum AccountKind { private, business }
 
 abstract final class RegistrationRules {
-  /// Età minima per usare VoxLine (D1).
+  /// Età minima per usare Piazly (D1).
   static const int minimumAge = 14;
 
   /// Età minima per l'account Azienda (M6).

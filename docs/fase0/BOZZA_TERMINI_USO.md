@@ -1,4 +1,4 @@
-# BOZZA · Termini d'uso di VoxLine
+# BOZZA · Termini d'uso di Piazly
 
 > **BOZZA DI LAVORO, NON VALIDATA.** Testo preparato come base di discussione: **non è stato
 > rivisto da un avvocato** e non va pubblicato né accettato dagli utenti in questa forma. Il piano
@@ -10,9 +10,9 @@
 
 ## 1. Chi siamo e cosa offre l'app
 
-VoxLine è gestita da **[NOME O RAGIONE SOCIALE, SEDE, PARTITA IVA, CONTATTI]**.
+Piazly è gestita da **[NOME O RAGIONE SOCIALE, SEDE, PARTITA IVA, CONTATTI]**.
 
-VoxLine è un **social network con marketplace integrato**. Permette di:
+Piazly è un **social network con marketplace integrato**. Permette di:
 
 - socializzare e conoscere persone;
 - organizzare incontri informali, per esempio un caffè;
@@ -24,7 +24,7 @@ VoxLine è un **social network con marketplace integrato**. Permette di:
 - per aziende, negozi, bar e ristoranti: promuovere i propri locali e comparire sulla mappa con la
   sede ufficiale.
 
-**VoxLine non è un'app di incontri romantici e non è una piattaforma per adulti o per
+**Piazly non è un'app di incontri romantici e non è una piattaforma per adulti o per
 contenuti sessuali.**
 
 ## 2. Chi può usare l'app
@@ -47,9 +47,9 @@ contenuti sessuali.**
 ## 4. Annunci, Scambia e Vendita
 
 - Pubblicare annunci normali, Scambia e Vendita è **gratuito**.
-- Vendita: la consegna è solo con ritiro a mano o spedizione. **VoxLine non gestisce soldi né
+- Vendita: la consegna è solo con ritiro a mano o spedizione. **Piazly non gestisce soldi né
   pagamenti tra utenti**: gli accordi si prendono in chat, direttamente tra le parti.
-- VoxLine non è parte delle compravendite o degli scambi e non garantisce gli oggetti né il
+- Piazly non è parte delle compravendite o degli scambi e non garantisce gli oggetti né il
   comportamento degli utenti. **[⚠ Da verificare: limiti di responsabilità ammessi]**
 - Il feedback si può lasciare solo dopo che l'annuncio è segnato come concluso, e deve essere
   onesto.
@@ -74,13 +74,13 @@ contenuti sessuali.**
 
 ## 6. Sicurezza negli incontri
 
-- Gli incontri organizzati con VoxLine sono incontri informali (un caffè, un'attività
+- Gli incontri organizzati con Piazly sono incontri informali (un caffè, un'attività
   insieme, uno scambio di oggetti).
 - Quando incontri una persona conosciuta nell'app, scegli luoghi pubblici.
 - Se sei minorenne, fai ancora più attenzione: leggi l'avviso di sicurezza della Mappa Social e
   usa blocco e segnalazione appena qualcosa non va.
 - Usa la funzione «Condividi l'incontro con un amico», quando sarà disponibile.
-- VoxLine non verifica l'identità degli utenti privati. **[⚠ Da verificare: formulazione]**
+- Piazly non verifica l'identità degli utenti privati. **[⚠ Da verificare: formulazione]**
 
 ## 7. Moderazione e sanzioni
 
