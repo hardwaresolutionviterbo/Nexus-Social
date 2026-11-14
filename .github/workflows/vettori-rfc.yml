@@ -23,8 +23,8 @@ jobs:
           awk '/A.3.  OPRF\(P-256, SHA-256\)/{f=1} /A.3.2.  VOPRF Mode/{f=0} f' 9497.txt | grep -v "^RFC 9497\|^Davidson" || true
           echo "----- contesto -----"
           grep -n "contextString\|HashToGroup-\|\"Finalize\"\|DeriveKeyPair" 9497.txt | head -40
-      - name: RFC 9380
-        if: always() · P256_XMD:SHA-256_SSWU_RO_
+      - name: RFC 9380 · P256_XMD:SHA-256_SSWU_RO_
+        if: always()
         run: |
           for u in https://www.rfc-editor.org/rfc/rfc9380.txt https://www.ietf.org/rfc/rfc9380.txt https://datatracker.ietf.org/doc/rfc9380/txt/; do
             if curl -sSL -A "Mozilla/5.0" --fail "$u" -o 9380.txt; then echo "scaricato da $u"; break; else echo "fallito $u"; fi
