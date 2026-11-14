@@ -43,7 +43,7 @@ profili e privacy» (SHA-256 `7da25d52…b8561eb`).
 | P12 | Effetti del blocco applicati dal server |
 | P14, P15 | Controllo privacy proposto alla fine della registrazione (saltabile); ogni scelta salvata subito |
 | D1, M1, M2 | Età minima 14 anni con data di nascita (privata); sotto i 14 anni blocco senza salvare dati |
-| D2, D3, M3 | Avviso di sicurezza a tutti al primo accesso, con richiamo per i minorenni |
+| D2, D3, M3 | Avviso di sicurezza al primo accesso alla Mappa: **Fase 3**, non in registrazione |
 | D4 | Esperienza simile a WhatsApp |
 | M6 | Azienda e abbonamento solo per maggiorenni (punto aperto 6 della checklist della Fase 1) |
 | L1, L2, L3 | Sviluppo con numeri di prova; prova del numero reale con Blaze, budget 10 €/mese, SMS solo +39 |
@@ -82,13 +82,15 @@ profili e privacy» (SHA-256 `7da25d52…b8561eb`).
    blocco senza salvare dati (M2); Azienda solo 18+ (M6).
    Correzione del 14/11/2026: nella prima versione la data veniva chiesta dopo l'SMS, ma il login
    con SMS crea già un account Firebase con il numero, e questo violerebbe M2.
-3. Avviso di sicurezza (D3, M3), con richiamo per i minorenni.
-4. Termini e Privacy (S7).
-5. Numero di telefono (+39) e codice SMS (R2.2).
-6. Profilo: @username univoco, nome e cognome, foto o avatar (A5), bio, social (R2.3, R2.4).
-7. Verifica in due passaggi (S2) e impronta (S3), saltabili.
-8. Controllo privacy (P14), saltabile.
-9. Arrivo su Chat (D4).
+3. Termini e Privacy (S7).
+4. Numero di telefono (+39) e codice SMS (R2.2).
+
+   Correzione del 14/11/2026: l'avviso di sicurezza (D3) **non** fa parte della registrazione.
+   Per M3 compare al primo accesso alla **Mappa Social**, quindi in Fase 3.
+5. Profilo: @username univoco, nome e cognome, foto o avatar (A5), bio, social (R2.3, R2.4).
+6. Verifica in due passaggi (S2) e impronta (S3), saltabili.
+7. Controllo privacy (P14), saltabile.
+8. Arrivo su Chat (D4).
 
 ## 6. Blocchi di lavoro
 
@@ -100,7 +102,7 @@ Ogni blocco segue le regole della Fase 1:
 
 | Blocco | Contenuto | Prova sul telefono Android |
 |---|---|---|
-| **1 · Registrazione e accesso** | Componente lato server (S1) con ruolo `authenticated`; flusso dei punti 1-5; logout. La data di nascita resta sul telefono fino alla creazione del profilo (Blocco 2) | Registrazione con un **numero di prova** e codice fisso; dopo l'accesso il Profilo mostra «Utente collegato»; sotto i 14 anni la registrazione si blocca |
+| **1 · Registrazione e accesso** | Componente lato server (S1) con ruolo `authenticated`; flusso dei punti 1-4; logout. La data di nascita resta sul telefono fino alla creazione del profilo (Blocco 2) | Registrazione con un **numero di prova** e codice fisso; dopo l'accesso il Profilo mostra «Utente collegato»; sotto i 14 anni la registrazione si blocca |
 | **2 · Profilo** | Migrazione `0003` (foto, social, Azienda); @username univoco; nome abbreviato; foto (S5) con miniatura; bio e social (P3); dati Azienda (S4); copia pubblica Firestore sincronizzata dal server | Completi il profilo; con un secondo numero di prova vedi solo «Carlo C.», @username, foto, bio e social |
 | **3 · Privacy e blocchi** | Pagina Privacy (7 sezioni) e Controllo privacy (8 passi) da `PRIVACY_IMPOSTAZIONI.md`; salvataggio immediato; blocco utenti applicato dal server (P12) | Cambi le impostazioni e le ritrovi dopo il riavvio; blocchi il secondo account e lui non vede più il tuo profilo |
 | **4 · Sicurezza dell'account** | 2FA (S2); impronta o volto (S3); uscita sicura | Attivi PIN e impronta; chiudi e riapri l'app: entri con l'impronta; su un nuovo accesso ti viene chiesto il PIN |
