@@ -669,6 +669,117 @@ def check_security_block4() -> None:
           s7 == 200 and isinstance(me8, dict) and me8.get("username") == "utente_a")
 
 
+def check_contacts_block5() -> None:
+    """I · Rubrica (Fase 2, Blocco 5). Utenti A, B, D; codici OPRF simulati."""
+    attest_key = "chiave-di-firma-solo-per-test-0123456789"
+    sql("insert into private.settings (key, value) values ('rubrica_attest_key', "
+        f"'{attest_key}') on conflict (key) do update set value = excluded.value;")
+    phones = {UID_A: "+393000000001", UID_B: "+393000000002", UID_D: "+393000000004"}
+    tags = {u: hashlib.sha256(f"tag-{u}".encode()).hexdigest() for u in phones}
+    tok = {u: token(u, extra={"phone_number": p}) for u, p in phones.items()}
+
+    def sign(uid, phone, tag, ts):
+        return hmac.new(attest_key.encode(), f"{uid}|{phone}|{tag}|{ts}".encode(),
+                        hashlib.sha256).hexdigest()
+
+    def register(uid, phone=None, tag=None, ts=None, sig=None):
+        phone = phone or phones[uid]
+        tag = tag or tags[uid]
+        ts = ts if ts is not None else int(time.time())
+        sig = sig or sign(uid, phone, tag, ts)
+        return rpc("register_my_phone", {"p_phone": phone, "p_tag": tag, "p_ts": ts,
+                                         "p_sig": sig}, tok[uid])
+
+    # I1 · Il proprio numero si registra solo con la firma del server e il numero dell'accesso
+    bad_sig = register(UID_A, sig="00" * 32)
+    other_phone = register(UID_A, phone=phones[UID_B])
+    old = register(UID_A, ts=int(time.time()) - 3600)
+    ok = [register(u)[0] for u in (UID_A, UID_B, UID_D)]
+    check("I1", "Numero registrato solo con firma valida, recente e uguale a quello dell'accesso",
+          bad_sig[0] >= 400 and other_phone[0] >= 400 and old[0] >= 400
+          and all(x in (200, 204) for x in ok), f"HTTP {bad_sig[0]}, {other_phone[0]}, {old[0]}, {ok}")
+
+    # I2 · Senza consenso niente sincronizzazione; «trovarmi» non si accende da solo
+    no_consent = rpc("match_contacts", {"p_tags": [tags[UID_B]]}, tok[UID_A])
+    disc = rpc("set_discoverable", {"p_value": True}, tok[UID_D])
+    _, pd = rpc("get_my_privacy", {}, tok[UID_D])
+    check("I2", "Senza consenso: nessuna sincronizzazione e «trovarmi» non attivabile",
+          no_consent[0] >= 400 and disc[0] >= 400 and pd.get("discoverable") is False
+          and pd.get("contacts_enabled") is False, f"HTTP {no_consent[0]}, {disc[0]}")
+
+    # I3 · Consenso con data; chi l'ha attivato è trovabile; il riconoscimento funziona
+    for u in (UID_A, UID_B):
+        rpc("enable_contacts", {}, tok[u])
+    s1, found = rpc("match_contacts", {"p_tags": [tags[UID_B], tags[UID_D], "ab" * 32]}, tok[UID_A])
+    _, pa = rpc("get_my_privacy", {}, tok[UID_A])
+    cons = rows(get("/rest/v1/consents?select=kind,granted_at,revoked_at", tok[UID_A]))
+    check("I3", "Consenso registrato con data; riconosciuto solo chi ha attivato «trovarmi»",
+          s1 == 200 and [f["id"] for f in found] == [UID_B]
+          and pa.get("contacts_enabled") is True and pa.get("contacts_synced_at") is not None
+          and pa.get("contacts_expire_at") is not None and len(cons) == 1
+          and cons[0]["revoked_at"] is None, str(found))
+
+    # I4 · Numero visibile solo al contatto riconosciuto, se consentito; mai agli altri
+    _, mine = rpc("my_contacts", {}, tok[UID_A])
+    seen = rpc("contact_phone", {"p_id": UID_B}, tok[UID_A])[1]
+    stranger = rpc("contact_phone", {"p_id": UID_B}, tok[UID_D])[1]
+    rpc("set_phone_visibility", {"p_value": "nobody"}, tok[UID_B])
+    hidden = rpc("contact_phone", {"p_id": UID_B}, tok[UID_A])[1]
+    rpc("set_phone_visibility", {"p_value": "contacts"}, tok[UID_B])
+    check("I4", "Numero di B: lo vede A che lo ha in rubrica; mai uno sconosciuto; con «Nessuno» nessuno",
+          mine and mine[0].get("phone") == phones[UID_B] and seen == phones[UID_B]
+          and stranger is None and hidden is None, f"{seen}, {stranger}, {hidden}")
+
+    # I5 · «Trovarmi» spento: non si viene più riconosciuti
+    rpc("set_discoverable", {"p_value": False}, tok[UID_B])
+    _, again = rpc("match_contacts", {"p_tags": [tags[UID_B]]}, tok[UID_A])
+    rpc("set_discoverable", {"p_value": True}, tok[UID_B])
+    check("I5", "Con «trovarmi» spento B non viene riconosciuto", again == [], str(again))
+
+    # I6 · Limiti: 3 sincronizzazioni al giorno, 2.000 numeri, solo codici validi
+    third = rpc("match_contacts", {"p_tags": [tags[UID_B]]}, tok[UID_A])
+    fourth = rpc("match_contacts", {"p_tags": [tags[UID_B]]}, tok[UID_A])
+    big = rpc("match_contacts", {"p_tags": ["ab" * 32] * 2001}, tok[UID_B])
+    junk = rpc("match_contacts", {"p_tags": ["+393000000001"]}, tok[UID_B])
+    check("I6", "Al massimo 3 sincronizzazioni al giorno e 2.000 codici; niente numeri in chiaro",
+          third[0] == 200 and fourth[0] >= 400 and big[0] >= 400 and junk[0] >= 400,
+          f"HTTP {third[0]}, {fourth[0]}, {big[0]}, {junk[0]}")
+
+    # I7 · Blocco: il contatto sparisce
+    rpc("block_user", {"p_user_id": UID_A}, tok[UID_B])
+    _, blocked = rpc("my_contacts", {}, tok[UID_A])
+    rpc("unblock_user", {"p_user_id": UID_A}, tok[UID_B])
+    check("I7", "Se uno dei due blocca l'altro, il contatto non compare", blocked == [], str(blocked))
+
+    # I8 · Scadenza dopo 30 giorni
+    sql(f"update private.contact_links set expires_at = now() - interval '1 second' "
+        f"where owner_id = '{UID_A}';")
+    _, expired = rpc("my_contacts", {}, tok[UID_A])
+    sql(f"update private.contact_links set expires_at = now() + interval '30 days' "
+        f"where owner_id = '{UID_A}';")
+    check("I8", "Dati della rubrica scaduti: non più usati", expired == [], str(expired))
+
+    # I9 · Revoca e cancella
+    rv = rpc("revoke_contacts", {}, tok[UID_A])
+    _, after = rpc("my_contacts", {}, tok[UID_A])
+    links = sql(f"select count(*) from private.contact_links where owner_id = '{UID_A}';")
+    _, pa2 = rpc("get_my_privacy", {}, tok[UID_A])
+    nomore = rpc("match_contacts", {"p_tags": [tags[UID_B]]}, tok[UID_B])
+    check("I9", "«Revoca e cancella»: dati derivati cancellati subito, consenso revocato",
+          rv[0] in (200, 204) and after == [] and links == "0"
+          and pa2.get("contacts_enabled") is False and pa2.get("contacts_synced_at") is None,
+          f"HTTP {rv[0]}, link {links}")
+
+    # I10 · Tabelle private non raggiungibili, consensi altrui non leggibili, senza token niente
+    t1 = get("/rest/v1/phone_numbers", tok[UID_A])
+    t2 = rows(get(f"/rest/v1/consents?user_id=eq.{UID_B}", tok[UID_A]))
+    t3 = rpc("my_contacts", {})
+    t4 = rpc("contacts_consent_active", {"p_uid": UID_B}, tok[UID_A])
+    check("I10", "Numeri e codici solo sul server; consensi altrui e funzioni interne non accessibili",
+          t1[0] >= 400 and t2 == [] and t3[0] >= 400 and t4[0] >= 400,
+          f"HTTP {t1[0]}, {t3[0]}, {t4[0]}")
+
+
 def main() -> int:
     try:
         ids = setup()
@@ -679,6 +790,7 @@ def main() -> int:
     check_profile_block2()
     check_privacy_block3()
     check_security_block4()
+    check_contacts_block5()
     failed = [r for r in results if not r[2]]
     print(f"{'Caso':6} {'Esito':9} Descrizione")
     for case, desc, ok, detail in results:
