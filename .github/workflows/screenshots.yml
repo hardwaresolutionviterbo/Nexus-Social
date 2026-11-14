@@ -40,10 +40,18 @@ jobs:
       - name: Immagini nel log
         run: |
           set -euo pipefail
+          # Versione leggera (JPEG, 720 px di larghezza) a righe corte: il log di GitHub
+          # non mostra righe troppo lunghe.
+          mkdir -p tool/screenshots/jpg
           for f in tool/screenshots/out/*.png; do
-            echo "SCREENSHOT_START $(basename "$f")"
-            base64 -w0 "$f"
-            echo
+            n="$(basename "$f" .png)"
+            if command -v magick >/dev/null; then
+              magick "$f" -resize 720x -quality 85 "tool/screenshots/jpg/${n}.jpg"
+            else
+              convert "$f" -resize 720x -quality 85 "tool/screenshots/jpg/${n}.jpg"
+            fi
+            echo "SCREENSHOT_START ${n}.jpg"
+            base64 -w 3000 "tool/screenshots/jpg/${n}.jpg"
             echo "SCREENSHOT_END"
           done
 
