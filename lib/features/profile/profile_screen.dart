@@ -25,7 +25,7 @@ class ProfileScreen extends StatelessWidget {
     final bool? ok = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) => AlertDialog(
-        title: const Text('Uscire da Nexus Social?'),
+        title: const Text('Uscire da VoxLine?'),
         content: const Text(
           'Su questo telefono non riceverai più notifiche finché non entri di nuovo.',
         ),

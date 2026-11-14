@@ -26,7 +26,7 @@ abstract final class AppConfig {
 
 /// Identità dell'app mostrata nell'interfaccia.
 abstract final class AppInfo {
-  static const String name = 'Nexus Social';
+  static const String name = 'VoxLine';
   static const String version = '0.1.0';
   static const int phase = 1;
   static const String phaseLabel = 'Fase 1 · Fondamenta';

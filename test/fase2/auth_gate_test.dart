@@ -76,7 +76,7 @@ void main() {
 
     await tester.tap(find.widgetWithText(ListTile, 'Esci'));
     await tester.pumpAndSettle();
-    expect(find.text('Uscire da Nexus Social?'), findsOneWidget);
+    expect(find.text('Uscire da VoxLine?'), findsOneWidget);
     await tester.tap(find.widgetWithText(FilledButton, 'Esci'));
     await tester.pumpAndSettle();
 

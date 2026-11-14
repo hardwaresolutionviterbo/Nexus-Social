@@ -392,7 +392,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
                   ? 'Non puoi ancora registrarti'
                   : 'Account Azienda solo per maggiorenni',
               subtitle: tooYoung
-                  ? 'Per usare Nexus Social devi avere almeno 14 anni. '
+                  ? 'Per usare VoxLine devi avere almeno 14 anni. '
                         'Non abbiamo salvato nessun dato.'
                   : 'La registrazione come Azienda è riservata ai maggiorenni. '
                         'Non abbiamo salvato nessun dato.',
@@ -425,7 +425,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
               icon: Icons.verified_user_rounded,
               color: AppColors.brandViolet,
               title: 'Termini e Privacy',
-              subtitle: 'Leggi come funzionano Nexus Social e la tua privacy.',
+              subtitle: 'Leggi come funzionano VoxLine e la tua privacy.',
             ),
             const SizedBox(height: 18),
             const _DraftNotice(),

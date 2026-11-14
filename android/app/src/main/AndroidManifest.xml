@@ -4,7 +4,7 @@
     <!-- Notifiche push: su Android 13+ il consenso viene chiesto a runtime. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application
-        android:label="Nexus Social"
+        android:label="VoxLine"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <!-- Registrazione FCM tramite Firebase Installation ID. -->

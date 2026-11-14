@@ -2,7 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../theme/app_theme.dart';
 
-/// Monogramma del brand: «N» bianca su gradiente blu → arancio, con bagliore.
+/// Monogramma del brand: «V» bianca su gradiente blu → arancio, con bagliore.
 class NexusMark extends StatelessWidget {
   const NexusMark({super.key, this.size = 32});
 
@@ -11,7 +11,7 @@ class NexusMark extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Semantics(
-      label: 'Nexus Social',
+      label: 'VoxLine',
       child: Container(
         width: size,
         height: size,
@@ -38,7 +38,7 @@ class NexusMark extends StatelessWidget {
         ),
         child: ExcludeSemantics(
           child: Text(
-            'N',
+            'V',
             style: TextStyle(
               color: Colors.white,
               fontSize: size * 0.56,
@@ -53,7 +53,7 @@ class NexusMark extends StatelessWidget {
   }
 }
 
-/// Scritta «Nexus Social» con «Social» in arancio, come nel mockup.
+/// Scritta «VoxLine» con «Line» in arancio.
 class NexusWordmark extends StatelessWidget {
   const NexusWordmark({super.key, this.fontSize = 17});
 
@@ -73,14 +73,14 @@ class NexusWordmark extends StatelessWidget {
     return Text.rich(
       TextSpan(
         children: [
-          TextSpan(text: 'Nexus ', style: style),
+          TextSpan(text: 'Vox', style: style),
           TextSpan(
-            text: 'Social',
+            text: 'Line',
             style: style.copyWith(color: scheme.primary),
           ),
         ],
       ),
-      semanticsLabel: 'Nexus Social',
+      semanticsLabel: 'VoxLine',
     );
   }
 }

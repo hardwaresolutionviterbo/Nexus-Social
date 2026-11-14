@@ -1,4 +1,4 @@
-# BOZZA · Informativa sulla privacy di Nexus Social
+# BOZZA · Informativa sulla privacy di VoxLine
 
 > **BOZZA DI LAVORO, NON VALIDATA.** Questo testo è stato preparato come base di discussione.
 > **Non è stato rivisto da un avvocato o da un consulente privacy** e non va pubblicato né usato
@@ -102,7 +102,7 @@ legittimo interesse (artt. 15-22 GDPR).
 
 ## 9. Età minima
 
-Per usare Nexus Social devi avere **almeno 14 anni** (decisione D1 della Fase 0).
+Per usare VoxLine devi avere **almeno 14 anni** (decisione D1 della Fase 0).
 
 - All'iscrizione chiediamo il numero di telefono e la data di nascita.
 - Non chiediamo documenti d'identità.

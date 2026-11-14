@@ -1,10 +1,10 @@
-# BOZZA · Regole della community di Nexus Social
+# BOZZA · Regole della community di VoxLine
 
 > **BOZZA DI LAVORO, NON VALIDATA da un professionista.** Da rivedere in Fase 9 insieme a Termini
 > d'uso e Informativa privacy. Le parti tra **[PARENTESI QUADRE]** sono decisioni ancora aperte nel
 > piano di lavoro.
 
-Nexus Social serve a socializzare, conoscere persone, organizzare incontri informali, chiedere o
+VoxLine serve a socializzare, conoscere persone, organizzare incontri informali, chiedere o
 offrire aiuto, scambiare, vendere, regalare e scoprire le attività vicino a te.
 
 **Non è un'app di incontri romantici e non è una piattaforma per adulti.** Possono usarla le
