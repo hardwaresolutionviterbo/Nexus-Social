@@ -147,7 +147,11 @@ class SupabaseContactsRepository implements ContactsRepository {
       if (body is Map<String, dynamic> && body['result'] is Map<String, dynamic>) {
         return body['result'] as Map<String, dynamic>;
       }
-      final Object? status = body is Map<String, dynamic> ? (body['error'] as Map?)?['status'] : null;
+      Object? status;
+      if (body is Map<String, dynamic>) {
+        final Object? error = body['error'];
+        if (error is Map) status = error['status'];
+      }
       throw ProfileFailure(switch (status) {
         'RESOURCE_EXHAUSTED' => 'Hai già sincronizzato 3 volte oggi. Riprova domani.',
         'FAILED_PRECONDITION' => 'La rubrica non è ancora disponibile.',
