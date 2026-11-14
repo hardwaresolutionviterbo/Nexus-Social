@@ -67,6 +67,20 @@ Rami (ognuno contiene il precedente):
 
    Finché non è fatto, l'app continua a funzionare come oggi: nessun utente entra prima della
    Fase 2.
+
+   **Controllo in sola lettura fatto il 14/11/2026** (query nell'editor SQL di Supabase,
+   eseguita dal titolare):
+
+   | Voce | Valore |
+   |---|---|
+   | Registro delle migrazioni della CLI (`supabase_migrations`) | Assente: lo schema `0001` è stato applicato a mano, non con la CLI |
+   | Utenti Supabase Auth, profili, annunci, posizioni, segnalazioni, moderazione, admin, foto | **Tutti 0** |
+   | Schema 0002 già presente | No |
+   | PostGIS | Attivo |
+
+   Esito: il database reale non contiene dati, quindi lo schema `0002` si può applicare senza
+   conversione di dati esistenti. L'applicazione richiede comunque l'autorizzazione esplicita
+   del titolare.
 3. **Ruolo `authenticated` nei token Firebase (Fase 2).** Supabase accetta i token Firebase
    solo se ogni utente ha il claim personalizzato `role: authenticated`. Va assegnato lato
    server:
