@@ -22,6 +22,8 @@ dependencies:
   # Fase 2, Blocco 2: foto profilo dalla galleria, ridotta e ricodificata sul telefono.
   image_picker: ^1.1.2
   image: ^4.3.0
+  # Apertura dei social del profilo nell'app del social o nel browser.
+  url_launcher: ^6.3.1
 
 dev_dependencies:
   flutter_test:

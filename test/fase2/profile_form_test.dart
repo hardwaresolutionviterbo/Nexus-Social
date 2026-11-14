@@ -231,4 +231,58 @@ void main() {
     expect(find.textContaining('Bianchi'), findsNothing);
     expect(find.text('Bio privata'), findsNothing);
   });
+
+  testWidgets('R2.4 · toccando un social si apre il profilo su quel social', (tester) async {
+    final List<Uri> opened = <Uri>[];
+    const PublicProfile other = PublicProfile(
+      id: 'u2',
+      isBusiness: false,
+      username: 'laura_b',
+      publicName: 'Laura B.',
+      social: <SocialNetwork, String>{
+        SocialNetwork.instagram: 'laura.b',
+        SocialNetwork.tiktok: 'laurab',
+      },
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: PublicProfileScreen(
+          profile: other,
+          openLink: (Uri uri) async {
+            opened.add(uri);
+            return true;
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey<String>('apri_instagram')));
+    await tester.tap(find.byKey(const ValueKey<String>('apri_tiktok')));
+    await tester.pumpAndSettle();
+    expect(opened, <Uri>[
+      Uri.parse('https://instagram.com/laura.b'),
+      Uri.parse('https://www.tiktok.com/@laurab'),
+    ]);
+  });
+
+  testWidgets('R2.4 · social non apribile: messaggio chiaro', (tester) async {
+    const PublicProfile other = PublicProfile(
+      id: 'u2',
+      isBusiness: false,
+      username: 'laura_b',
+      publicName: 'Laura B.',
+      social: <SocialNetwork, String>{SocialNetwork.x: 'laurab'},
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: PublicProfileScreen(profile: other, openLink: (Uri uri) async => false),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey<String>('apri_x')));
+    await tester.pumpAndSettle();
+    expect(find.text('Non è stato possibile aprire X.'), findsOneWidget);
+  });
 }

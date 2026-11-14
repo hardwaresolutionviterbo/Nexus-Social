@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/nexus_ui.dart';
@@ -11,11 +12,37 @@ import 'profile_repository.dart';
 /// Mostra solo: nome abbreviato, @username, foto, bio e social secondo gli interruttori
 /// (P3), ragione sociale per le Aziende. Mai nome completo, numero, data di nascita o
 /// partita IVA.
+/// Apre un link fuori dall'app: l'app del social se installata, altrimenti il browser.
+typedef OpenLink = Future<bool> Function(Uri uri);
+
+Future<bool> openExternally(Uri uri) => launchUrl(uri, mode: LaunchMode.externalApplication);
+
 class PublicProfileView extends StatelessWidget {
-  const PublicProfileView({super.key, required this.profile, this.repository});
+  const PublicProfileView({
+    super.key,
+    required this.profile,
+    this.repository,
+    this.openLink = openExternally,
+  });
 
   final PublicProfile profile;
   final ProfileRepository? repository;
+  final OpenLink openLink;
+
+  Future<void> _open(BuildContext context, SocialNetwork network, String handle) async {
+    final ScaffoldMessengerState? messenger = ScaffoldMessenger.maybeOf(context);
+    bool ok = false;
+    try {
+      ok = await openLink(Uri.parse(network.profileUrl(handle)));
+    } catch (_) {
+      ok = false;
+    }
+    if (!ok) {
+      messenger?.showSnackBar(
+        SnackBar(content: Text('Non è stato possibile aprire ${network.label}.')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -73,15 +100,14 @@ class PublicProfileView extends StatelessWidget {
                 Text('Social', style: theme.textTheme.titleSmall),
                 const SizedBox(height: 8),
                 for (final MapEntry<SocialNetwork, String> e in profile.social.entries)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.link_rounded, size: 18, color: AppColors.brandOrange),
-                        const SizedBox(width: 8),
-                        Text('${e.key.label} · @${e.value}'),
-                      ],
-                    ),
+                  ListTile(
+                    key: ValueKey<String>('apri_${e.key.key}'),
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    leading: const Icon(Icons.link_rounded, color: AppColors.brandOrange),
+                    title: Text('${e.key.label} · @${e.value}'),
+                    trailing: const Icon(Icons.open_in_new_rounded, size: 18),
+                    onTap: () => _open(context, e.key, e.value),
                   ),
               ],
             ),
@@ -99,11 +125,13 @@ class PublicProfileScreen extends StatelessWidget {
     required this.profile,
     this.repository,
     this.title = 'Come ti vedono gli altri',
+    this.openLink = openExternally,
   });
 
   final PublicProfile profile;
   final ProfileRepository? repository;
   final String title;
+  final OpenLink openLink;
 
   @override
   Widget build(BuildContext context) {
@@ -117,7 +145,7 @@ class PublicProfileScreen extends StatelessWidget {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
               children: [
-                PublicProfileView(profile: profile, repository: repository),
+                PublicProfileView(profile: profile, repository: repository, openLink: openLink),
                 const SizedBox(height: 18),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,

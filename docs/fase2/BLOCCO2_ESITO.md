@@ -1,7 +1,8 @@
 # Fase 2 · Blocco 2: profilo · esito dello sviluppo
 
 Ramo `fase2/blocco2` · APK `nexus-social-0.1.0+16201-00e32cd-fase2-blocco2`.
-Stato: **in attesa della verifica del titolare**.
+Stato: **approvato dal titolare il 14/11/2026** per la parte provata con i test automatici;
+prova sul telefono quando Blaze sarà attivo (come il Blocco 1).
 
 ## Cosa è stato fatto
 
@@ -30,9 +31,13 @@ Stato: **in attesa della verifica del titolare**.
 - La **copia pubblica del profilo su Firestore** (per le chat) richiede la parte lato server
   (S1): si farà insieme alla ripresa di S1.
 
-## Scelte di dettaglio da confermare
+## Scelte di dettaglio (confermate dal titolare il 14/11/2026)
 
 1. La **ragione sociale** dell'Azienda compare nel profilo pubblico (la partita IVA no).
 2. **Nomi utente riservati** (admin, piazly…, assistenza, staff…) per evitare falsi account ufficiali.
 3. **Social come nome utente** su Instagram, TikTok, Facebook, X, YouTube, LinkedIn: niente link
    liberi, per evitare link ingannevoli.
+
+Richiesta del titolare alla conferma: **toccando un social nel profilo si apre direttamente
+quel profilo** (app del social se installata, altrimenti il browser). Aggiunto con
+`url_launcher` e coperto da test.
