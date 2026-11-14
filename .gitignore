@@ -51,3 +51,6 @@ node_modules/
 firebase-debug.log
 firestore-debug.log
 ui-debug.log
+
+# Segreti locali degli emulatori Firebase (mai nel repository)
+firebase/functions/.secret.local

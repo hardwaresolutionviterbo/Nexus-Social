@@ -41,10 +41,10 @@ jobs:
       - name: Dipendenze
         run: |
           set -euo pipefail
-          if [ -f package-lock.json ]; then
-            npm ci --no-audit --no-fund
+          if [ -f package-lock.json ] && npm ci --no-audit --no-fund; then
+            echo "Dipendenze dal lockfile."
           else
-            echo "::warning::package-lock.json assente: installazione non bloccata alle versioni."
+            echo "::warning::package-lock.json assente o non allineato: installazione con npm install."
             npm install --no-audit --no-fund
           fi
 
@@ -58,7 +58,8 @@ jobs:
       # versionare. Contiene solo nomi e versioni dei pacchetti.
       - name: Lockfile da versionare
         run: |
-          if ! git ls-files --error-unmatch package-lock.json > /dev/null 2>&1; then
+          if ! git ls-files --error-unmatch package-lock.json > /dev/null 2>&1 \
+             || ! git diff --quiet -- package-lock.json; then
             echo "LOCKFILE_INIZIO"
             gzip -9c package-lock.json | base64 -w0
             echo
@@ -68,5 +69,8 @@ jobs:
       - name: Controllo sintassi
         run: npm run check
 
-      - name: Test (emulatori Auth e Functions)
+      - name: Test OPRF (vettori ufficiali RFC 9497)
+        run: npm run test:oprf
+
+      - name: Test (emulatori Auth, Functions e Firestore)
         run: npm test

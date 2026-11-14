@@ -27,6 +27,9 @@ dependencies:
   # Fase 2, Blocco 4: codice del telefono nella memoria protetta; sblocco con impronta o volto.
   flutter_secure_storage: ^10.0.0
   local_auth: ^2.3.0
+  # Fase 2, Blocco 5: SHA-256 per l'OPRF della rubrica; lettura dei contatti con permesso.
+  crypto: ^3.0.6
+  flutter_contacts: ^1.1.9+2
 
 dev_dependencies:
   flutter_test:

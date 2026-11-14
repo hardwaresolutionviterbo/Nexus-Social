@@ -1,19 +1,21 @@
 {
   "name": "nexus-social-functions",
   "private": true,
-  "description": "Cloud Functions di Nexus Social (Fase 2, decisione S1).",
+  "description": "Cloud Functions di Piazly (Fase 2, decisione S1).",
   "type": "module",
   "main": "index.js",
   "engines": {
     "node": "22"
   },
   "scripts": {
-    "check": "node --check index.js && node --check test/assegna-ruolo.test.mjs",
-    "test": "firebase emulators:exec --config ../../firebase.json --only auth,functions --project demo-nexus-social \"node --test --test-reporter=spec test/assegna-ruolo.test.mjs\""
+    "check": "node --check index.js && node --check oprf.js && node --check test/assegna-ruolo.test.mjs && node --check test/rubrica.test.mjs && node --check test/oprf.test.mjs",
+    "test": "node scripts/segreti-di-prova.mjs && firebase emulators:exec --config ../../firebase.json --only auth,functions,firestore --project demo-nexus-social \"node --test --test-reporter=spec test/assegna-ruolo.test.mjs test/rubrica.test.mjs\"",
+    "test:oprf": "node --test --test-reporter=spec test/oprf.test.mjs"
   },
   "dependencies": {
     "firebase-admin": "^13.0.0",
-    "firebase-functions": "^7.0.0"
+    "firebase-functions": "^7.0.0",
+    "@noble/curves": "~1.9.0"
   },
   "devDependencies": {
     "firebase-tools": "15.36.0"
