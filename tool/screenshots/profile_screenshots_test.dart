@@ -17,10 +17,14 @@ import 'package:nexus_social/features/privacy/privacy_screen.dart';
 import 'package:nexus_social/features/profile/profile_form_screen.dart';
 import 'package:nexus_social/features/profile/profile_models.dart';
 import 'package:nexus_social/features/profile/public_profile_screen.dart';
+import 'package:nexus_social/features/security/app_lock.dart';
+import 'package:nexus_social/features/security/security_repository.dart';
+import 'package:nexus_social/features/security/security_screens.dart';
 import 'package:nexus_social/features/shell/app_shell.dart';
 
 import '../../test/support/fake_privacy_repository.dart';
 import '../../test/support/fake_profile_repository.dart';
+import '../../test/support/fake_security.dart';
 
 Future<void> _loadFonts() async {
   final String root = Platform.environment['FLUTTER_ROOT'] ?? '';
@@ -274,5 +278,42 @@ void main() {
         }
       },
     );
+  });
+
+  testWidgets('11 · telefono nuovo: inserisci il PIN', (tester) async {
+    final FakeSecurityRepository sec = FakeSecurityRepository()
+      ..pin = '482913'
+      ..trusted = false;
+    await shoot(
+      tester,
+      '11_pin_telefono_nuovo',
+      PinEntryScreen(
+        repository: sec,
+        initialStatus: const SecurityStatus(pinEnabled: true, deviceTrusted: false),
+        onVerified: () {},
+        onSignOut: () async {},
+      ),
+      before: () async {
+        await tester.enterText(find.byKey(const ValueKey<String>('pin_accesso')), '000000');
+        await tester.tap(find.byKey(const ValueKey<String>('verifica_pin')));
+        await tester.pumpAndSettle();
+        FocusManager.instance.primaryFocus?.unfocus();
+        await tester.pumpAndSettle();
+      },
+    );
+  });
+
+  testWidgets('12 · sicurezza dell\'account', (tester) async {
+    final FakeSecurityRepository sec = FakeSecurityRepository()..pin = '482913';
+    final FakeBiometricLock lock = FakeBiometricLock()..enabled = true;
+    await shoot(tester, '12_sicurezza', SecuritySettingsScreen(repository: sec, lock: lock));
+  });
+
+  testWidgets('13 · app bloccata con impronta', (tester) async {
+    final FakeBiometricLock lock = FakeBiometricLock()
+      ..enabled = true
+      ..succeed = false;
+    await shoot(tester, '13_app_bloccata',
+        AppLockGate(lock: lock, child: const Scaffold(body: Text('app'))));
   });
 }
