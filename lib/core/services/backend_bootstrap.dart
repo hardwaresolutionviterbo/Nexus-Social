@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -53,6 +54,11 @@ abstract final class BackendBootstrap {
         await Supabase.initialize(
           url: AppConfig.supabaseUrl,
           publishableKey: AppConfig.supabaseKey,
+          // Fase 2: Supabase riconosce l'utente dal token Firebase (Third-Party Auth).
+          // Senza utente collegato si usa solo la chiave pubblica, come prima.
+          accessToken: firebase == ServiceState.connected
+              ? () async => FirebaseAuth.instance.currentUser?.getIdToken()
+              : null,
         );
         // initialize() prepara solo il client locale: una lettura minima dimostra
         // che URL, chiave e schema rispondono davvero.

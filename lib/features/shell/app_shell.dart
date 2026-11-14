@@ -18,9 +18,13 @@ class AppShell extends StatefulWidget {
   const AppShell({
     super.key,
     this.backend = const BackendStatus.unconfigured(),
+    this.onSignOut,
   });
 
   final BackendStatus backend;
+
+  /// Uscita dall'account (presente solo con un utente collegato).
+  final Future<void> Function()? onSignOut;
 
   /// Scheda mostrata all'apertura: Chat, come WhatsApp (D4).
   static const int initialIndex = 0;
@@ -44,7 +48,7 @@ class _AppShellState extends State<AppShell> {
     const MapScreen(),
     const ListingsScreen(),
     const SaleScreen(),
-    ProfileScreen(backend: widget.backend),
+    ProfileScreen(backend: widget.backend, onSignOut: widget.onSignOut),
   ];
 
   int _index = AppShell.initialIndex;

@@ -11,9 +11,38 @@ class ProfileScreen extends StatelessWidget {
   const ProfileScreen({
     super.key,
     this.backend = const BackendStatus.unconfigured(),
+    this.onSignOut,
   });
 
   final BackendStatus backend;
+
+  /// Presente solo con un utente collegato (Fase 2): mostra «Esci».
+  final Future<void> Function()? onSignOut;
+
+  bool get _signedIn => onSignOut != null;
+
+  Future<void> _confirmSignOut(BuildContext context) async {
+    final bool? ok = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('Uscire da Nexus Social?'),
+        content: const Text(
+          'Su questo telefono non riceverai più notifiche finché non entri di nuovo.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Annulla'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Esci'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) await onSignOut?.call();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -74,14 +103,16 @@ class ProfileScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Profilo non configurato',
+                        _signedIn ? 'Accesso effettuato' : 'Profilo non configurato',
                         style: theme.textTheme.titleMedium?.copyWith(
                           color: Colors.white,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Registrati con il numero di telefono per iniziare.',
+                        _signedIn
+                            ? 'Nome, foto e bio si completano nel prossimo aggiornamento.'
+                            : 'Registrati con il numero di telefono per iniziare.',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: Colors.white.withValues(alpha: 0.85),
                         ),
@@ -95,6 +126,18 @@ class ProfileScreen extends StatelessWidget {
             ),
           ),
         ),
+        if (_signedIn) ...[
+          const SizedBox(height: AppSpacing.md),
+          SectionCard(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            child: ListTile(
+              leading: const Icon(Icons.logout_rounded),
+              title: const Text('Esci'),
+              subtitle: const Text('Esci dall\'account su questo telefono'),
+              onTap: () => _confirmSignOut(context),
+            ),
+          ),
+        ],
         const SizedBox(height: AppSpacing.md),
         SectionCard(
           child: Column(

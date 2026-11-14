@@ -27,3 +27,9 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  # Bozze legali mostrate alla registrazione con l'avviso «bozza non validata» (Fase 2, S7).
+  assets:
+    - docs/fase0/BOZZA_TERMINI_USO.md
+    - docs/fase0/BOZZA_PRIVACY_POLICY.md
+    - docs/fase0/BOZZA_REGOLE_COMMUNITY.md

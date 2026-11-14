@@ -6,7 +6,7 @@ name: Android APK
 # es. nexus-social-0.1.0+1202-a1b2c3d-fase1-blocco1.
 on:
   push:
-    branches: [main, 'fase1/**']
+    branches: [main, 'fase1/**', 'fase2/**']
   workflow_dispatch:
 
 permissions:

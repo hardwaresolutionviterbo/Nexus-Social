@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 
 import 'app.dart';
 import 'core/config/app_config.dart';
+import 'core/services/auth_gateway.dart';
 import 'core/services/backend_bootstrap.dart';
 import 'core/services/firebase_services.dart';
 
@@ -25,5 +26,12 @@ Future<void> main() async {
     );
   }
 
-  runApp(NexusApp(backend: backend));
+  final bool firebaseReady =
+      AppConfig.hasFirebase && backend.firebase == ServiceState.connected;
+  runApp(
+    NexusApp(
+      backend: backend,
+      authGateway: firebaseReady ? FirebaseAuthGateway() : null,
+    ),
+  );
 }
