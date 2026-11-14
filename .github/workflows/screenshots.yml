@@ -42,14 +42,9 @@ jobs:
           set -euo pipefail
           # Versione leggera (JPEG, 720 px di larghezza) a righe corte: il log di GitHub
           # non mostra righe troppo lunghe.
-          mkdir -p tool/screenshots/jpg
+          dart run tool/screenshots/to_jpg.dart
           for f in tool/screenshots/out/*.png; do
             n="$(basename "$f" .png)"
-            if command -v magick >/dev/null; then
-              magick "$f" -resize 720x -quality 85 "tool/screenshots/jpg/${n}.jpg"
-            else
-              convert "$f" -resize 720x -quality 85 "tool/screenshots/jpg/${n}.jpg"
-            fi
             echo "SCREENSHOT_START ${n}.jpg"
             base64 -w 3000 "tool/screenshots/jpg/${n}.jpg"
             echo "SCREENSHOT_END"
