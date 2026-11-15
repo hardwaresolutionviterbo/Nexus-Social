@@ -59,6 +59,12 @@ ThemeData _withRoboto(ThemeData t) => t.copyWith(
   chipTheme: t.chipTheme.copyWith(
     labelStyle: (t.chipTheme.labelStyle ?? const TextStyle()).copyWith(fontFamily: 'Roboto'),
   ),
+  listTileTheme: t.listTileTheme.copyWith(
+    titleTextStyle: (t.listTileTheme.titleTextStyle ?? t.textTheme.bodyLarge)
+        ?.copyWith(fontFamily: 'Roboto'),
+    subtitleTextStyle: (t.listTileTheme.subtitleTextStyle ?? t.textTheme.bodyMedium)
+        ?.copyWith(fontFamily: 'Roboto'),
+  ),
 );
 
 void main() {
@@ -201,11 +207,17 @@ void main() {
     );
   });
 
+  // Orari relativi a ora: il riquadro della Mappa usa l'orologio vero.
+  final DateTime adesso = DateTime.now();
   List<NearbyListing> vicini() => <NearbyListing>[
-    sampleNearby(),
+    sampleNearby(createdAt: adesso.subtract(const Duration(minutes: 25)),
+        expiresAt: adesso.add(const Duration(hours: 3))),
     sampleNearby(id: 'n2', title: 'Chi viene a prendere un caffè in centro?', availableNow: true,
-        distance: 250),
-    sampleNearby(id: 'n3', title: 'Cerco compagni per una partita a padel', distance: 3500),
+        distance: 250, createdAt: adesso.subtract(const Duration(minutes: 8)),
+        expiresAt: adesso.add(const Duration(hours: 1))),
+    sampleNearby(id: 'n3', title: 'Cerco compagni per una partita a padel', distance: 3500,
+        createdAt: adesso.subtract(const Duration(hours: 2)),
+        expiresAt: adesso.add(const Duration(days: 2))),
   ];
 
   testWidgets('vicini 1 · scheda di un annuncio', (tester) async {
@@ -228,7 +240,7 @@ void main() {
         ),
         origin: const GeoPoint(43.7696, 11.2558),
         filters: const MapFilters(),
-        now: () => now,
+        now: () => adesso,
       ),
     );
   });
