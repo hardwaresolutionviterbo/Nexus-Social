@@ -15,3 +15,6 @@ Ramo `fase5/blocco1`. Nessuna modifica a `main` né al database reale.
 - Prezzo massimo 999.999.999 €.
 - Parole a rischio (armi, droghe, farmaci, contraffazione, beni rubati, animali vivi, documenti): annuncio "in revisione", visibile solo all'autore.
 - Correzione durante il blocco: la pubblicazione inserisce la riga completa in un solo passaggio (prima falliva per il vincolo sui campi obbligatori).
+
+## Approvazione
+- 15/11/2026: Blocco 1 approvato dal titolare, con foto facoltative solo per «Cerco».
