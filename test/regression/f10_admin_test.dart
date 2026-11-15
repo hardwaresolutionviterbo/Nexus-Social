@@ -92,7 +92,8 @@ void main() {
   // Fase 1: diagnostica push del Profilo. Fase 2: profilo (Blocco 2), Privacy e blocchi
   // (Blocco 3), sicurezza dell'account (Blocco 4). Fase 3, Blocco 2: annunci della Mappa
   // (pubblica, scegli il punto, i miei annunci); Blocco 3: scheda dell'annuncio, filtri e
-  // segnalazione. Blocco 4: commenti, interazioni sotto l'annuncio, notifiche. Nessuno apre l'anteprima admin.
+  // segnalazione. Blocco 4: commenti, interazioni sotto l'annuncio, notifiche. Fase 5,
+  // Blocco 1: Scambia & Vendi (sezioni, categoria, pubblica, i miei annunci). Nessuno apre l'anteprima admin.
   test('F10 · navigazione esplicita solo nei file rivisti (Profilo e Privacy)', () {
     final List<String> users = <String>[
       for (final File file in dartSources())
@@ -107,6 +108,10 @@ void main() {
       'lib/features/map/my_listings_screen.dart',
       'lib/features/map/notifications_screen.dart',
       'lib/features/map/point_picker_screen.dart',
+      'lib/features/market/category_picker.dart',
+      'lib/features/market/market_publish_screen.dart',
+      'lib/features/market/market_section_screen.dart',
+      'lib/features/market/my_market_screen.dart',
       'lib/features/privacy/privacy_screen.dart',
       'lib/features/privacy/privacy_sections.dart',
       'lib/features/profile/profile_screen.dart',

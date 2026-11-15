@@ -9,6 +9,7 @@ import 'features/contacts/contacts_sync.dart';
 import 'features/map/listing_repository.dart';
 import 'features/map/map_screen.dart';
 import 'features/map/social_repository.dart';
+import 'features/market/market_repository.dart';
 import 'features/privacy/privacy_repository.dart';
 import 'features/profile/profile_repository.dart';
 import 'features/security/app_lock.dart';
@@ -28,6 +29,7 @@ class NexusApp extends StatelessWidget {
     this.map,
     this.listings,
     this.social,
+    this.market,
   });
 
   /// Stato dei servizi collegati all'avvio (Firebase, Supabase).
@@ -59,6 +61,9 @@ class NexusApp extends StatelessWidget {
   /// Interazioni e notifiche (Fase 3, Blocco 4).
   final SocialRepository? social;
 
+  /// Scambia & Vendi (Fase 5).
+  final MarketRepository? market;
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -83,6 +88,7 @@ class NexusApp extends StatelessWidget {
               map: map,
               listings: listings,
               social: social,
+              market: market,
             ),
     );
   }

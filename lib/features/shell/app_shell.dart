@@ -5,9 +5,11 @@ import '../../core/services/backend_bootstrap.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/nexus_ui.dart';
 import '../chat/chat_screen.dart';
-import '../listings/listings_screen.dart';
 import '../map/listing_repository.dart';
 import '../map/map_screen.dart';
+import '../market/market_models.dart';
+import '../market/market_repository.dart';
+import '../market/market_section_screen.dart';
 import '../map/notifications_screen.dart';
 import '../map/social_repository.dart';
 import '../contacts/contacts_sync.dart';
@@ -17,7 +19,6 @@ import '../security/security_repository.dart';
 import '../profile/profile_models.dart';
 import '../profile/profile_repository.dart';
 import '../profile/profile_screen.dart';
-import '../sale/sale_screen.dart';
 
 /// Impalcatura dell'app: barra in alto con marchio e notifiche, cinque sezioni in basso.
 ///
@@ -39,6 +40,7 @@ class AppShell extends StatefulWidget {
     this.listings,
     this.today,
     this.social,
+    this.market,
   });
 
   final BackendStatus backend;
@@ -60,6 +62,9 @@ class AppShell extends StatefulWidget {
 
   /// Interazioni e notifiche della campanella (Fase 3, Blocco 4).
   final SocialRepository? social;
+
+  /// Annunci di Scambia & Vendi (Fase 5).
+  final MarketRepository? market;
 
   /// Data di oggi per il calcolo dell'età (nei test si fissa).
   final DateTime Function()? today;
@@ -95,8 +100,16 @@ class _AppShellState extends State<AppShell> {
       privacy: widget.privacy,
       social: widget.social,
     ),
-    const ListingsScreen(),
-    const SaleScreen(),
+    MarketSectionScreen(
+      section: MarketSection.swap,
+      repository: widget.market,
+      services: widget.map,
+    ),
+    MarketSectionScreen(
+      section: MarketSection.sale,
+      repository: widget.market,
+      services: widget.map,
+    ),
     ProfileScreen(
       backend: widget.backend,
       onSignOut: widget.onSignOut,
