@@ -8,6 +8,8 @@
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>NSContactsUsageDescription</key>
 	<string>Per trovare i tuoi contatti che usano Piazly. I numeri non vengono mai inviati in chiaro.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Per centrare la mappa su di te mentre usi Piazly. La tua posizione esatta non è mai mostrata agli altri.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Per sbloccare Piazly con il volto, se lo attivi.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

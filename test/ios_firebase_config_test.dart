@@ -68,11 +68,12 @@ void main() {
       ),
     );
     expect(pbxproj, contains('FlutterGeneratedPluginSwiftPackage in Frameworks'));
-    // Versione minima iOS 15 (prima indicata nel Podfile).
+    // Versione minima iOS 15.5: richiesta dalla mappa MapLibre (Fase 3, Blocco 1);
+    // prima era 15.0, indicata nel Podfile.
     final Set<String> targets = RegExp(
       r'IPHONEOS_DEPLOYMENT_TARGET = ([0-9.]+);',
     ).allMatches(pbxproj).map((Match m) => m.group(1)!).toSet();
-    expect(targets, <String>{'15.0'});
+    expect(targets, <String>{'15.5'});
   });
 
   test('iOS · Bundle ID dell\'app: com.nexussocial.app (come in Firebase)', () {

@@ -6,7 +6,7 @@ name: Android APK
 # es. nexus-social-0.1.0+1202-a1b2c3d-fase1-blocco1.
 on:
   push:
-    branches: [main, 'fase1/**', 'fase2/**']
+    branches: [main, 'fase1/**', 'fase2/**', 'fase3/**']
   workflow_dispatch:
 
 permissions:
@@ -113,7 +113,7 @@ jobs:
           else
             echo "::warning::pubspec.lock aggiornato da flutter pub get: va salvato nel repository."
             echo "PUBSPEC_LOCK_BASE64_START"
-            base64 -w0 pubspec.lock
+            base64 -w 3000 pubspec.lock
             echo
             echo "PUBSPEC_LOCK_BASE64_END"
           fi
@@ -371,6 +371,34 @@ jobs:
         with:
           name: ${{ env.APK_NAME }}
           path: build/consegna/${{ env.APK_NAME }}.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      # Fase 3, Blocco 1: la mappa non usa il server. Finché l'accesso con SMS richiede
+      # Blaze, questo secondo APK si apre senza accesso (come nella Fase 1), così la mappa
+      # si prova subito sul telefono. Stesso codice e stessa firma: sostituisce l'altro
+      # APK se installato. Nessuna chiave: né Firebase né Supabase.
+      - name: Build APK di prova della mappa (senza accesso)
+        if: startsWith(github.ref_name, 'fase3/')
+        run: |
+          set -euo pipefail
+          flutter build apk --debug \
+            --build-name="${APP_VERSION}" \
+            --build-number="${BUILD_NUMBER}" \
+            --dart-define=BUILD_NUMBER="${BUILD_NUMBER}" \
+            --dart-define=GIT_COMMIT="${GIT_COMMIT}" \
+            --dart-define=GIT_BRANCH="${GIT_BRANCH}" \
+            --dart-define=FIREBASE_ENABLED=false \
+            --dart-define=SERVER_LINK_ENABLED=false
+          cp build/app/outputs/flutter-apk/app-debug.apk \
+            "build/consegna/${APK_NAME}-mappa-senza-accesso.apk"
+
+      - name: Carica APK di prova della mappa
+        if: startsWith(github.ref_name, 'fase3/')
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.APK_NAME }}-mappa-senza-accesso
+          path: build/consegna/${{ env.APK_NAME }}-mappa-senza-accesso.apk
           if-no-files-found: error
           retention-days: 14
 

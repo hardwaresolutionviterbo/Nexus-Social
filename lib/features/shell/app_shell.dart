@@ -32,6 +32,7 @@ class AppShell extends StatefulWidget {
     this.security,
     this.biometricLock,
     this.contacts,
+    this.map,
   });
 
   final BackendStatus backend;
@@ -44,6 +45,9 @@ class AppShell extends StatefulWidget {
   final SecurityRepository? security;
   final BiometricLock? biometricLock;
   final ContactsRepository? contacts;
+
+  /// Posizione, avviso di sicurezza e mappa del telefono (Fase 3, Blocco 1).
+  final MapServices? map;
 
   /// Uscita dall'account (presente solo con un utente collegato).
   final Future<void> Function()? onSignOut;
@@ -67,7 +71,7 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   List<Widget> get _screens => <Widget>[
     const ChatScreen(),
-    const MapScreen(),
+    MapScreen(active: _index == 1, services: widget.map),
     const ListingsScreen(),
     const SaleScreen(),
     ProfileScreen(

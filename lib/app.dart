@@ -6,6 +6,7 @@ import 'core/services/backend_bootstrap.dart';
 import 'core/theme/app_theme.dart';
 import 'features/onboarding/auth_gate.dart';
 import 'features/contacts/contacts_sync.dart';
+import 'features/map/map_screen.dart';
 import 'features/privacy/privacy_repository.dart';
 import 'features/profile/profile_repository.dart';
 import 'features/security/app_lock.dart';
@@ -22,6 +23,7 @@ class NexusApp extends StatelessWidget {
     this.security,
     this.biometricLock,
     this.contacts,
+    this.map,
   });
 
   /// Stato dei servizi collegati all'avvio (Firebase, Supabase).
@@ -44,6 +46,9 @@ class NexusApp extends StatelessWidget {
   /// Rubrica (Blocco 5).
   final ContactsRepository? contacts;
 
+  /// Mappa e posizione del telefono (Fase 3): null nei test di interfaccia.
+  final MapServices? map;
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -56,7 +61,7 @@ class NexusApp extends StatelessWidget {
       supportedLocales: const [Locale('it'), Locale('en')],
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
       home: authGateway == null
-          ? AppShell(backend: backend)
+          ? AppShell(backend: backend, map: map)
           : AuthGate(
               gateway: authGateway!,
               backend: backend,
@@ -65,6 +70,7 @@ class NexusApp extends StatelessWidget {
               security: security,
               biometricLock: biometricLock,
               contacts: contacts,
+              map: map,
             ),
     );
   }

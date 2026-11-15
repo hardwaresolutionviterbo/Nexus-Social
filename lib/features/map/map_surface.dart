@@ -1,0 +1,112 @@
+import 'dart:math' show Point;
+
+import 'package:maplibre_gl/maplibre_gl.dart';
+import 'package:material_ui/material_ui.dart';
+
+import '../../core/theme/app_theme.dart';
+import 'map_location.dart';
+
+/// Comandi che lo schermo della Mappa dà alla mappa disegnata.
+/// Nei test la mappa vera (MapLibre) è sostituita da una finta.
+abstract class MapSurfaceHandle {
+  /// Sposta il segnaposto rotondo animato sulla posizione del telefono.
+  Future<void> showMe(GeoFix fix);
+
+  /// Porta la vista sulla posizione, in 3D o in piano.
+  Future<void> flyTo(GeoFix fix, {required bool threeD});
+
+  /// Inclina o raddrizza la vista lasciandola dov'è.
+  Future<void> setThreeD(bool threeD);
+}
+
+typedef MapSurfaceBuilder =
+    Widget Function(BuildContext context, ValueChanged<MapSurfaceHandle> onReady);
+
+/// Mappa MapLibre con le tile OpenFreeMap (F9).
+///
+/// La posizione arriva dall'app (sorgente «manuale»): MapLibre non legge il GPS da sola,
+/// così l'aggiornamento resta quello deciso da [MapRules.updateDistanceMeters].
+class MapLibreSurface extends StatefulWidget {
+  const MapLibreSurface({super.key, required this.onReady});
+
+  final ValueChanged<MapSurfaceHandle> onReady;
+
+  static Widget builder(BuildContext context, ValueChanged<MapSurfaceHandle> onReady) =>
+      MapLibreSurface(onReady: onReady);
+
+  @override
+  State<MapLibreSurface> createState() => _MapLibreSurfaceState();
+}
+
+class _MapLibreSurfaceState extends State<MapLibreSurface> implements MapSurfaceHandle {
+  MapLibreMapController? _controller;
+
+  @override
+  Future<void> showMe(GeoFix fix) async {
+    await _controller?.updateManualLocation(
+      ManualLocationUpdate(
+        target: LatLng(fix.latitude, fix.longitude),
+        horizontalAccuracy: fix.accuracyMeters,
+        bearing: fix.heading,
+        timestamp: fix.time,
+      ),
+    );
+  }
+
+  @override
+  Future<void> flyTo(GeoFix fix, {required bool threeD}) async {
+    final double bearing = _controller?.cameraPosition?.bearing ?? 0;
+    await _controller?.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: LatLng(fix.latitude, fix.longitude),
+          zoom: MapRules.userZoom,
+          tilt: threeD ? MapRules.tilt3d : MapRules.tilt2d,
+          bearing: bearing,
+        ),
+      ),
+      duration: const Duration(milliseconds: 1400),
+    );
+  }
+
+  @override
+  Future<void> setThreeD(bool threeD) async {
+    await _controller?.animateCamera(
+      CameraUpdate.tiltTo(threeD ? MapRules.tilt3d : MapRules.tilt2d),
+      duration: const Duration(milliseconds: 600),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MapLibreMap(
+      styleString: MapRules.styleUrl,
+      initialCameraPosition: const CameraPosition(
+        target: LatLng(MapRules.italyLat, MapRules.italyLng),
+        zoom: MapRules.italyZoom,
+      ),
+      minMaxZoomPreference: const MinMaxZoomPreference(3, 19),
+      trackCameraPosition: true,
+      // Rotazione e inclinazione con due dita: la vista 3D (F9).
+      rotateGesturesEnabled: true,
+      tiltGesturesEnabled: true,
+      compassEnabled: true,
+      compassViewPosition: CompassViewPosition.topRight,
+      compassViewMargins: const Point<num>(16, 96),
+      // Oltre al testo sempre visibile dell'app resta il pulsante «i» di MapLibre.
+      attributionEnabled: true,
+      attributionButtonPosition: AttributionButtonPosition.bottomLeft,
+      attributionButtonMargins: const Point<num>(8, 128),
+      locationSource: const ManualLocationSource(),
+      myLocationEnabled: true,
+      myLocationStyle: const MyLocationStyle(
+        fillColor: AppColors.brandOrange,
+        accuracyColor: AppColors.brandOrange,
+        pulseEnabled: true,
+        pulseColor: AppColors.brandOrangeLight,
+      ),
+      onMapCreated: (MapLibreMapController c) => _controller = c,
+      onStyleLoadedCallback: () => widget.onReady(this),
+    );
+  }
+}

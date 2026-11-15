@@ -30,6 +30,9 @@ dependencies:
   # Fase 2, Blocco 5: SHA-256 per l'OPRF della rubrica; lettura dei contatti con permesso.
   crypto: ^3.0.6
   flutter_contacts: ^1.1.9+2
+  # Fase 3, Blocco 1: mappa MapLibre con tile OpenFreeMap (F9) e posizione del telefono.
+  maplibre_gl: ^0.28.0
+  geolocator: ^14.0.2
 
 dev_dependencies:
   flutter_test:

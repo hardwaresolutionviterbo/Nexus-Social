@@ -11,6 +11,7 @@ import 'core/services/auth_gateway.dart';
 import 'core/services/backend_bootstrap.dart';
 import 'core/services/firebase_services.dart';
 import 'features/contacts/contacts_sync.dart';
+import 'features/map/map_screen.dart';
 import 'features/privacy/privacy_repository.dart';
 import 'features/profile/profile_repository.dart';
 import 'features/security/app_lock.dart';
@@ -53,6 +54,8 @@ Future<void> main() async {
       security: profilesReady ? SupabaseSecurityRepository(Supabase.instance.client) : null,
       biometricLock: profilesReady ? DeviceBiometricLock() : null,
       contacts: profilesReady ? SupabaseContactsRepository(Supabase.instance.client) : null,
+      // La mappa non usa il server: funziona anche senza accesso e senza Blaze.
+      map: MapServices.device(),
     ),
   );
 }
