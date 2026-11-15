@@ -1,7 +1,8 @@
 # Fase 4 · Piano operativo (proposta)
 
-Stato: **proposta da approvare dal titolare**. Nessun codice della Fase 4 prima dell'approvazione
-e delle decisioni della sezione 3 (in particolare C1, la libreria di cifratura).
+Stato: **in sospeso per decisione del titolare (15/11/2026)**: «questo blocco andrà studiato a
+fondo», in particolare la cifratura e la sua licenza (C1). Nessun codice della Fase 4 finché il
+titolare non riprende il piano e decide C1-C9.
 
 Riferimento: `Nexus_Social_Piano_di_Lavoro_COMPLETO_AGGIORNATO.pdf`, «FASE 4 – Chat, chiamate e
 notifiche» (SHA-256 `7da25d52…b8561eb`), più quanto spostato qui dalla Fase 3 (GPS in tempo reale).
