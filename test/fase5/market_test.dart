@@ -275,8 +275,8 @@ void main() {
 
       // L'elenco dei divieti si apre dal modulo.
       await tapVisible(tester, find.text('Vedi l\'elenco dei divieti'));
-      expect(find.text('Droghe e sostanze illegali'), findsOneWidget);
-      expect(find.text('Animali vivi (solo accessori e attrezzature)'), findsOneWidget);
+      expect(find.text('• Droghe e sostanze illegali'), findsOneWidget);
+      expect(find.text('• Animali vivi (solo accessori e attrezzature)'), findsOneWidget);
     });
 
     testWidgets('Auto: l\'anno è obbligatorio, i km facoltativi', (WidgetTester tester) async {
