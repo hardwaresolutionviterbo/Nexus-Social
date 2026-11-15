@@ -104,11 +104,13 @@ class _AppShellState extends State<AppShell> {
       section: MarketSection.swap,
       repository: widget.market,
       services: widget.map,
+      social: widget.social,
     ),
     MarketSectionScreen(
       section: MarketSection.sale,
       repository: widget.market,
       services: widget.map,
+      social: widget.social,
     ),
     ProfileScreen(
       backend: widget.backend,

@@ -4,10 +4,11 @@ import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart'
     show FileOptions, PostgrestException, StorageException, SupabaseClient;
 
+import '../map/listing_models.dart' show GeoPoint, ReportReason;
 import '../map/listing_repository.dart' show ListingFailure, ListingPhotos, SupabaseMapListingRepository;
 import 'market_models.dart';
 
-/// Annunci di Scambia & Vendi sul server (migrazioni 0010-0012). Nei test: versione finta.
+/// Annunci di Scambia & Vendi sul server (migrazioni 0010-0013). Nei test: versione finta.
 abstract class MarketRepository {
   Future<List<MarketCategory>> categories();
 
@@ -22,6 +23,14 @@ abstract class MarketRepository {
   Future<List<MyMarketListing>> mine();
 
   Future<Uint8List?> downloadPhoto(String path);
+
+  /// Una pagina di risultati (20, D9) dalla posizione [offset].
+  Future<List<MarketListing>> search(MarketSection section, MarketQuery query, {int offset = 0});
+
+  /// La scheda; null se non esiste più o non è visibile. [origin] solo per la distanza.
+  Future<MarketListing?> listing(String id, {GeoPoint? origin});
+
+  Future<void> report(String id, ReportReason reason, {String? details});
 }
 
 class SupabaseMarketRepository implements MarketRepository {
@@ -69,6 +78,8 @@ class SupabaseMarketRepository implements MarketRepository {
     'p_wanted_in_exchange': (d.wantedInExchange?.trim().isEmpty ?? true)
         ? null
         : d.wantedInExchange!.trim(),
+    'p_open_to_swap': d.type == MarketType.sell && d.openToSwap,
+    'p_cash_adjustment': d.cashAdjustment,
   };
 
   static MarketPublishResult _result(Object? data) {
@@ -128,6 +139,48 @@ class SupabaseMarketRepository implements MarketRepository {
         for (final Object? r in data)
           if (r is Map<String, dynamic>) MyMarketListing.fromJson(r),
     ];
+  });
+
+  static List<MarketListing> _listings(Object? data) => <MarketListing>[
+    if (data is List)
+      for (final Object? r in data)
+        if (r is Map<String, dynamic>) MarketListing.fromJson(r),
+  ];
+
+  @override
+  Future<List<MarketListing>> search(MarketSection section, MarketQuery query, {int offset = 0}) =>
+      _guard(() async {
+        final Object? data = await _client.rpc(
+          'market_search',
+          params: query.toParams(section, offset: offset),
+        );
+        return _listings(data);
+      });
+
+  @override
+  Future<MarketListing?> listing(String id, {GeoPoint? origin}) => _guard(() async {
+    final Object? data = await _client.rpc(
+      'market_listing',
+      params: <String, Object?>{
+        'p_id': id,
+        'p_lat': origin?.latitude,
+        'p_lon': origin?.longitude,
+      },
+    );
+    final List<MarketListing> l = _listings(data);
+    return l.isEmpty ? null : l.first;
+  });
+
+  @override
+  Future<void> report(String id, ReportReason reason, {String? details}) => _guard(() async {
+    await _client.rpc(
+      'report_listing',
+      params: <String, Object?>{
+        'p_listing': id,
+        'p_reason': reason.serverValue,
+        'p_details': details?.trim().isEmpty ?? true ? null : details!.trim(),
+      },
+    );
   });
 
   @override

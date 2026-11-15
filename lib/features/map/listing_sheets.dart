@@ -103,7 +103,7 @@ class ListingDetail extends StatelessWidget {
       showDragHandle: true,
       builder: (BuildContext ctx) => Padding(
         padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(ctx).bottom),
-        child: ReportListingForm(listingId: listing.id, repository: services.listings),
+        child: ReportListingForm(listingId: listing.id, report: services.listings.report),
       ),
     );
     if ((sent ?? false) && context.mounted) {
@@ -225,8 +225,8 @@ class ListingDetail extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.md),
         ListingSocialPanel(
-          listing: listing,
-          listings: services.listings,
+          listing: SocialTarget.fromNearby(listing),
+          downloadPhoto: services.listings.downloadPhoto,
           social: services.social,
           share: services.share,
         ),
@@ -352,10 +352,12 @@ class _InfoChip extends StatelessWidget {
 
 /// Segnalazione di un annuncio: motivo da un elenco chiuso e dettagli facoltativi.
 class ReportListingForm extends StatefulWidget {
-  const ReportListingForm({super.key, required this.listingId, required this.repository});
+  const ReportListingForm({super.key, required this.listingId, required this.report});
 
   final String listingId;
-  final MapListingRepository repository;
+
+  /// Invio al server (Mappa o Scambia & Vendi: stessa funzione).
+  final Future<void> Function(String id, ReportReason reason, {String? details}) report;
 
   @override
   State<ReportListingForm> createState() => _ReportListingFormState();
@@ -384,7 +386,7 @@ class _ReportListingFormState extends State<ReportListingForm> {
       _error = null;
     });
     try {
-      await widget.repository.report(widget.listingId, reason, details: _details.text);
+      await widget.report(widget.listingId, reason, details: _details.text);
       if (mounted) Navigator.of(context).pop(true);
     } on ListingFailure catch (f) {
       if (mounted) setState(() => _error = f.message);

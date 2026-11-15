@@ -70,6 +70,8 @@ class _MarketPublishScreenState extends State<MarketPublishScreen> {
   ItemCondition? _condition;
   bool _ships = false;
   bool _pickup = true;
+  bool _openToSwap = false;
+  bool _cash = false;
   final List<_Photo> _photos = <_Photo>[];
   ListingPlace _place = ListingPlace.approximateZone;
   GeoPoint? _here;
@@ -80,6 +82,10 @@ class _MarketPublishScreenState extends State<MarketPublishScreen> {
   String? _error;
 
   MyMarketListing? get _existing => widget.existing;
+
+  /// Il conguaglio vale per lo Scambio e per la Vendita che accetta scambi.
+  bool get _cashAllowed =>
+      _type == MarketType.swap || (_type == MarketType.sell && _openToSwap);
   bool get _editing => _existing != null;
 
   @override
@@ -97,6 +103,8 @@ class _MarketPublishScreenState extends State<MarketPublishScreen> {
       _condition = e.condition;
       _ships = e.ships;
       _pickup = e.pickup;
+      _openToSwap = e.openToSwap;
+      _cash = e.cashAdjustment;
       _photos.addAll(e.photos.map(_Photo.kept));
       _place = e.place;
       _here = e.savedPoint;
@@ -262,6 +270,8 @@ class _MarketPublishScreenState extends State<MarketPublishScreen> {
       newPhotos: <Uint8List>[for (final _Photo p in _photos) if (p.bytes != null) p.bytes!],
       wantedInExchange: _type == MarketType.swap ? _wanted.text : null,
       noProhibitedItems: _confirmed,
+      openToSwap: _type == MarketType.sell && _openToSwap,
+      cashAdjustment: _cashAllowed && _cash,
     );
     setState(() {
       _busy = true;
@@ -440,6 +450,24 @@ class _MarketPublishScreenState extends State<MarketPublishScreen> {
                 ),
               ),
             ],
+            if (_type == MarketType.sell)
+              CheckboxListTile(
+                key: const ValueKey<String>('mercato_valuto_scambi'),
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Valuto anche scambi'),
+                subtitle: const Text('Chi cerca «disponibili allo scambio» troverà il tuo annuncio'),
+                value: _openToSwap,
+                onChanged: (bool? v) => setState(() => _openToSwap = v ?? false),
+              ),
+            if (_cashAllowed)
+              CheckboxListTile(
+                key: const ValueKey<String>('mercato_conguaglio'),
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Accetto un conguaglio in denaro'),
+                subtitle: const Text('Se gli oggetti hanno valori diversi, si pareggia con dei soldi'),
+                value: _cash,
+                onChanged: (bool? v) => setState(() => _cash = v ?? false),
+              ),
             if (attrs.isNotEmpty) ...[
               const SizedBox(height: AppSpacing.sm),
               _Title('Dettagli di ${main!.name.toLowerCase()}'),
@@ -590,15 +618,29 @@ class _Title extends StatelessWidget {
 }
 
 /// Foto di un annuncio di Scambia & Vendi scaricata dal server.
-class MarketPhoto extends StatelessWidget {
+class MarketPhoto extends StatefulWidget {
   const MarketPhoto({super.key, required this.path, required this.repository});
 
   final String path;
   final MarketRepository repository;
 
   @override
+  State<MarketPhoto> createState() => _MarketPhotoState();
+}
+
+/// La foto si scarica una volta sola, non a ogni ridisegno.
+class _MarketPhotoState extends State<MarketPhoto> {
+  late Future<Uint8List?> _bytes = widget.repository.downloadPhoto(widget.path);
+
+  @override
+  void didUpdateWidget(MarketPhoto old) {
+    super.didUpdateWidget(old);
+    if (old.path != widget.path) _bytes = widget.repository.downloadPhoto(widget.path);
+  }
+
+  @override
   Widget build(BuildContext context) => FutureBuilder<Uint8List?>(
-    future: repository.downloadPhoto(path),
+    future: _bytes,
     builder: (BuildContext context, AsyncSnapshot<Uint8List?> snap) => snap.data == null
         ? const ColoredBox(color: Color(0x14000000), child: SizedBox.expand())
         : Image.memory(snap.data!, fit: BoxFit.cover,

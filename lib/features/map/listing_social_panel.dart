@@ -5,7 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/theme/app_theme.dart';
 import 'comments_screen.dart';
 import 'listing_models.dart';
-import 'listing_repository.dart';
+import 'listing_repository.dart' show ListingFailure;
 import 'listing_share.dart';
 import 'social_models.dart';
 import 'social_repository.dart';
@@ -17,13 +17,14 @@ class ListingSocialPanel extends StatefulWidget {
   const ListingSocialPanel({
     super.key,
     required this.listing,
-    required this.listings,
+    required this.downloadPhoto,
     this.social,
     this.share = shareWithSystem,
   });
 
-  final NearbyListing listing;
-  final MapListingRepository listings;
+  /// L'annuncio della Mappa o di Scambia & Vendi (Fase 5): stesse interazioni.
+  final SocialTarget listing;
+  final Future<Uint8List?> Function(String path) downloadPhoto;
 
   /// null finché il server delle interazioni non c'è: resta solo «Condividi».
   final SocialRepository? social;
@@ -37,7 +38,7 @@ class _ListingSocialPanelState extends State<ListingSocialPanel> {
   ListingSocial? _s;
   bool _busy = false;
 
-  NearbyListing get _l => widget.listing;
+  SocialTarget get _l => widget.listing;
 
   @override
   void initState() {
@@ -125,8 +126,9 @@ class _ListingSocialPanelState extends State<ListingSocialPanel> {
 
   Future<void> _share() async {
     Uint8List? photo;
-    if (_l.photos.isNotEmpty) photo = await widget.listings.downloadPhoto(_l.photos.first);
-    await widget.share(ListingShare.text(_l, social: _s), photo: photo);
+    final String? first = _l.firstPhoto;
+    if (first != null) photo = await widget.downloadPhoto(first);
+    await widget.share(_l.shareText(_s), photo: photo);
   }
 
   @override
@@ -239,6 +241,34 @@ class _ListingSocialPanelState extends State<ListingSocialPanel> {
       ],
     );
   }
+}
+
+/// Ciò che serve al pannello delle interazioni per un annuncio qualsiasi.
+@immutable
+class SocialTarget {
+  const SocialTarget({
+    required this.id,
+    required this.title,
+    required this.isMine,
+    required this.firstPhoto,
+    required this.shareText,
+  });
+
+  factory SocialTarget.fromNearby(NearbyListing l) => SocialTarget(
+    id: l.id,
+    title: l.title,
+    isMine: l.isMine,
+    firstPhoto: l.photos.isEmpty ? null : l.photos.first,
+    shareText: (ListingSocial? s) => ListingShare.text(l, social: s),
+  );
+
+  final String id;
+  final String title;
+  final bool isMine;
+  final String? firstPhoto;
+
+  /// Testo condiviso: mai la posizione.
+  final String Function(ListingSocial? social) shareText;
 }
 
 class _EventCard extends StatelessWidget {

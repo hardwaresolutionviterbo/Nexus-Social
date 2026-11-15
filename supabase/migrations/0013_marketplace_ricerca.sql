@@ -416,7 +416,7 @@ declare
   v_q text := nullif(btrim(coalesce(p_query, '')), '');
   v_ts tsquery;
   v_like text;
-  v_has_origin boolean := p_lat between -90 and 90 and p_lon between -180 and 180;
+  v_has_origin boolean := coalesce(p_lat between -90 and 90 and p_lon between -180 and 180, false);
   v_radius_m double precision;
 begin
   if public.current_uid() is null then

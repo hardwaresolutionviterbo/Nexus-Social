@@ -202,7 +202,7 @@ void main() {
       await openSection(tester, MarketSection.sale, server: false);
       expect(find.text('Vendita tra privati'), findsOneWidget);
       expect(find.byKey(const ValueKey<String>('avviso_antitruffa')), findsOneWidget);
-      expect(find.byType(Chip), findsNWidgets(19));
+      expect(find.byType(ChoiceChip), findsNWidgets(20)); // «Tutte» e le 19 categorie
       await tester.tap(find.byKey(const ValueKey<String>('pubblica_sale')));
       await tester.pump();
       expect(find.textContaining('serve il collegamento al server'), findsOneWidget);

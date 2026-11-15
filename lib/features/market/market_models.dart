@@ -206,6 +206,8 @@ class MarketDraft {
     this.newPhotos = const <Uint8List>[],
     this.wantedInExchange,
     this.noProhibitedItems = false,
+    this.openToSwap = false,
+    this.cashAdjustment = false,
   });
 
   final MarketType type;
@@ -225,6 +227,10 @@ class MarketDraft {
 
   /// Conferma «non pubblico prodotti vietati» (specifica, sezione 9).
   final bool noProhibitedItems;
+
+  /// «Valuto anche scambi» (solo Vendita) e «Accetto conguaglio» (specifica, sezione 7).
+  final bool openToSwap;
+  final bool cashAdjustment;
 }
 
 /// Esito della pubblicazione: in revisione se il testo contiene parole a rischio.
@@ -289,6 +295,8 @@ class MyMarketListing {
     this.review = ReviewStatus.published,
     required this.expiresAt,
     required this.createdAt,
+    this.openToSwap = false,
+    this.cashAdjustment = false,
   });
 
   factory MyMarketListing.fromJson(Map<String, dynamic> json) => MyMarketListing(
@@ -318,6 +326,8 @@ class MyMarketListing {
     review: ReviewStatus.fromServer(json['review_status'] as String?),
     expiresAt: DateTime.parse(json['expires_at'] as String).toLocal(),
     createdAt: DateTime.parse(json['created_at'] as String).toLocal(),
+    openToSwap: json['open_to_swap'] as bool? ?? false,
+    cashAdjustment: json['cash_adjustment'] as bool? ?? false,
   );
 
   final String id;
@@ -332,6 +342,8 @@ class MyMarketListing {
   final Map<String, Object> attributes;
   final List<String> photos;
   final String? wantedInExchange;
+  final bool openToSwap;
+  final bool cashAdjustment;
   final ListingPlace place;
   final GeoPoint savedPoint;
   final MarketListingState state;
@@ -364,5 +376,316 @@ class MyMarketListing {
     review: review,
     expiresAt: expiresAt ?? this.expiresAt,
     createdAt: createdAt,
+    openToSwap: openToSwap,
+    cashAdjustment: cashAdjustment,
   );
+}
+
+/// Attributi in forma leggibile per la scheda (decisione D3).
+Map<String, Object> marketAttributesFromJson(Object? raw) => <String, Object>{
+  for (final MapEntry<String, dynamic> e
+      in ((raw as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{}).entries)
+    if (e.value != null) e.key: e.value as Object,
+};
+
+/// Un annuncio di Scambia & Vendi come lo vedono gli altri (ricerca e scheda, Blocco 2):
+/// solo il punto pubblico e una distanza arrotondata, mai il punto salvato.
+@immutable
+class MarketListing {
+  const MarketListing({
+    required this.id,
+    required this.type,
+    required this.categoryId,
+    required this.title,
+    this.description = '',
+    this.priceCents,
+    this.condition,
+    this.ships = false,
+    this.pickup = false,
+    this.openToSwap = false,
+    this.cashAdjustment = false,
+    this.attributes = const <String, Object>{},
+    this.wantedInExchange,
+    this.photos = const <String>[],
+    required this.place,
+    required this.point,
+    this.distanceBandMeters,
+    this.review = ReviewStatus.published,
+    required this.expiresAt,
+    required this.createdAt,
+    this.isMine = false,
+    required this.ownerId,
+    required this.ownerUsername,
+    required this.ownerPublicName,
+    this.ownerAvatarThumbPath,
+    this.ownerIsBusiness = false,
+  });
+
+  factory MarketListing.fromJson(Map<String, dynamic> json) => MarketListing(
+    id: json['id'] as String,
+    type: MarketType.fromServer(json['market_type'] as String?),
+    categoryId: json['category_id'] as String,
+    title: json['title'] as String? ?? '',
+    description: json['description'] as String? ?? '',
+    priceCents: (json['price_cents'] as num?)?.toInt(),
+    condition: ItemCondition.fromServer(json['item_condition'] as String?),
+    ships: json['ships'] as bool? ?? false,
+    pickup: json['pickup'] as bool? ?? false,
+    openToSwap: json['open_to_swap'] as bool? ?? false,
+    cashAdjustment: json['cash_adjustment'] as bool? ?? false,
+    attributes: marketAttributesFromJson(json['attributes']),
+    wantedInExchange: json['wanted_in_exchange'] as String?,
+    photos: <String>[for (final Object? p in json['photos'] as List? ?? const <Object?>[]) '$p'],
+    place: ListingPlace.fromServer(json['location_mode'] as String?),
+    point: GeoPoint((json['lat'] as num).toDouble(), (json['lon'] as num).toDouble()),
+    distanceBandMeters: (json['distance_band_m'] as num?)?.toInt(),
+    review: ReviewStatus.fromServer(json['review_status'] as String?),
+    expiresAt: DateTime.parse(json['expires_at'] as String).toLocal(),
+    createdAt: DateTime.parse(json['created_at'] as String).toLocal(),
+    isMine: json['is_mine'] as bool? ?? false,
+    ownerId: json['owner_id'] as String,
+    ownerUsername: json['owner_username'] as String? ?? '',
+    ownerPublicName: json['owner_public_name'] as String? ?? '',
+    ownerAvatarThumbPath: json['owner_avatar_thumb_path'] as String?,
+    ownerIsBusiness: json['owner_is_business'] as bool? ?? false,
+  );
+
+  final String id;
+  final MarketType type;
+  final String categoryId;
+  final String title;
+  final String description;
+  final int? priceCents;
+  final ItemCondition? condition;
+  final bool ships;
+  final bool pickup;
+  final bool openToSwap;
+  final bool cashAdjustment;
+  final Map<String, Object> attributes;
+  final String? wantedInExchange;
+  final List<String> photos;
+  final ListingPlace place;
+
+  /// Punto pubblico: zona approssimata o punto scelto dall'autore.
+  final GeoPoint point;
+
+  /// Arrotondata a 250 m; null se la ricerca non ha un punto di partenza.
+  final int? distanceBandMeters;
+  final ReviewStatus review;
+  final DateTime expiresAt;
+  final DateTime createdAt;
+  final bool isMine;
+  final String ownerId;
+  final String ownerUsername;
+  final String ownerPublicName;
+  final String? ownerAvatarThumbPath;
+  final bool ownerIsBusiness;
+
+  /// «350 €», «Gratis», «Scambio», «Cerco · fino a 50 €».
+  String get priceLabel {
+    final int? p = priceCents;
+    return switch (type) {
+      MarketType.free => 'Gratis',
+      MarketType.sell => p == null ? '' : MarketRules.formatPrice(p),
+      MarketType.swap => p == null ? 'Scambio' : 'Scambio · ${MarketRules.formatPrice(p)}',
+      MarketType.wanted => p == null ? 'Cerco' : 'Cerco · fino a ${MarketRules.formatPrice(p)}',
+    };
+  }
+
+  /// Si scambia: lo Scambio sempre, la Vendita se l'autore lo accetta.
+  bool get swappable => type == MarketType.swap || openToSwap;
+}
+
+/// Ordinamenti (specifica, sezione 7).
+enum MarketSort {
+  recent('recent', 'Più recenti'),
+  priceAsc('price_asc', 'Prezzo crescente'),
+  priceDesc('price_desc', 'Prezzo decrescente'),
+  nearest('nearest', 'Più vicini'),
+  relevant('relevant', 'Più pertinenti');
+
+  const MarketSort(this.serverValue, this.label);
+
+  final String serverValue;
+  final String label;
+}
+
+/// Privato o azienda (dal tipo di account, Fase 2).
+enum SellerKind {
+  any(null, 'Tutti'),
+  private('private', 'Privati'),
+  business('business', 'Aziende');
+
+  const SellerKind(this.serverValue, this.label);
+
+  final String? serverValue;
+  final String label;
+}
+
+/// Data di pubblicazione.
+enum PublishedWithin {
+  any(null, 'Qualsiasi'),
+  day(1, 'Ultime 24 ore'),
+  week(7, 'Ultimi 7 giorni'),
+  month(30, 'Ultimi 30 giorni');
+
+  const PublishedWithin(this.days, this.label);
+
+  final int? days;
+  final String label;
+}
+
+/// Da dove si cerca: ovunque, dalla posizione del telefono o da un punto scelto.
+enum SearchOrigin { anywhere, myPosition, chosenPoint }
+
+/// I 13 filtri, la parola cercata e l'ordinamento (specifica, sezione 7; D4).
+@immutable
+class MarketQuery {
+  const MarketQuery({
+    this.text = '',
+    this.categoryId,
+    this.subcategoryId,
+    this.types = const <MarketType>{},
+    this.priceMinCents,
+    this.priceMaxCents,
+    this.conditions = const <ItemCondition>{},
+    this.origin = SearchOrigin.anywhere,
+    this.point,
+    this.radiusKm = defaultRadiusKm,
+    this.seller = SellerKind.any,
+    this.ships = false,
+    this.pickup = false,
+    this.openToSwap = false,
+    this.cashAdjustment = false,
+    this.published = PublishedWithin.any,
+    this.sort = MarketSort.recent,
+  });
+
+  static const int defaultRadiusKm = 30;
+  static const int minRadiusKm = 1;
+  static const int maxRadiusKm = 200;
+
+  /// Pagine da 20 (D9).
+  static const int pageSize = 20;
+
+  final String text;
+  final String? categoryId;
+  final String? subcategoryId;
+
+  /// Vuoto = tutte le tipologie della sezione.
+  final Set<MarketType> types;
+  final int? priceMinCents;
+  final int? priceMaxCents;
+  final Set<ItemCondition> conditions;
+  final SearchOrigin origin;
+
+  /// Punto di ricerca: serve solo al calcolo, il server non lo salva.
+  final GeoPoint? point;
+  final int radiusKm;
+  final SellerKind seller;
+  final bool ships;
+  final bool pickup;
+  final bool openToSwap;
+  final bool cashAdjustment;
+  final PublishedWithin published;
+  final MarketSort sort;
+
+  bool get hasPoint => origin != SearchOrigin.anywhere && point != null;
+
+  /// Quanti filtri sono attivi (per il segnalino sul pulsante «Filtri»).
+  int get activeFilters =>
+      (categoryId != null ? 1 : 0) +
+      (subcategoryId != null ? 1 : 0) +
+      (types.isNotEmpty ? 1 : 0) +
+      (priceMinCents != null || priceMaxCents != null ? 1 : 0) +
+      (conditions.isNotEmpty ? 1 : 0) +
+      (hasPoint ? 1 : 0) +
+      (seller != SellerKind.any ? 1 : 0) +
+      (ships ? 1 : 0) +
+      (pickup ? 1 : 0) +
+      (openToSwap ? 1 : 0) +
+      (cashAdjustment ? 1 : 0) +
+      (published != PublishedWithin.any ? 1 : 0);
+
+  /// Parametri della funzione `market_search` (migrazione 0013).
+  Map<String, Object?> toParams(MarketSection section, {int offset = 0}) {
+    final String q = text.trim();
+    MarketSort effective = sort;
+    if (effective == MarketSort.nearest && !hasPoint) effective = MarketSort.recent;
+    if (effective == MarketSort.relevant && q.isEmpty) effective = MarketSort.recent;
+    final Set<MarketType> allowed = types.intersection(section.types.toSet());
+    return <String, Object?>{
+      'p_section': section == MarketSection.swap ? 'swap' : 'sale',
+      'p_query': q.isEmpty ? null : q,
+      'p_category': categoryId,
+      'p_subcategory': subcategoryId,
+      'p_types': allowed.isEmpty
+          ? null
+          : <String>[for (final MarketType t in allowed) t.serverValue],
+      'p_price_min_cents': priceMinCents,
+      'p_price_max_cents': priceMaxCents,
+      'p_conditions': conditions.isEmpty
+          ? null
+          : <String>[for (final ItemCondition c in conditions) c.serverValue],
+      'p_lat': hasPoint ? point!.latitude : null,
+      'p_lon': hasPoint ? point!.longitude : null,
+      'p_radius_km': hasPoint ? radiusKm.clamp(minRadiusKm, maxRadiusKm) : null,
+      'p_seller': seller.serverValue,
+      'p_ships': ships,
+      'p_pickup': pickup,
+      'p_open_to_swap': section == MarketSection.sale && openToSwap,
+      'p_cash_adjustment': cashAdjustment,
+      'p_published_within_days': published.days,
+      'p_sort': effective.serverValue,
+      'p_offset': offset,
+    };
+  }
+
+  MarketQuery copyWith({
+    String? text,
+    String? Function()? categoryId,
+    String? Function()? subcategoryId,
+    Set<MarketType>? types,
+    int? Function()? priceMinCents,
+    int? Function()? priceMaxCents,
+    Set<ItemCondition>? conditions,
+    SearchOrigin? origin,
+    GeoPoint? Function()? point,
+    int? radiusKm,
+    SellerKind? seller,
+    bool? ships,
+    bool? pickup,
+    bool? openToSwap,
+    bool? cashAdjustment,
+    PublishedWithin? published,
+    MarketSort? sort,
+  }) => MarketQuery(
+    text: text ?? this.text,
+    categoryId: categoryId != null ? categoryId() : this.categoryId,
+    subcategoryId: subcategoryId != null ? subcategoryId() : this.subcategoryId,
+    types: types ?? this.types,
+    priceMinCents: priceMinCents != null ? priceMinCents() : this.priceMinCents,
+    priceMaxCents: priceMaxCents != null ? priceMaxCents() : this.priceMaxCents,
+    conditions: conditions ?? this.conditions,
+    origin: origin ?? this.origin,
+    point: point != null ? point() : this.point,
+    radiusKm: radiusKm ?? this.radiusKm,
+    seller: seller ?? this.seller,
+    ships: ships ?? this.ships,
+    pickup: pickup ?? this.pickup,
+    openToSwap: openToSwap ?? this.openToSwap,
+    cashAdjustment: cashAdjustment ?? this.cashAdjustment,
+    published: published ?? this.published,
+    sort: sort ?? this.sort,
+  );
+
+  /// Azzera i filtri, tenendo la parola cercata e l'ordinamento.
+  MarketQuery cleared() => MarketQuery(text: text, sort: sort == MarketSort.nearest ? MarketSort.recent : sort);
+}
+
+/// «a 750 m», «a 12 km».
+String marketDistanceLabel(int meters) {
+  if (meters < 1000) return 'a meno di 1 km';
+  final int km = (meters / 1000).round();
+  return 'a $km km';
 }
