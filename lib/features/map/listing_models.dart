@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:flutter/foundation.dart';
 
 /// Regole degli annunci della Mappa (Fase 3, Blocco 2). Il server (0007) le ripete tutte.
