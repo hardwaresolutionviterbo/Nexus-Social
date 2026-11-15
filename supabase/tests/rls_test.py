@@ -780,6 +780,125 @@ def check_contacts_block5() -> None:
           f"HTTP {t1[0]}, {t3[0]}, {t4[0]}")
 
 
+def check_map_listings_phase3() -> None:
+    """J · Annunci della Mappa (Fase 3, Blocco 2). Utenti A e B."""
+    ta, tb = token(UID_A), token(UID_B)
+    soon = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + 3 * 3600))
+    week = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + 7 * 86400))
+    too_far = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + 8 * 86400))
+    past = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 60))
+
+    def publish(tok, title="Chi viene a prendere un caffè?", lat=43.7696, lon=11.2558,
+                mode="approximate", expires=None, photos=None, details=""):
+        return rpc("publish_map_listing", {
+            "p_title": title, "p_details": details, "p_lat": lat, "p_lon": lon,
+            "p_location_mode": mode, "p_expires_at": expires or soon,
+            "p_photos": photos or []}, tok)
+
+    def mine(tok):
+        return rows(rpc("my_map_listings", {}, tok))
+
+    # J1 · Zona approssimata (preselezionata): gli altri vedono solo la zona, l'autore il punto
+    up = storage("POST", f"listing-photos/{UID_A}/fotoProva0001.jpg", ta, JPEG)
+    s, approx_id = publish(ta, photos=[f"{UID_A}/fotoProva0001.jpg"])
+    seen = by_id(near(43.7696, 11.2558, tb), approx_id)
+    own = next((x for x in mine(ta) if x["id"] == approx_id), None)
+    check("J1", "Annuncio Libero in zona approssimata: gli altri vedono solo la zona, l'autore il suo punto",
+          up == 200 and s == 200 and seen is not None and seen["category"] == "libera"
+          and seen["location_mode"] == "approximate"
+          and (abs(seen["approx_lat"] - 43.7696) > 1e-4 or abs(seen["approx_lon"] - 11.2558) > 1e-4)
+          and "exact" not in json.dumps(seen) and own is not None
+          and abs(own["exact_lat"] - 43.7696) < 1e-6 and own["status"] == "active"
+          and own["photos"] == [f"{UID_A}/fotoProva0001.jpg"],
+          f"HTTP foto {up}, pubblica {s}")
+
+    # J2 · Punto scelto a mano (bar, punto d'incontro): visibile esattamente
+    s, manual_id = publish(ta, title="Calcetto stasera, ci manca uno", lat=43.7731, lon=11.2560,
+                           mode="precise", expires=week)
+    seen = by_id(near(43.7731, 11.2560, tb), manual_id)
+    check("J2", "Punto scelto a mano: gli altri vedono esattamente quel punto",
+          s == 200 and seen is not None and seen["location_mode"] == "precise"
+          and abs(seen["approx_lat"] - 43.7731) < 1e-6, f"HTTP {s}")
+
+    # J3 · Regole: testo, scadenza (1 ora - 7 giorni), foto proprie ed esistenti, massimo 4
+    storage("POST", f"listing-photos/{UID_B}/fotoDiB0001.jpg", tb, JPEG)
+    bad = {
+        "testo corto": publish(ta, title="ok")[0],
+        "oltre 7 giorni": publish(ta, expires=too_far)[0],
+        "già scaduto": publish(ta, expires=past)[0],
+        "foto di B": publish(ta, photos=[f"{UID_B}/fotoDiB0001.jpg"])[0],
+        "foto inesistente": publish(ta, photos=[f"{UID_A}/nonCaricata001.jpg"])[0],
+        "5 foto": publish(ta, photos=[f"{UID_A}/fotoProva0001.jpg"] * 5)[0],
+        "senza modalità": rpc("publish_map_listing", {
+            "p_title": "Senza modalità", "p_details": "", "p_lat": 43.77, "p_lon": 11.25,
+            "p_location_mode": None, "p_expires_at": soon}, ta)[0],
+    }
+    check("J3", "Testo, scadenza, foto e modalità controllati dal server",
+          all(code >= 400 for code in bad.values()),
+          ", ".join(f"{k}: {v}" for k, v in bad.items() if v < 400))
+
+    # J4 · Una zona approssimata non diventa «precisa» senza un punto scelto a mano
+    r = rpc("set_listing_location_mode", {"p_listing_id": approx_id, "p_mode": "precise"}, ta)
+    seen = by_id(near(43.7696, 11.2558, tb), approx_id)
+    check("J4", "La posizione reale del telefono non si rende visibile cambiando modalità",
+          r[0] >= 400 and seen is not None and seen["location_mode"] == "approximate"
+          and (abs(seen["approx_lat"] - 43.7696) > 1e-4 or abs(seen["approx_lon"] - 11.2558) > 1e-4),
+          f"HTTP {r[0]}")
+
+    # J5 · Modifica solo dall'autore e solo con le funzioni previste
+    ok = rpc("update_my_listing", {"p_id": approx_id, "p_title": "Caffè al bar della piazza?",
+                                   "p_details": "Verso le 17", "p_expires_at": soon,
+                                   "p_photos": []}, ta)
+    other = rpc("update_my_listing", {"p_id": approx_id, "p_title": "Modificato da B",
+                                      "p_details": "", "p_expires_at": soon, "p_photos": []}, tb)
+    direct = request("PATCH", f"/rest/v1/listings?id=eq.{approx_id}", jwt=ta,
+                     prefer="return=representation", body={"title": "Diretto"})
+    own = next((x for x in mine(ta) if x["id"] == approx_id), None)
+    check("J5", "L'autore modifica testo, scadenza e foto; nessun altro, nessuna scrittura diretta",
+          ok[0] in (200, 204) and other[0] >= 400 and direct[0] >= 400 and own is not None
+          and own["title"] == "Caffè al bar della piazza?" and own["photos"] == [],
+          f"HTTP {ok[0]}, {other[0]}, {direct[0]}")
+
+    # J6 · Spostare il punto: nuovo punto scelto a mano, oppure di nuovo la zona
+    mv = rpc("move_my_listing", {"p_id": approx_id, "p_lat": 43.7800, "p_lon": 11.2400,
+                                 "p_location_mode": "precise"}, ta)
+    seen = by_id(near(43.7800, 11.2400, tb), approx_id)
+    mv_b = rpc("move_my_listing", {"p_id": approx_id, "p_lat": 43.0, "p_lon": 11.0,
+                                   "p_location_mode": "precise"}, tb)
+    check("J6", "Solo l'autore sposta l'annuncio; il nuovo punto scelto è quello visibile",
+          mv[0] in (200, 204) and mv_b[0] >= 400 and seen is not None
+          and abs(seen["approx_lat"] - 43.78) < 1e-6, f"HTTP {mv[0]}, {mv_b[0]}")
+
+    # J7 · Chiudere: sparisce dalla mappa, resta tra i miei come chiuso; non si riapre da solo
+    cl = rpc("close_my_listing", {"p_id": manual_id}, ta)
+    gone = by_id(near(43.7731, 11.2560, tb), manual_id) is None
+    own = next((x for x in mine(ta) if x["id"] == manual_id), None)
+    revive = request("PATCH", f"/rest/v1/listings?id=eq.{manual_id}", jwt=ta,
+                     prefer="return=representation", body={"status": "active"})
+    again = rpc("update_my_listing", {"p_id": manual_id, "p_title": "Riaperto",
+                                      "p_details": "", "p_expires_at": soon, "p_photos": []}, ta)
+    check("J7", "Annuncio chiuso: non più sulla mappa, non modificabile né riattivabile",
+          cl[0] in (200, 204) and gone and own is not None and own["status"] == "completed"
+          and revive[0] >= 400 and again[0] >= 400, f"HTTP {cl[0]}, {revive[0]}, {again[0]}")
+
+    # J8 · Blocchi (P12): gli annunci non si vedono in nessuna delle due direzioni
+    s, b_id = publish(tb, title="Annuncio di B a Firenze", lat=43.7700, lon=11.2500)
+    rpc("block_user", {"p_user_id": UID_B}, ta)
+    b_sees_a = by_id(near(43.78, 11.24, tb, radius=10000), approx_id)
+    a_sees_b = by_id(near(43.77, 11.25, ta, radius=10000), b_id)
+    b_direct = rows(get(f"/rest/v1/listings?id=eq.{approx_id}&select=id", tb))
+    rpc("unblock_user", {"p_user_id": UID_B}, ta)
+    back = by_id(near(43.78, 11.24, tb, radius=10000), approx_id)
+    check("J8", "Con un blocco gli annunci spariscono per entrambi; dopo lo sblocco tornano",
+          s == 200 and b_sees_a is None and a_sees_b is None and b_direct == [] and back is not None)
+
+    # J9 · Senza token: niente pubblicazione né elenco
+    n1 = publish(None)
+    n2 = rpc("my_map_listings", {})
+    check("J9", "Senza token: non si pubblica e non si leggono annunci",
+          n1[0] >= 400 and n2[0] >= 400, f"HTTP {n1[0]}, {n2[0]}")
+
+
 def main() -> int:
     try:
         ids = setup()
@@ -791,6 +910,7 @@ def main() -> int:
     check_privacy_block3()
     check_security_block4()
     check_contacts_block5()
+    check_map_listings_phase3()
     failed = [r for r in results if not r[2]]
     print(f"{'Caso':6} {'Esito':9} Descrizione")
     for case, desc, ok, detail in results:

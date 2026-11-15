@@ -25,13 +25,13 @@ jobs:
 
       # Elenco atteso: migrazioni applicate al database reale con autorizzazione del titolare
       # (0001, 0002 il 14/11/2026) più quelle del blocco in corso, provate SOLO qui sul
-      # database temporaneo (0003-0006, Fase 2 Blocchi 2-5: in attesa di autorizzazione per il reale).
+      # database temporaneo (0003-0006, Fase 2 Blocchi 2-5; 0007, Fase 3 Blocco 2: in attesa di autorizzazione per il reale).
       # Una nuova migrazione va aggiunta qui consapevolmente.
       - name: Migrazioni approvate
         run: |
           set -euo pipefail
           found=$(ls supabase/migrations | tr '\n' ' ')
-          expected="0001_init.sql 0002_identita_firebase_e_dati_privati.sql 0003_profilo_completo.sql 0004_privacy_e_blocchi.sql 0005_sicurezza_account.sql 0006_rubrica.sql "
+          expected="0001_init.sql 0002_identita_firebase_e_dati_privati.sql 0003_profilo_completo.sql 0004_privacy_e_blocchi.sql 0005_sicurezza_account.sql 0006_rubrica.sql 0007_annunci_mappa.sql "
           echo "Migrazioni: ${found}"
           if [ "${found}" != "${expected}" ]; then
             echo "::error::supabase/migrations contiene migrazioni non approvate dal titolare."
@@ -102,6 +102,10 @@ jobs:
             caso: H3
           - difetto: numero_esposto
             caso: I4
+          - difetto: modalita_precisa_forzata
+            caso: J4
+          - difetto: annunci_bloccati_visibili
+            caso: J8
 
     steps:
       - name: Checkout
