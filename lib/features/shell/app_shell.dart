@@ -85,6 +85,8 @@ class _AppShellState extends State<AppShell> {
       services: widget.map,
       listings: widget.listings,
       isMinor: _isMinor,
+      profiles: widget.profiles,
+      privacy: widget.privacy,
     ),
     const ListingsScreen(),
     const SaleScreen(),

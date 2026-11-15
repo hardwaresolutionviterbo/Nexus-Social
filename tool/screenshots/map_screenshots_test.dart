@@ -8,7 +8,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:nexus_social/core/theme/app_theme.dart';
+import 'package:nexus_social/features/map/latest_listings_screen.dart';
 import 'package:nexus_social/features/map/listing_form_screen.dart';
+import 'package:nexus_social/features/map/listing_sheets.dart';
 import 'package:nexus_social/features/map/listing_models.dart';
 import 'package:nexus_social/features/map/map_location.dart';
 import 'package:nexus_social/features/map/my_listings_screen.dart';
@@ -63,14 +65,14 @@ void main() {
   setUpAll(_loadFonts);
 
   Future<void> shoot(WidgetTester tester, String name, FakeMap map,
-      {Future<void> Function()? before}) async {
+      {Future<void> Function()? before, FakeListingRepository? listings}) async {
     tester.view.physicalSize = const Size(1080, 2340);
     tester.view.devicePixelRatio = 2.75;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: _withRoboto(AppTheme.light),
-      home: AppShell(map: map.services),
+      home: AppShell(map: map.services, listings: listings),
     ));
     await tester.pumpAndSettle();
     await tester.tap(find.descendant(of: find.byType(NavigationBar), matching: find.text('Mappa')));
@@ -197,5 +199,49 @@ void main() {
         now: () => now,
       ),
     );
+  });
+
+  List<NearbyListing> vicini() => <NearbyListing>[
+    sampleNearby(),
+    sampleNearby(id: 'n2', title: 'Chi viene a prendere un caffè in centro?', availableNow: true,
+        distance: 250),
+    sampleNearby(id: 'n3', title: 'Cerco compagni per una partita a padel', distance: 3500),
+  ];
+
+  testWidgets('vicini 1 · scheda di un annuncio', (tester) async {
+    final FakeMap map = FakeMap(noticeSeen: true, access: LocationAccess.granted);
+    final FakeListingRepository repo = FakeListingRepository()..nearbyItems = vicini();
+    await shoot(tester, 'vicini_1_scheda', map, listings: repo, before: () async {
+      map.location.emit(fixAt(43.7696, 11.2558));
+      await tester.pumpAndSettle();
+      map.handle.tapMarker('n1');
+    });
+  });
+
+  testWidgets('vicini 2 · ultimi annunci', (tester) async {
+    await shootScreen(
+      tester,
+      'vicini_2_ultimi_annunci',
+      LatestListingsScreen(
+        services: ListingSheetServices(
+          listings: FakeListingRepository()..nearbyItems = vicini(),
+        ),
+        origin: const GeoPoint(43.7696, 11.2558),
+        filters: const MapFilters(),
+        now: () => now,
+      ),
+    );
+  });
+
+  testWidgets('vicini 3 · filtri', (tester) async {
+    final FakeMap map = FakeMap(noticeSeen: true, access: LocationAccess.granted);
+    final FakeListingRepository repo = FakeListingRepository()..nearbyItems = vicini();
+    await shoot(tester, 'vicini_3_filtri', map, listings: repo, before: () async {
+      map.location.emit(fixAt(43.7696, 11.2558));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Filtri'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Ultime 24 ore'));
+    });
   });
 }

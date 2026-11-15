@@ -60,7 +60,58 @@ class FakeListingRepository implements MapListingRepository {
 
   @override
   Future<Uint8List?> downloadPhoto(String path) async => null;
+
+  /// Annunci vicini restituiti dal «server» e richieste ricevute.
+  List<NearbyListing> nearbyItems = <NearbyListing>[];
+  final List<(GeoPoint, MapFilters, ListingTab)> nearbyCalls = <(GeoPoint, MapFilters, ListingTab)>[];
+  final List<(String, bool)> availability = <(String, bool)>[];
+  final List<(String, ReportReason, String?)> reports = <(String, ReportReason, String?)>[];
+
+  @override
+  Future<List<NearbyListing>> nearby(
+    GeoPoint origin,
+    MapFilters filters, {
+    ListingTab tab = ListingTab.free,
+  }) async {
+    nearbyCalls.add((origin, filters, tab));
+    return <NearbyListing>[
+      for (final NearbyListing l in nearbyItems)
+        if (l.category == tab.category && (!filters.availableNowOnly || l.availableNow)) l,
+    ];
+  }
+
+  @override
+  Future<void> setAvailableNow(String id, bool available) async =>
+      availability.add((id, available));
+
+  @override
+  Future<void> report(String id, ReportReason reason, {String? details}) async =>
+      reports.add((id, reason, details));
 }
+
+NearbyListing sampleNearby({
+  String id = 'n1',
+  String title = 'Ci manca uno per il calcetto, chi viene?',
+  bool availableNow = false,
+  bool isMine = false,
+  String category = 'libera',
+  int distance = 1250,
+}) => NearbyListing(
+  id: id,
+  title: title,
+  details: 'Campo del quartiere, ore 21',
+  category: category,
+  place: ListingPlace.chosenPoint,
+  point: const GeoPoint(43.7731, 11.256),
+  distanceBandMeters: distance,
+  availableNow: availableNow,
+  expiresAt: DateTime(2026, 11, 15, 14),
+  createdAt: DateTime(2026, 11, 15, 10, 5),
+  isMine: isMine,
+  ownerId: 'utente-b',
+  ownerUsername: 'marco_r',
+  ownerPublicName: 'Marco R.',
+);
 
 MyListing sampleListing({
   String id = 'a1',

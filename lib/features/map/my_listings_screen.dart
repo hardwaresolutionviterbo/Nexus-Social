@@ -93,6 +93,21 @@ class _MyListingsScreenState extends State<MyListingsScreen> {
     }
   }
 
+  Future<void> _setAvailable(MyListing item, bool value) async {
+    try {
+      await widget.repository.setAvailableNow(item.id, value);
+      if (!mounted) return;
+      setState(() {
+        _items = <MyListing>[
+          for (final MyListing x in _items ?? const <MyListing>[])
+            x.id == item.id ? x.copyWith(availableNow: value) : x,
+        ];
+      });
+    } on ListingFailure catch (f) {
+      if (mounted) setState(() => _error = f.message);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
@@ -129,6 +144,7 @@ class _MyListingsScreenState extends State<MyListingsScreen> {
                 repository: widget.repository,
                 onEdit: () => _edit(item),
                 onClose: () => _close(item),
+                onAvailable: (bool v) => _setAvailable(item, v),
               ),
           ],
         ),
@@ -145,6 +161,7 @@ class _ListingCard extends StatelessWidget {
     required this.repository,
     required this.onEdit,
     required this.onClose,
+    required this.onAvailable,
   });
 
   final MyListing item;
@@ -152,6 +169,7 @@ class _ListingCard extends StatelessWidget {
   final MapListingRepository repository;
   final VoidCallback onEdit;
   final VoidCallback onClose;
+  final ValueChanged<bool> onAvailable;
 
   @override
   Widget build(BuildContext context) {
@@ -215,6 +233,16 @@ class _ListingCard extends StatelessWidget {
                 ),
               ],
             ),
+            if (active)
+              SwitchListTile(
+                key: ValueKey<String>('disponibile_${item.id}'),
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: const Text('Disponibile ora'),
+                subtitle: const Text('Mostra agli altri che sei pronto a vederti adesso'),
+                value: item.availableNow,
+                onChanged: onAvailable,
+              ),
             if (active)
               OverflowBar(
                 alignment: MainAxisAlignment.end,

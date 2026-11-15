@@ -61,6 +61,17 @@ abstract class MapListingRepository {
   Future<List<MyListing>> mine();
 
   Future<Uint8List?> downloadPhoto(String path);
+
+  /// Annunci intorno a [origin] (la posizione serve solo al calcolo, non viene salvata).
+  Future<List<NearbyListing>> nearby(
+    GeoPoint origin,
+    MapFilters filters, {
+    ListingTab tab = ListingTab.free,
+  });
+
+  Future<void> setAvailableNow(String id, bool available);
+
+  Future<void> report(String id, ReportReason reason, {String? details});
 }
 
 class SupabaseMapListingRepository implements MapListingRepository {
@@ -141,6 +152,50 @@ class SupabaseMapListingRepository implements MapListingRepository {
     }
   }
 
+  @override
+  Future<List<NearbyListing>> nearby(
+    GeoPoint origin,
+    MapFilters filters, {
+    ListingTab tab = ListingTab.free,
+  }) => _guard(() async {
+    final Object? data = await _client.rpc(
+      'map_listings_nearby',
+      params: <String, Object?>{
+        'p_lat': origin.latitude,
+        'p_lon': origin.longitude,
+        'p_radius_m': filters.radiusKm * 1000,
+        'p_category': tab.category,
+        'p_published_within_hours': filters.published.hours,
+        'p_available_now': filters.availableNowOnly,
+      },
+    );
+    return <NearbyListing>[
+      if (data is List)
+        for (final Object? row in data)
+          if (row is Map<String, dynamic>) NearbyListing.fromJson(row),
+    ];
+  });
+
+  @override
+  Future<void> setAvailableNow(String id, bool available) => _guard(() async {
+    await _client.rpc(
+      'set_my_listing_available',
+      params: <String, Object?>{'p_id': id, 'p_available': available},
+    );
+  });
+
+  @override
+  Future<void> report(String id, ReportReason reason, {String? details}) => _guard(() async {
+    await _client.rpc(
+      'report_listing',
+      params: <String, Object?>{
+        'p_listing': id,
+        'p_reason': reason.serverValue,
+        'p_details': details?.trim().isEmpty ?? true ? null : details!.trim(),
+      },
+    );
+  });
+
   Future<List<String>> _upload(ListingDraft d) async {
     final List<String> paths = <String>[...d.keptPhotos];
     const FileOptions options = FileOptions(contentType: 'image/jpeg', upsert: false);
@@ -182,6 +237,9 @@ class SupabaseMapListingRepository implements MapListingRepository {
       case '42501':
         if (message.contains('sospeso')) {
           return const ListingFailure('Il tuo account è sospeso: non puoi pubblicare.');
+        }
+        if (message.contains('non trovato')) {
+          return const ListingFailure('Annuncio non più disponibile.');
         }
         if (message.contains('chiuso')) {
           return const ListingFailure('L\'annuncio è chiuso o rimosso: non si può modificare.');

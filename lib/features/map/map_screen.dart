@@ -4,9 +4,13 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../profile/profile_form_screen.dart' show PickImage, pickFromGallery;
+import '../privacy/privacy_repository.dart';
+import '../profile/profile_repository.dart';
+import 'latest_listings_screen.dart';
 import 'listing_form_screen.dart';
 import 'listing_models.dart';
 import 'listing_repository.dart';
+import 'listing_sheets.dart';
 import 'map_location.dart';
 import 'my_listings_screen.dart';
 import 'map_surface.dart';
@@ -40,6 +44,9 @@ class MapScreen extends StatefulWidget {
     this.listings,
     this.isMinor = false,
     this.pickImage = pickFromGallery,
+    this.profiles,
+    this.privacy,
+    this.now = DateTime.now,
   });
 
   /// Vero quando la scheda Mappa è quella aperta: solo allora si crea la mappa e si
@@ -54,14 +61,22 @@ class MapScreen extends StatefulWidget {
   final bool isMinor;
   final PickImage pickImage;
 
-  static const List<int> radiusOptions = <int>[1, 5, 10, 30];
+  /// Profilo pubblico dell'autore di un annuncio e «Blocca» (Blocco 3).
+  final ProfileRepository? profiles;
+  final PrivacyRepository? privacy;
+  final DateTime Function() now;
+
+  static const List<int> radiusOptions = MapFilters.radiusOptions;
 
   @override
   State<MapScreen> createState() => _MapScreenState();
 }
 
 class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
-  int _radiusKm = 10;
+  MapFilters _filters = const MapFilters();
+  List<NearbyListing> _nearby = const <NearbyListing>[];
+  bool _loadingNearby = false;
+  int _nearbyRequest = 0;
   bool _started = false;
   bool _showNotice = false;
   bool _noticeChecked = false;
@@ -88,6 +103,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     super.didUpdateWidget(old);
     if (widget.active && !_started) _start();
     _syncListening();
+    if (widget.active && !old.active) unawaited(_refreshNearby());
   }
 
   @override
@@ -103,6 +119,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     if (_foreground && _noticeChecked && !_showNotice) {
       // Ritorno dalle impostazioni del telefono: il permesso può essere cambiato.
       unawaited(_checkAccess());
+      unawaited(_refreshNearby());
     } else {
       _syncListening();
     }
@@ -173,6 +190,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   void _onFix(GeoFix fix) {
     _lastFix = fix;
+    // Nuova posizione (ogni ~300 m): si aggiornano gli annunci intorno.
+    unawaited(_refreshNearby());
     final MapSurfaceHandle? h = _handle;
     if (h != null) {
       unawaited(h.showMe(fix));
@@ -186,6 +205,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   void _onSurfaceReady(MapSurfaceHandle handle) {
     _handle = handle;
+    if (_nearby.isNotEmpty) unawaited(handle.showListings(_nearby, _openListingById));
     final GeoFix? fix = _lastFix;
     if (fix != null) {
       unawaited(handle.showMe(fix));
@@ -210,16 +230,83 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     return f == null ? null : GeoPoint(f.latitude, f.longitude);
   }
 
-  /// Pubblicare richiede il server; finché è spento lo si dice chiaramente.
-  bool _canPublish() {
+  /// Annunci intorno alla posizione attuale con i filtri scelti (solo con il server).
+  Future<void> _refreshNearby() async {
+    final MapListingRepository? repo = widget.listings;
+    final GeoPoint? origin = _currentPoint;
+    if (repo == null || origin == null || !widget.active) return;
+    final int request = ++_nearbyRequest;
+    if (mounted) setState(() => _loadingNearby = true);
+    try {
+      final List<NearbyListing> items = await repo.nearby(origin, _filters);
+      // Una risposta vecchia (filtri cambiati nel frattempo) non sovrascrive la nuova.
+      if (!mounted || request != _nearbyRequest) return;
+      setState(() => _nearby = items);
+      await _handle?.showListings(items, _openListingById);
+    } on ListingFailure {
+      // La mappa resta utilizzabile; si riprova al prossimo spostamento o filtro.
+    } finally {
+      if (mounted && request == _nearbyRequest) setState(() => _loadingNearby = false);
+    }
+  }
+
+  void _setFilters(MapFilters f) {
+    if (f == _filters) return;
+    setState(() => _filters = f);
+    unawaited(_refreshNearby());
+  }
+
+  ListingSheetServices? get _sheetServices {
+    final MapListingRepository? repo = widget.listings;
+    return repo == null
+        ? null
+        : ListingSheetServices(listings: repo, profiles: widget.profiles, privacy: widget.privacy);
+  }
+
+  Future<void> _openListingById(String id) async {
+    final NearbyListing? listing = _nearby.where((NearbyListing l) => l.id == id).firstOrNull;
+    final ListingSheetServices? services = _sheetServices;
+    if (listing == null || services == null || !mounted) return;
+    final bool? blocked = await showListingSheet(
+      context,
+      listing: listing,
+      services: services,
+      now: widget.now,
+    );
+    if (blocked ?? false) unawaited(_refreshNearby());
+  }
+
+  Future<void> _openFilters() async {
+    final MapFilters? f = await showMapFilters(context, _filters);
+    if (f != null) _setFilters(f);
+  }
+
+  Future<void> _openLatest() async {
+    if (!_needsServer()) return;
+    final ListingSheetServices services = _sheetServices!;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => LatestListingsScreen(
+          services: services,
+          origin: _currentPoint,
+          filters: _filters,
+          now: widget.now,
+        ),
+      ),
+    );
+    unawaited(_refreshNearby());
+  }
+
+  /// Annunci e pubblicazione richiedono il server; finché è spento lo si dice chiaramente.
+  bool _needsServer() {
     if (widget.listings != null && _services != null) return true;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
         const SnackBar(
           content: Text(
-            'Per pubblicare serve il collegamento al server: si attiverà con il piano '
-            'Blaze. La mappa intanto funziona.',
+            'Per vedere e pubblicare annunci serve il collegamento al server: si attiverà '
+            'con il piano Blaze. La mappa intanto funziona.',
           ),
         ),
       );
@@ -227,7 +314,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _publish() async {
-    if (!_canPublish()) return;
+    if (!_needsServer()) return;
     final bool? done = await Navigator.of(context).push<bool>(
       MaterialPageRoute<bool>(
         builder: (_) => ListingFormScreen(
@@ -243,11 +330,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(const SnackBar(content: Text('Annuncio pubblicato.')));
+      unawaited(_refreshNearby());
     }
   }
 
   Future<void> _openMine() async {
-    if (!_canPublish()) return;
+    if (!_needsServer()) return;
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => MyListingsScreen(
@@ -259,6 +347,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         ),
       ),
     );
+    unawaited(_refreshNearby());
   }
 
   void _toggleThreeD() {
@@ -287,8 +376,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           left: 12,
           right: 12,
           child: _MapHeader(
-            radiusKm: _radiusKm,
-            onRadiusChanged: (int v) => setState(() => _radiusKm = v),
+            filters: _filters,
+            count: widget.listings == null ? null : _nearby.length,
+            loading: _loadingNearby,
+            onRadiusChanged: (int v) => _setFilters(_filters.copyWith(radiusKm: v)),
+            onFilters: _openFilters,
+            onLatest: _openLatest,
           ),
         ),
         Positioned(
@@ -359,22 +452,36 @@ abstract final class _MapLayout {
 }
 
 class _MapHeader extends StatelessWidget {
-  const _MapHeader({required this.radiusKm, required this.onRadiusChanged});
+  const _MapHeader({
+    required this.filters,
+    required this.count,
+    required this.loading,
+    required this.onRadiusChanged,
+    required this.onFilters,
+    required this.onLatest,
+  });
 
-  final int radiusKm;
+  final MapFilters filters;
+
+  /// Annunci visibili entro il raggio; null senza server.
+  final int? count;
+  final bool loading;
   final ValueChanged<int> onRadiusChanged;
+  final VoidCallback onFilters;
+  final VoidCallback onLatest;
 
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     final ColorScheme scheme = theme.colorScheme;
+    final int? n = count;
     return Material(
       color: scheme.surface.withValues(alpha: 0.94),
       elevation: 3,
       shadowColor: Colors.black26,
       borderRadius: BorderRadius.circular(22),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+        padding: const EdgeInsets.fromLTRB(14, 6, 6, 10),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
@@ -384,27 +491,45 @@ class _MapHeader extends StatelessWidget {
                 Icon(Icons.map_rounded, size: 18, color: scheme.primary),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
-                  child: Text(
-                    'Mappa Sociale',
-                    style: theme.textTheme.titleSmall,
-                    overflow: TextOverflow.ellipsis,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Mappa Sociale',
+                        style: theme.textTheme.titleSmall,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (n != null)
+                        Text(
+                          loading
+                              ? 'Cerco annunci…'
+                              : n == 1
+                              ? '1 annuncio entro ${filters.radiusKm} km'
+                              : '$n annunci entro ${filters.radiusKm} km',
+                          key: const ValueKey<String>('conteggio_annunci'),
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-                Icon(Icons.radar_rounded, size: 16, color: scheme.onSurfaceVariant),
-                const SizedBox(width: AppSpacing.xs),
-                Flexible(
-                  child: Text(
-                    'Raggio $radiusKm km',
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: scheme.primary,
-                      fontWeight: FontWeight.w700,
-                    ),
+                IconButton(
+                  tooltip: 'Filtri',
+                  onPressed: onFilters,
+                  icon: Badge(
+                    isLabelVisible: filters.narrowed,
+                    child: const Icon(Icons.tune_rounded),
                   ),
+                ),
+                IconButton(
+                  tooltip: 'Ultimi annunci',
+                  onPressed: onLatest,
+                  icon: const Icon(Icons.dynamic_feed_rounded),
                 ),
               ],
             ),
-            const SizedBox(height: AppSpacing.sm),
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
@@ -412,7 +537,7 @@ class _MapHeader extends StatelessWidget {
                   for (final int option in MapScreen.radiusOptions) ...[
                     ChoiceChip(
                       label: Text('$option km'),
-                      selected: option == radiusKm,
+                      selected: option == filters.radiusKm,
                       visualDensity: VisualDensity.compact,
                       onSelected: (_) => onRadiusChanged(option),
                     ),

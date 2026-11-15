@@ -95,6 +95,20 @@ class FakeMapHandle implements MapSurfaceHandle {
 
   @override
   Future<GeoPoint?> center() async => centerPoint;
+
+  /// Annunci mostrati l'ultima volta e funzione per «toccarne» uno nei test.
+  List<NearbyListing> markers = <NearbyListing>[];
+  ValueChanged<String>? _onTap;
+  int markerUpdates = 0;
+
+  @override
+  Future<void> showListings(List<NearbyListing> listings, ValueChanged<String> onTap) async {
+    markers = listings;
+    _onTap = onTap;
+    markerUpdates++;
+  }
+
+  void tapMarker(String id) => _onTap?.call(id);
 }
 
 class FakeMapSurface extends StatefulWidget {

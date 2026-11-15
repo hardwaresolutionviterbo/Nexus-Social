@@ -21,6 +21,10 @@ abstract class MapSurfaceHandle {
 
   /// Punto al centro della vista (per scegliere a mano il luogo di un annuncio).
   Future<GeoPoint?> center();
+
+  /// Segnaposti rotondi degli annunci vicini con l'iniziale dell'autore (T2); toccandoli
+  /// si riceve l'identificativo dell'annuncio.
+  Future<void> showListings(List<NearbyListing> listings, ValueChanged<String> onTap);
 }
 
 typedef MapSurfaceBuilder =
@@ -44,6 +48,59 @@ class MapLibreSurface extends StatefulWidget {
 
 class _MapLibreSurfaceState extends State<MapLibreSurface> implements MapSurfaceHandle {
   MapLibreMapController? _controller;
+  ValueChanged<String>? _onListingTap;
+
+  void _tappedCircle(Circle c) => _tapped(c.data);
+  void _tappedSymbol(Symbol s) => _tapped(s.data);
+
+  void _tapped(Map<dynamic, dynamic>? data) {
+    final Object? id = data?['id'];
+    if (id is String) _onListingTap?.call(id);
+  }
+
+  @override
+  Future<void> showListings(List<NearbyListing> listings, ValueChanged<String> onTap) async {
+    final MapLibreMapController? c = _controller;
+    if (c == null) return;
+    _onListingTap = onTap;
+    await c.clearSymbols();
+    await c.clearCircles();
+    if (listings.isEmpty) return;
+    final List<Map<String, dynamic>> data = <Map<String, dynamic>>[
+      for (final NearbyListing l in listings) <String, dynamic>{'id': l.id},
+    ];
+    await c.addCircles(<CircleOptions>[
+      for (final NearbyListing l in listings)
+        CircleOptions(
+          geometry: LatLng(l.point.latitude, l.point.longitude),
+          circleRadius: 14,
+          circleColor: l.isMine
+              ? '#22B8CF'
+              : l.availableNow
+              ? '#12B886'
+              : '#FF7A1A',
+          circleStrokeWidth: 3,
+          circleStrokeColor: '#FFFFFF',
+        ),
+    ], data);
+    await c.addSymbols(<SymbolOptions>[
+      for (final NearbyListing l in listings)
+        SymbolOptions(
+          geometry: LatLng(l.point.latitude, l.point.longitude),
+          textField: l.initial,
+          textSize: 13,
+          textColor: '#FFFFFF',
+          fontNames: const <String>['Noto Sans Bold'],
+        ),
+    ], data);
+  }
+
+  @override
+  void dispose() {
+    _controller?.onCircleTapped.remove(_tappedCircle);
+    _controller?.onSymbolTapped.remove(_tappedSymbol);
+    super.dispose();
+  }
 
   @override
   Future<void> showMe(GeoFix fix) async {
@@ -115,7 +172,18 @@ class _MapLibreSurfaceState extends State<MapLibreSurface> implements MapSurface
         pulseEnabled: true,
         pulseColor: AppColors.brandOrangeLight,
       ),
-      onMapCreated: (MapLibreMapController c) => _controller = c,
+      // I segnaposti degli annunci sopra i cerchi, le iniziali sopra tutto.
+      annotationOrder: const <AnnotationType>[
+        AnnotationType.line,
+        AnnotationType.fill,
+        AnnotationType.circle,
+        AnnotationType.symbol,
+      ],
+      onMapCreated: (MapLibreMapController c) {
+        _controller = c;
+        c.onCircleTapped.add(_tappedCircle);
+        c.onSymbolTapped.add(_tappedSymbol);
+      },
       onStyleLoadedCallback: () => widget.onReady(this),
     );
   }
