@@ -1,74 +1,94 @@
-# Fase 5 · Piano operativo (proposta)
+# Fase 5 · Piano operativo
 
-Stato: **proposta da approvare dal titolare**. Nessun codice della Fase 5 prima dell'approvazione
-e delle categorie (S1).
+Stato: **decisioni del titolare raccolte il 15/11/2026** (domande 1-11, sezione 3); piano da
+approvare prima di iniziare il Blocco 1.
 
-Riferimento: `Nexus_Social_Piano_di_Lavoro_COMPLETO_AGGIORNATO.pdf`, «FASE 5 – Scambia, Vendita e
-feedback» (SHA-256 `7da25d52…b8561eb`).
+Riferimenti:
+- `Nexus_Social_Piano_di_Lavoro_COMPLETO_AGGIORNATO.pdf`, «FASE 5 – Scambia, Vendita e feedback»
+  (SHA-256 `7da25d52…b8561eb`);
+- **specifica del titolare** «PIAZLY – Marketplace SCAMBIA & VENDI v1.0»
+  (`docs/fase5/CATALOGO_TITOLARE.md`), che amplia la Fase 5 del PDF: dove le due fonti
+  differiscono vale la specifica del titolare, più recente.
 
-## 1. Obiettivo e requisiti (dal PDF)
+## 1. Requisiti
 
-> Obiettivo: permettere alle persone di scambiare e vendere oggetti gratuitamente, con interazioni
-> social sugli annunci.
->
-> Cosa devi riuscire a provare sul telefono: pubblichi un oggetto, un altro utente ti contatta,
-> interagisce con l'annuncio, commenta, concludete e vi lasciate il feedback.
-
-| N. | Requisito | Blocco |
-|---|---|---|
-| R5.1 | Scambia: «offro / cerco», foto, categorie, tasto Contatta | 1 |
-| R5.2 | Vendita: foto, titolo, prezzo, consegna solo ritiro a mano o spedizione; accordi in chat, l'app non gestisce i soldi | 2 |
-| R5.3 | Avviso antitruffa sempre visibile e «Segnala annuncio» | 1, 2 |
-| R5.4 | «Segna come concluso»: solo dopo si può lasciare il feedback | 3 |
-| R5.5 | Feedback a stelle con commento (stile eBay e Subito); media stelle sul profilo dei privati | 3 |
-| R5.6 | Mi piace / Non mi piace, una reazione per persona, conteggi separati ed elenchi nominativi | 1, 2 (dalla Fase 3) |
-| R5.7 | Reazioni senza notifiche (PDF) — **vedi S6** | 4 |
-| R5.8 | Commenti: avatar/nome pubblico, testo, data e ora; l'autore modifica o elimina il proprio commento | 4 |
-| R5.9 | Moderazione dell'autore dell'annuncio e degli amministratori senza alterare l'identità di chi ha scritto | 4 |
-| R5.10 | Segnalazione dei commenti, blocco utenti, moderazione Admin, limiti anti-spam, paginazione e caricamento progressivo | 4 |
-| R5.11 | Notifiche dei commenti separate dalle reazioni; mai per un proprio commento | 4 (già in Fase 3) |
+| N. | Requisito | Fonte | Blocco |
+|---|---|---|---|
+| R5.1 | Catalogo gerarchico: 19 categorie con sottocategorie, ID e slug stabili, ordine, attivo/disattivo | Specifica 2-3 | 1 |
+| R5.2 | Un solo sistema di annunci con 4 tipologie: Vendita, Scambio, Regalo, Cerco | Specifica 4 | 1 |
+| R5.3 | Campi: titolo, descrizione, categoria, sottocategoria, tipologia, prezzo (obbligatorio Vendita, facoltativo Scambio, assente Regalo), condizioni, località, foto, stato, spedizione, ritiro a mano | Specifica 5, PDF | 1 |
+| R5.4 | Selezione categoria → sottocategoria → campi specifici | Specifica 10 | 1 |
+| R5.5 | Prodotti vietati, illegali o regolamentati; animali solo accessori | Specifica 9 | 1 |
+| R5.6 | Avviso antitruffa sempre visibile, «Segnala annuncio», l'app non gestisce i soldi | PDF | 2 |
+| R5.7 | Ricerca con 13 filtri e 5 ordinamenti, pagine progressive | Specifica 7, PDF | 2 |
+| R5.8 | Mi piace / Non mi piace con elenchi; commenti; Condividi; Contatta | PDF | 2 |
+| R5.9 | Scambi: cosa si cerca, proposte con annunci propri e conguaglio, controproposte, accetta/rifiuta, annulla, conclusione da entrambi, storico, notifiche; stati In attesa / Accettata / Rifiutata / Controproposta / Annullata / Completata | Specifica 6 | 3 |
+| R5.10 | Concluso → feedback a stelle con commento; media sul profilo dei privati | PDF | 4 |
+| R5.11 | Commenti: modifica, moderazione senza alterare l'identità, segnalazione, anti-spam, paginazione; notifiche separate dalle reazioni | PDF | 5 |
+| R5.12 | Amministrazione delle categorie (crea, rinomina, attiva/disattiva, ordina, conteggi, archivia senza eliminare quelle usate) | Specifica 8 | 5 |
 
 ## 2. Cosa c'è già e cosa dipende da altro
 
-- **Riutilizzati dalla Fase 3**: foto senza metadati, zona approssimata o punto scelto, raggio
-  1-30 km, segnalazione, blocchi, Mi piace / Non mi piace con elenchi, commenti con risposte,
-  notifiche nella campanella, «Condividi».
-- **«Contatta» e gli accordi in chat** dipendono dalla chat (Fase 4, in sospeso). Fino ad allora il
-  pulsante resta l'avviso «Chat in arrivo» e ci si accorda nei commenti; la prova completa del PDF
-  («un altro utente ti contatta») arriva con la Fase 4.
-- **Prova sul telefono**: come le Fasi 2-3, serve il server attivo (Blaze) e l'autorizzazione ad
-  applicare le migrazioni.
-- **Gestionale Admin**: le funzioni di moderazione si preparano sul server e si provano nei test;
-  le schermate per l'amministratore arrivano con la Fase 7.
+- **Riutilizzati**: foto senza metadati, zona approssimata o punto scelto, raggio 1-30 km,
+  segnalazioni, blocchi, Mi piace / Non mi piace, commenti con risposte, notifiche nella
+  campanella, Condividi (Fasi 2-3).
+- **Chat tra le parti**: con la Fase 4 (in sospeso). Fino ad allora proposte e conclusione
+  funzionano senza chat, ci si scrive nei commenti e «Contatta» mostra l'avviso.
+- **Pannello amministrativo**: in questa fase le funzioni del server per le categorie e la
+  moderazione, provate dai test; le schermate per l'amministratore con la Fase 7 (Gestionale
+  Admin), come previsto dal PDF.
+- **Prova sul telefono**: server attivo (Blaze) e autorizzazione ad applicare le migrazioni.
+  Nessuna migrazione sul database reale senza autorizzazione; nessun merge in `main` prima
+  dell'approvazione del titolare (specifica, sezione 12).
 
-## 3. Decisioni da prendere
+## 3. Decisioni del titolare (15/11/2026)
 
-| N. | Domanda | Proposta |
-|---|---|---|
-| S1 | **Categorie** di Scambia e Vendita | Le manda il titolare. Se preferisce una base: Abbigliamento e accessori · Casa e arredamento · Elettronica · Libri, musica e film · Bambini e giocattoli · Sport e tempo libero · Auto e moto (ricambi e accessori) · Hobby e collezionismo · Animali (accessori) · Altro |
-| S2 | Dove valgono | Stesse regole della Mappa: zona approssimata o punto scelto, raggio 1-30 km (10 di partenza). Gli annunci compaiono nelle sezioni Scambia e Vendita, non sulla Mappa |
-| S3 | Durata | 30 giorni, rinnovabili dall'autore |
-| S4 | Vendita | Prezzo in euro da 0 a 99.999; «Ritiro a mano», «Spedizione» o entrambi; nessun pagamento nell'app; avviso antitruffa fisso in ogni annuncio e prima del contatto |
-| S5 | Concluso e feedback | L'autore tocca «Segna come concluso» e sceglie con chi (tra chi ha commentato e, con la Fase 4, chi l'ha contattato); l'altra persona conferma. Solo dopo, ciascuno dei due lascia **un** feedback: 1-5 stelle e commento fino a 500 caratteri, non modificabile, visibile sul profilo. Media stelle solo sul profilo dei privati |
-| S6 | Notifiche dei Mi piace | Il PDF (Fase 5) dice nessuna notifica per le reazioni; in Fase 3 hai deciso le notifiche dei Mi piace per la Mappa. Proposta: **stessa regola ovunque** (Mi piace sì, Non mi piace mai), salvo tua diversa indicazione |
-| S7 | Commenti (novità del PDF) | Modifica del proprio commento con la scritta «modificato»; l'autore dell'annuncio e gli amministratori possono **nascondere** un commento (resta «Commento nascosto dalla moderazione», nome di chi l'ha scritto invariato); segnalazione dei commenti; vale anche per la Mappa |
-| S8 | Limiti anti-spam | 10 commenti al minuto e 100 al giorno per persona; 20 annunci nuovi al giorno; elenchi e commenti a pagine da 20 con caricamento progressivo |
-| S9 | Ricerca per parola, aste, pagamenti | Non previsti dal PDF: non si fanno |
+| N. | Decisione |
+|---|---|
+| D1 | Categorie: quelle della specifica del titolare (19 categorie, sottocategorie elencate) |
+| D2 | Scambio: proposte, controproposte, accetta/rifiuta e conclusione subito; chat tra le parti con la Fase 4 |
+| D3 | Campi specifici: Motori anno e km; Immobili metri quadri e locali; Abbigliamento e scarpe taglia/numero; Elettronica memoria. Facoltativi, tranne l'anno per Auto e i metri quadri per Immobili |
+| D4 | Barra di ricerca per parola (titolo e descrizione), con l'ordinamento «Più pertinenti» |
+| D5 | Durata 30 giorni, rinnovabile con un tocco |
+| D6 | Conclusione: l'autore indica la persona, l'altra conferma; poi un feedback a testa (1-5 stelle e commento, non modificabile). Per lo Scambio la conferma di entrambi è già nella specifica |
+| D7 | Notifiche dei Mi piace come sulla Mappa (Mi piace sì, raggruppati; Non mi piace mai) |
+| D8 | Commenti: modifica con «modificato», nascondi (autore dell'annuncio e amministratori) con l'identità invariata, segnalazione; vale anche per la Mappa |
+| D9 | Anti-spam: commenti 10 al minuto e 100 al giorno; annunci nuovi 20 al giorno; proposte 30 al giorno; pagine da 20 |
+| D10 | Due sezioni, un solo sistema: «Scambia» mostra Scambio, Regalo e Cerco; «Vendita» mostra Vendita. La barra in basso non cambia. Questi annunci non vanno sulla Mappa |
+
+Scelte tecniche (proposte, approvate con il piano):
+- **Slug**: la specifica dà alcuni esempi; per tutte le sottocategorie lo slug sarà
+  `categoria-nome` senza articoli e congiunzioni (es. `motori-moto-scooter`). Una volta creati
+  non cambiano più.
+- **Prodotti vietati** (D-sicurezza): conferma obbligatoria «non vendo prodotti vietati» a ogni
+  pubblicazione, elenco dei divieti sempre consultabile, parole a rischio nel testo che mettono
+  l'annuncio in revisione (non pubblico finché un amministratore non lo approva), segnalazioni.
+  Nessuna sottocategoria di animali vivi.
+- **Prezzo**: in euro, da 0 a 999.999.999 (gli immobili superano i 99.999); conguaglio da 1 a
+  999.999.
+- **«Privato o azienda»**: dal tipo di account già presente (Fase 2).
 
 ## 4. Blocchi di lavoro
 
-Ogni blocco: APK identificabile, schermate di anteprima, test automatici, approvazione.
+Ogni blocco: APK identificabile, schermate di anteprima, test automatici, migrazione provata
+solo sul database temporaneo, approvazione.
 
-1. **Scambia.** Schede «Offro» e «Cerco», pubblica (foto, titolo, descrizione, categoria, luogo),
-   elenco vicino a te con filtri categoria e distanza, scheda dell'annuncio con avviso
-   antitruffa, Contatta (avviso finché non c'è la chat), Segnala, Mi piace, commenti, Condividi.
-2. **Vendita.** Come Scambia con prezzo e consegna; avviso «l'app non gestisce i pagamenti».
-3. **Concluso e feedback.** Segna come concluso con conferma dell'altra persona, feedback a
-   stelle con commento, elenco dei feedback e media sul profilo dei privati.
-4. **Commenti completi e moderazione.** Modifica, nascondi (autore dell'annuncio e
-   amministratori), segnala commento, limiti anti-spam, pagine da 20, notifiche dei commenti
-   separate dalle reazioni; esteso anche agli annunci della Mappa.
+1. **Catalogo e pubblicazione.** Tabella `marketplace_categories` con le 19 categorie e le
+   sottocategorie; annunci con le 4 tipologie, condizioni, prezzo secondo la tipologia,
+   spedizione e ritiro, campi specifici (D3); modulo con scelta categoria → sottocategoria;
+   regole sui prodotti vietati; I miei annunci con rinnovo (D5).
+2. **Ricerca e scheda.** Sezioni Scambia e Vendita (D10), barra di ricerca (D4), i 13 filtri e
+   i 5 ordinamenti, pagine progressive; scheda con avviso antitruffa, Segnala, Mi piace,
+   commenti, Condividi, Contatta.
+3. **Proposte di scambio.** Cosa si cerca in cambio, proposte con annunci propri e conguaglio,
+   controproposte, accetta/rifiuta/annulla, stati, notifiche, storico.
+4. **Conclusione e feedback.** Conferma di entrambi (D6), feedback a stelle, elenco dei
+   feedback e media sul profilo dei privati.
+5. **Commenti completi e amministrazione.** Modifica, nascondi, segnala commento, anti-spam (D8,
+   D9), anche sulla Mappa; funzioni del server per amministrare le categorie (R5.12).
 
-## 5. Azioni che spettano al titolare
+## 5. Test di accettazione (specifica, sezione 12)
 
-- Inviare o approvare le categorie (S1) e decidere S2-S9.
+Tutte le 19 categorie presenti; sottocategorie associate correttamente; ID univoci; selezione
+gerarchica; ricerca per categoria; quattro tipologie; filtri; pubblicazione da smartphone;
+policy di sicurezza provate; migrazioni verificate su database temporaneo; nessuna regressione.
