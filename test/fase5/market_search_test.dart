@@ -84,7 +84,8 @@ void main() {
       MarketSection section,
       List<MarketListing> listings,
     ) async {
-      tester.view.physicalSize = const Size(1170, 2532);
+      // Schermo alto: l'elenco costruisce solo le schede visibili.
+      tester.view.physicalSize = const Size(1170, 9000);
       tester.view.devicePixelRatio = 3;
       addTearDown(tester.view.reset);
       repo = FakeMarketRepository(listings: listings);
@@ -290,12 +291,15 @@ void main() {
           sampleListing(id: 'p$i', title: 'Oggetto $i',
               createdAt: DateTime(2026, 11, 14).subtract(Duration(minutes: i))),
       ]);
+      await tester.scrollUntilVisible(find.byKey(const ValueKey<String>('mercato_altri')), 300,
+          scrollable: find.byType(Scrollable).first);
       expect(find.byKey(const ValueKey<String>('mercato_altri')), findsOneWidget);
       expect(repo.searches.single.$3, 0);
       await tapVisible(tester, find.byKey(const ValueKey<String>('mercato_altri')));
       expect(repo.searches.last.$3, 20);
       expect(find.byKey(const ValueKey<String>('mercato_altri')), findsNothing);
-      await tester.ensureVisible(find.byKey(const ValueKey<String>('risultato_p24')));
+      await tester.scrollUntilVisible(find.byKey(const ValueKey<String>('risultato_p24')), 300,
+          scrollable: find.byType(Scrollable).first);
       expect(find.byKey(const ValueKey<String>('risultato_p24')), findsOneWidget);
     });
 

@@ -332,13 +332,16 @@ class _MarketFiltersScreenState extends State<MarketFiltersScreen> {
               style: TextStyle(color: theme.colorScheme.error),
             ),
           ],
-          const SizedBox(height: AppSpacing.lg),
-          FilledButton(
-            key: const ValueKey<String>('filtri_mostra'),
-            onPressed: _apply,
-            child: const Text('Mostra risultati'),
-          ),
         ],
+      ),
+      // Sempre a portata di dito, anche in fondo a un elenco lungo.
+      bottomNavigationBar: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+        child: FilledButton(
+          key: const ValueKey<String>('filtri_mostra'),
+          onPressed: _apply,
+          child: const Text('Mostra risultati'),
+        ),
       ),
     );
   }
