@@ -1,7 +1,7 @@
 # Fase 3 · Piano operativo (proposta)
 
 Stato: **piano approvato dal titolare il 15/11/2026** con le modifiche della sezione 3.1;
-in attesa delle **categorie e sottocategorie** del titolare (sostituiscono T4) prima del Blocco 2.
+categorie della mappa decise dal titolare il 15/11/2026 (sezione 3.1, T4).
 
 Riferimento: `Nexus_Social_Piano_di_Lavoro_COMPLETO_AGGIORNATO.pdf`, «FASE 3 – Mappa Sociale (il
 cuore dell'app)» (SHA-256 `7da25d52…b8561eb`).
@@ -67,7 +67,18 @@ cuore dell'app)» (SHA-256 `7da25d52…b8561eb`).
 ### 3.1 Decisioni del titolare (15/11/2026)
 
 - **T1, T2, T3, T5, T7:** approvate come proposte.
-- **T4 · Categorie:** sostituita dall'elenco di categorie e sottocategorie che fornirà il titolare.
+- **T4 · Categorie della mappa (decisione del titolare, sostituisce la proposta):** sulla mappa
+  esistono **solo due categorie**, senza sottocategorie:
+  - **Libera** — le persone scrivono ciò che vogliono («chi viene a prendere un caffè con me?»,
+    «ci manca una persona per il calcetto, chi viene?»); la richiesta è libera, senza
+    sottocategorie, gratuita. Gli eventi di gruppo con «mancano N persone» sono annunci Liberi.
+  - **Promozione / Pubblicità** — per le aziende, a pagamento (9,99 €/mese), attiva dalla Fase 6.
+  - Le due categorie coincidono con le due schede di «Ultimi annunci» (Annunci / Promozioni);
+    il filtro «categoria» del PDF (R3.11) diventa la scelta tra queste due.
+  - Le eventuali categorie di **Scambia** e **Vendita** (Fase 5) restano da definire dal titolare
+    prima della Fase 5.
+  - Nota: la Fase 6 del PDF parla di «attività e privati che fanno pubblicità»; se anche i privati
+    potranno acquistare la Promozione si decide in Fase 6.
 - **T6 · Interazioni come Facebook (modifica):** già in Fase 3, sotto ogni annuncio o post:
   - Mi piace, Non mi piace e Commenta, con i conteggi; una sola reazione per persona,
     sostituibile o rimovibile;
