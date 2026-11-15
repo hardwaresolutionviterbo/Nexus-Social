@@ -1290,6 +1290,203 @@ def check_marketplace_phase5() -> None:
     check("M8", "Il ventunesimo annuncio della giornata viene rifiutato", s21 >= 400, f"HTTP {s21}")
 
 
+def check_marketplace_search_phase5() -> None:
+    """N · Scambia & Vendi, Blocco 2: ricerca, filtri, ordinamenti, scheda (Fase 5). Utenti A, B, D."""
+    ta, tb, td = token(UID_A), token(UID_B), token(UID_D)
+    MI = (45.4641, 9.1912)        # Milano: A, zona approssimata
+    MI_B = (45.5000, 9.1900)      # circa 4 km a nord: B, punto preciso
+    MONZA = (45.5800, 9.2700)     # circa 14 km: D (azienda)
+    # Partenza pulita: nessun blocco tra A, B e D; D sotto il limite giornaliero (M8).
+    for t, other in ((ta, UID_B), (tb, UID_A), (ta, UID_D), (td, UID_A)):
+        rpc("unblock_user", {"p_user_id": other}, t)
+    sql(f"delete from public.listings where owner_id = '{UID_D}' and photos = '{{}}'")
+
+    _, cats = rpc("marketplace_categories_list", {}, ta)
+    by_slug = {c["slug"]: c for c in (cats if isinstance(cats, list) else [])}
+    music = by_slug["musica-strumenti"]["id"]
+    guitars = by_slug["musica-strumenti-chitarre"]["id"]
+    basses = by_slug["musica-strumenti-bassi"]["id"]
+    amps = by_slug["musica-strumenti-amplificatori"]["id"]
+    pa, pb, pd = [f"{UID_A}/mercatoA0001.jpg"], [f"{UID_B}/mercatoB0001.jpg"], [f"{UID_D}/mercatoD0001.jpg"]
+
+    def publish(tok, photos, lat_lon, **kw):
+        body = {"p_type": "sell", "p_category": guitars, "p_title": "Chitarra",
+                "p_description": "", "p_price_cents": 10000, "p_condition": "good",
+                "p_ships": False, "p_pickup": True, "p_attributes": {},
+                "p_lat": lat_lon[0], "p_lon": lat_lon[1], "p_location_mode": "approximate",
+                "p_photos": photos, "p_wanted_in_exchange": None, "p_no_prohibited_items": True,
+                "p_open_to_swap": False, "p_cash_adjustment": False}
+        body.update(kw)
+        s, res = rpc("publish_market_listing", body, tok)
+        return s, (res.get("id") if isinstance(res, dict) else None)
+
+    def search(tok=ta, **kw):
+        body = {"p_section": "sale", "p_lat": MI[0], "p_lon": MI[1], "p_radius_km": 30}
+        body.update(kw)
+        s, res = rpc("market_search", body, tok)
+        return s, (res if isinstance(res, list) else [])
+
+    def ids(res):
+        return [x["id"] for x in res]
+
+    s1, a_gtr = publish(ta, pa, MI, p_title="Chitarra acustica Yamaha",
+                        p_description="Corde nuove, custodia inclusa", p_price_cents=15000,
+                        p_open_to_swap=True, p_cash_adjustment=True)
+    s2, b_gtr = publish(tb, pb, MI_B, p_title="Chitarra elettrica Fender Stratocaster",
+                        p_price_cents=60000, p_condition="like_new", p_ships=True, p_pickup=False,
+                        p_location_mode="precise")
+    s3, d_amp = publish(td, pd, MONZA, p_category=amps, p_title="Amplificatore valvolare",
+                        p_description="Perfetto per chitarra elettrica", p_price_cents=20000,
+                        p_condition="new", p_ships=True, p_pickup=True)
+    s4, b_bass = publish(tb, pb, MI_B, p_type="swap", p_category=basses, p_title="Basso elettrico",
+                         p_price_cents=None, p_wanted_in_exchange="una chitarra",
+                         p_cash_adjustment=True, p_location_mode="precise")
+    check("N0", "Annunci di prova per la ricerca pubblicati (anche con le opzioni di scambio)",
+          all(x == 200 for x in (s1, s2, s3, s4)) and None not in (a_gtr, b_gtr, d_amp, b_bass),
+          f"HTTP {s1}, {s2}, {s3}, {s4}")
+    if None in (a_gtr, b_gtr, d_amp, b_bass):
+        return
+
+    # N1 · Due sezioni, un solo sistema (D10); parametri controllati dal server
+    s, sale = search(p_category=music)
+    _, swap = search(p_section="swap", p_category=music)
+    anon = rpc("market_search", {"p_section": "sale"})
+    bad = [search(p_section="mappa")[0], search(p_sort="a_caso")[0],
+           search(p_section="sale", p_types=["swap"])[0], search(p_seller="amici")[0],
+           search(p_price_min_cents=500, p_price_max_cents=100)[0],
+           search(p_sort="nearest", p_lat=None, p_lon=None)[0],
+           search(p_conditions=["rotto"])[0]]
+    check("N1", "Vendita mostra solo vendite, Scambia scambi/regali/cerco; parametri errati rifiutati",
+          s == 200 and set(ids(sale)) == {a_gtr, b_gtr, d_amp} and ids(swap) == [b_bass]
+          and all(x["market_type"] == "sell" for x in sale) and anon[0] >= 400
+          and all(x >= 400 for x in bad), f"HTTP {s}, {ids(sale)}, {ids(swap)}, {bad}")
+
+    # N2 · Ricerca per parola (D4): radici italiane, parti di parola nel titolo, «Più pertinenti»
+    _, w1 = search(p_query="chitarre")                 # plurale → chitarra/chitarre
+    _, w2 = search(p_query="strato")                   # parte di parola nel titolo
+    _, w3 = search(p_query="chitarra", p_sort="relevant")
+    _, w4 = search(p_query="pianoforte")
+    check("N2", "Parola nel titolo o nella descrizione; i titoli che la contengono vengono prima",
+          set(ids(w1)) == {a_gtr, b_gtr, d_amp} and ids(w2) == [b_gtr]
+          and set(ids(w3)[:2]) == {a_gtr, b_gtr} and ids(w3)[2:] == [d_amp] and w4 == [],
+          f"{len(w1)}, {ids(w2)}, {len(w3)}, {len(w4)}")
+
+    # N3 · Filtri: categoria, sottocategoria, prezzo, condizioni, privato/azienda, consegna
+    f = {
+        "sottocategoria": ids(search(p_category=music, p_subcategory=amps)[1]) == [d_amp],
+        "prezzo": set(ids(search(p_category=music, p_price_min_cents=15000,
+                                 p_price_max_cents=20000)[1])) == {a_gtr, d_amp},
+        "condizioni": ids(search(p_category=music, p_conditions=["like_new", "fair"])[1]) == [b_gtr],
+        "azienda": ids(search(p_category=music, p_seller="business")[1]) == [d_amp],
+        "privato": set(ids(search(p_category=music, p_seller="private")[1])) == {a_gtr, b_gtr},
+        "spedizione": set(ids(search(p_category=music, p_ships=True)[1])) == {b_gtr, d_amp},
+        "ritiro": set(ids(search(p_category=music, p_pickup=True)[1])) == {a_gtr, d_amp},
+    }
+    check("N3", "Categoria, sottocategoria, prezzo, condizioni, privato o azienda, spedizione, ritiro",
+          all(f.values()), ", ".join(k for k, v in f.items() if not v))
+
+    # N4 · Località, raggio e «Più vicini»: distanza dal punto pubblico, mai il punto salvato
+    _, near10 = search(p_category=music, p_radius_km=10)
+    _, nearest = search(p_category=music, p_sort="nearest")
+    _, anywhere = search(p_category=music, p_lat=41.9, p_lon=12.5, p_radius_km=None)
+    _, far = search(p_category=music, p_lat=41.9, p_lon=12.5, p_radius_km=50)
+    a_row = by_id(nearest, a_gtr) or {}
+    check("N4", "Raggio sul punto pubblico, ordinamento per distanza, distanza arrotondata",
+          set(ids(near10)) == {a_gtr, b_gtr} and ids(nearest) == [a_gtr, b_gtr, d_amp]
+          and set(ids(anywhere)) == {a_gtr, b_gtr, d_amp} and far == []
+          and all(x["distance_band_m"] % 250 == 0 for x in nearest)
+          and (a_row.get("lat"), a_row.get("lon")) != MI and "exact_lat" not in a_row
+          and abs(a_row.get("lat", 0) - 45.465) < 1e-9,
+          f"{ids(near10)}, {ids(nearest)}, {len(anywhere)}, {len(far)}, {a_row.get('lat')}")
+
+    # N5 · Ordinamento per prezzo
+    _, up = search(p_category=music, p_sort="price_asc")
+    _, down = search(p_category=music, p_sort="price_desc")
+    check("N5", "Prezzo crescente e decrescente",
+          ids(up) == [a_gtr, d_amp, b_gtr] and ids(down) == [b_gtr, d_amp, a_gtr],
+          f"{ids(up)}, {ids(down)}")
+
+    # N6 · Disponibilità allo scambio e conguaglio
+    open_sale = ids(search(p_category=music, p_open_to_swap=True)[1])
+    cash_swap = ids(search(p_section="swap", p_category=music, p_cash_adjustment=True)[1])
+    wrong = [publish(tb, pb, MI_B, p_type="swap", p_category=basses, p_price_cents=None,
+                     p_open_to_swap=True)[0],
+             publish(tb, pb, MI_B, p_cash_adjustment=True)[0]]
+    up_a = rpc("update_market_listing", {
+        "p_id": a_gtr, "p_category": guitars, "p_title": "Chitarra acustica Yamaha",
+        "p_description": "Corde nuove, custodia inclusa", "p_price_cents": 15000,
+        "p_condition": "good", "p_ships": False, "p_pickup": True, "p_attributes": {},
+        "p_photos": pa, "p_wanted_in_exchange": None, "p_open_to_swap": False,
+        "p_cash_adjustment": False}, ta)
+    open_after = ids(search(p_category=music, p_open_to_swap=True)[1])
+    check("N6", "«Valuto anche scambi» e «conguaglio»: filtri, regole e modifica",
+          open_sale == [a_gtr] and cash_swap == [b_bass] and all(x >= 400 for x in wrong)
+          and up_a[0] == 200 and open_after == [],
+          f"{open_sale}, {cash_swap}, {wrong}, {up_a[0]}, {open_after}")
+
+    # N7 · Data di pubblicazione
+    sql("select set_config('nexus.internal', 'on', false); "
+        f"update public.listings set created_at = now() - interval '10 days' where id = '{d_amp}'")
+    recent7 = set(ids(search(p_category=music, p_published_within_days=7)[1]))
+    recent30 = set(ids(search(p_category=music, p_published_within_days=30)[1]))
+    check("N7", "Pubblicati negli ultimi 7 o 30 giorni",
+          recent7 == {a_gtr, b_gtr} and recent30 == {a_gtr, b_gtr, d_amp}, f"{recent7}, {recent30}")
+
+    # N8 · Scheda; annunci in revisione e persone bloccate
+    sql("select set_config('nexus.internal', 'on', false); "
+        f"update public.listings set review_status = 'pending_review' where id = '{b_gtr}'")
+    a_hidden = b_gtr not in ids(search(p_category=music)[1])
+    a_card = rows(rpc("market_listing", {"p_id": b_gtr}, ta))
+    b_card = rows(rpc("market_listing", {"p_id": b_gtr}, tb))
+    sql("select set_config('nexus.internal', 'on', false); "
+        f"update public.listings set review_status = 'published' where id = '{b_gtr}'")
+    card = rows(rpc("market_listing", {"p_id": d_amp, "p_lat": MI[0], "p_lon": MI[1]}, ta))
+    rpc("block_user", {"p_user_id": UID_D}, ta)
+    blocked_search = d_amp not in ids(search(p_category=music)[1])
+    blocked_card = rows(rpc("market_listing", {"p_id": d_amp}, ta))
+    d_blocked = a_gtr not in ids(search(td, p_category=music)[1])
+    rpc("unblock_user", {"p_user_id": UID_D}, ta)
+    back = d_amp in ids(search(p_category=music)[1])
+    c = card[0] if card else {}
+    check("N8", "Scheda completa; in revisione solo per l'autore; blocchi in entrambe le direzioni",
+          a_hidden and a_card == [] and len(b_card) == 1 and b_card[0]["is_mine"]
+          and c.get("owner_is_business") is True and c.get("owner_username") == "bottega_d"
+          and c.get("price_cents") == 20000 and c.get("item_condition") == "new"
+          and c.get("distance_band_m", 1) % 250 == 0
+          and blocked_search and blocked_card == [] and d_blocked and back,
+          f"{a_hidden}, {len(a_card)}, {len(b_card)}, {blocked_search}, {d_blocked}, {back}")
+
+    # N9 · Mi piace, commenti, segnalazione: come sulla Mappa; non sugli annunci in revisione
+    like = rpc("set_listing_reaction", {"p_listing": b_gtr, "p_kind": "like"}, ta)
+    social = rpc("listing_social", {"p_listing": b_gtr}, tb)[1] or {}
+    com = rpc("add_listing_comment", {"p_listing": b_gtr, "p_body": "È ancora disponibile?"}, ta)
+    notes = rows(rpc("my_notifications", {}, tb))
+    rep = rpc("report_listing", {"p_listing": d_amp, "p_reason": "truffa"}, ta)
+    _, flagged = publish(tb, pb, MI_B, p_title="Pistola softair", p_category=guitars)
+    like_flag = rpc("set_listing_reaction", {"p_listing": flagged, "p_kind": "like"}, ta)
+    rep_flag = rpc("report_listing", {"p_listing": flagged, "p_reason": "pericolo"}, ta)
+    check("N9", "Mi piace, commenti e notifiche sugli annunci pubblicati; in revisione non esistono",
+          like[0] in (200, 204) and social.get("likes") == 1 and com[0] == 200
+          and any(n.get("listing_id") == b_gtr for n in notes) and rep[0] in (200, 204)
+          and flagged is not None and like_flag[0] >= 400 and rep_flag[0] >= 400,
+          f"HTTP {like[0]}, {com[0]}, {rep[0]}, {like_flag[0]}, {rep_flag[0]}")
+
+    # N10 · Pagine da 20 (D9), senza doppioni
+    sub = amps
+    sql("insert into public.listings (owner_id, kind, title, approx_location, market_type, "
+        "market_category_id, market_price_cents, item_condition, pickup, photos, expires_at, created_at) "
+        f"select '{UID_D}', 'market', 'Cassa ' || g, "
+        "st_setsrid(st_makepoint(7.68, 45.07), 4326)::extensions.geography, 'sell', "
+        f"'{sub}', 1000 + g, 'good', true, array['{pd[0]}'], now() + interval '20 days', "
+        "now() - make_interval(mins => g) from generate_series(1, 25) g")
+    TO = (45.07, 7.68)
+    s1, p1 = search(p_lat=TO[0], p_lon=TO[1], p_radius_km=5, p_subcategory=sub)
+    s2, p2 = search(p_lat=TO[0], p_lon=TO[1], p_radius_km=5, p_subcategory=sub, p_offset=20)
+    check("N10", "Prima pagina 20 annunci, seconda 5, nessun doppione",
+          s1 == 200 and s2 == 200 and len(p1) == 20 and len(p2) == 5
+          and not set(ids(p1)) & set(ids(p2)), f"{len(p1)}, {len(p2)}")
+
+
 def main() -> int:
     try:
         ids = setup()
@@ -1305,6 +1502,7 @@ def main() -> int:
     check_nearby_phase3()
     check_interactions_phase3()
     check_marketplace_phase5()
+    check_marketplace_search_phase5()
     failed = [r for r in results if not r[2]]
     print(f"{'Caso':6} {'Esito':9} Descrizione")
     for case, desc, ok, detail in results:
