@@ -11,6 +11,7 @@ import 'listing_form_screen.dart';
 import 'listing_models.dart';
 import 'listing_repository.dart';
 import 'listing_sheets.dart';
+import 'social_repository.dart';
 import 'map_location.dart';
 import 'my_listings_screen.dart';
 import 'map_surface.dart';
@@ -47,6 +48,7 @@ class MapScreen extends StatefulWidget {
     this.profiles,
     this.privacy,
     this.now = DateTime.now,
+    this.social,
   });
 
   /// Vero quando la scheda Mappa è quella aperta: solo allora si crea la mappa e si
@@ -65,6 +67,9 @@ class MapScreen extends StatefulWidget {
   final ProfileRepository? profiles;
   final PrivacyRepository? privacy;
   final DateTime Function() now;
+
+  /// Eventi, reazioni, commenti e notifiche (Blocco 4).
+  final SocialRepository? social;
 
   static const List<int> radiusOptions = MapFilters.radiusOptions;
 
@@ -260,7 +265,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     final MapListingRepository? repo = widget.listings;
     return repo == null
         ? null
-        : ListingSheetServices(listings: repo, profiles: widget.profiles, privacy: widget.privacy);
+        : ListingSheetServices(
+            listings: repo,
+            profiles: widget.profiles,
+            privacy: widget.privacy,
+            social: widget.social,
+          );
   }
 
   Future<void> _openListingById(String id) async {

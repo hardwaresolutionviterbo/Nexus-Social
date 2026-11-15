@@ -5,6 +5,7 @@ import 'listing_form_screen.dart' show ListingPhotoView;
 import 'listing_models.dart';
 import 'listing_repository.dart';
 import 'listing_sheets.dart';
+import 'social_models.dart' show missingLabel;
 
 /// «Ultimi annunci» (R3.10): due schede, Annunci (persone, categoria Libera) e Promozioni
 /// (attività, dalla Fase 6), entro il raggio scelto e con gli stessi filtri della Mappa.
@@ -194,6 +195,14 @@ class _LatestListingsScreenState extends State<LatestListingsScreen> {
                               color: theme.colorScheme.onSurfaceVariant,
                             ),
                           ),
+                          if (l.groupSpots != null)
+                            Text(
+                              missingLabel(l.groupSpots!, l.participants),
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                color: AppColors.brandOrangeDeep,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                           if (l.availableNow || l.isMine) ...[
                             const SizedBox(height: 4),
                             Wrap(

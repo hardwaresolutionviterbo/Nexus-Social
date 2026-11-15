@@ -8,6 +8,8 @@ import '../chat/chat_screen.dart';
 import '../listings/listings_screen.dart';
 import '../map/listing_repository.dart';
 import '../map/map_screen.dart';
+import '../map/notifications_screen.dart';
+import '../map/social_repository.dart';
 import '../contacts/contacts_sync.dart';
 import '../privacy/privacy_repository.dart';
 import '../security/app_lock.dart';
@@ -36,6 +38,7 @@ class AppShell extends StatefulWidget {
     this.map,
     this.listings,
     this.today,
+    this.social,
   });
 
   final BackendStatus backend;
@@ -54,6 +57,9 @@ class AppShell extends StatefulWidget {
 
   /// Annunci della Mappa sul server (Fase 3, Blocco 2).
   final MapListingRepository? listings;
+
+  /// Interazioni e notifiche della campanella (Fase 3, Blocco 4).
+  final SocialRepository? social;
 
   /// Data di oggi per il calcolo dell'età (nei test si fissa).
   final DateTime Function()? today;
@@ -87,6 +93,7 @@ class _AppShellState extends State<AppShell> {
       isMinor: _isMinor,
       profiles: widget.profiles,
       privacy: widget.privacy,
+      social: widget.social,
     ),
     const ListingsScreen(),
     const SaleScreen(),
@@ -104,6 +111,30 @@ class _AppShellState extends State<AppShell> {
   ];
 
   int _index = AppShell.initialIndex;
+  int _unread = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshUnread();
+  }
+
+  /// Contatore della campanella: all'avvio, al cambio di sezione e dopo le notifiche.
+  Future<void> _refreshUnread() async {
+    final SocialRepository? social = widget.social;
+    if (social == null) return;
+    try {
+      final int n = await social.unreadCount();
+      if (mounted && n != _unread) setState(() => _unread = n);
+    } catch (_) {
+      // Senza rete il contatore resta com'era.
+    }
+  }
+
+  Future<void> _openNotifications() async {
+    await NotificationsScreen.open(context, widget.social!);
+    await _refreshUnread();
+  }
 
   /// Minorenne secondo la data di nascita del profilo (M3).
   bool get _isMinor {
@@ -178,7 +209,13 @@ class _AppShellState extends State<AppShell> {
               ),
             ],
           ),
-          actions: const [NotificationBell(), SizedBox(width: 14)],
+          actions: [
+            NotificationBell(
+              count: _unread,
+              onPressed: widget.social == null ? null : _openNotifications,
+            ),
+            const SizedBox(width: 14),
+          ],
         ),
         body: SafeArea(
           top: false,
@@ -221,8 +258,10 @@ class _AppShellState extends State<AppShell> {
               borderRadius: BorderRadius.circular(30),
               child: NavigationBar(
                 selectedIndex: _index,
-                onDestinationSelected: (int value) =>
-                    setState(() => _index = value),
+                onDestinationSelected: (int value) {
+                  setState(() => _index = value);
+                  _refreshUnread();
+                },
                 destinations: const [
                   NavigationDestination(
                     icon: _NavIcon(Icons.chat_bubble_outline_rounded),

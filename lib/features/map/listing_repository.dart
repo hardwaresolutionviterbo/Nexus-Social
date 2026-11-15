@@ -95,6 +95,7 @@ class SupabaseMapListingRepository implements MapListingRepository {
         'p_location_mode': d.place.serverValue,
         'p_expires_at': d.expiresAt.toUtc().toIso8601String(),
         'p_photos': photos,
+        'p_group_spots': d.groupSpots,
       },
     );
     return '$id';
@@ -111,6 +112,7 @@ class SupabaseMapListingRepository implements MapListingRepository {
         'p_details': d.details.trim(),
         'p_expires_at': d.expiresAt.toUtc().toIso8601String(),
         'p_photos': photos,
+        'p_group_spots': d.groupSpots,
       },
     );
   });

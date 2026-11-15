@@ -105,6 +105,7 @@ class ListingDraft {
     required this.point,
     this.keptPhotos = const <String>[],
     this.newPhotos = const <Uint8List>[],
+    this.groupSpots,
   });
 
   final String title;
@@ -119,6 +120,9 @@ class ListingDraft {
   /// Foto già pubblicate da tenere (percorsi sul server) e foto nuove da caricare.
   final List<String> keptPhotos;
   final List<Uint8List> newPhotos;
+
+  /// Evento di gruppo (R3.12): persone cercate oltre all'autore; null = annuncio semplice.
+  final int? groupSpots;
 }
 
 enum ListingState {
@@ -156,6 +160,8 @@ class MyListing {
     this.availableNow = false,
     required this.expiresAt,
     required this.createdAt,
+    this.groupSpots,
+    this.participants = 0,
   });
 
   factory MyListing.fromJson(Map<String, dynamic> json) => MyListing(
@@ -176,6 +182,8 @@ class MyListing {
     availableNow: json['available_now'] as bool? ?? false,
     expiresAt: DateTime.parse(json['expires_at'] as String).toLocal(),
     createdAt: DateTime.parse(json['created_at'] as String).toLocal(),
+    groupSpots: (json['group_spots'] as num?)?.toInt(),
+    participants: (json['participants'] as num?)?.toInt() ?? 0,
   );
 
   final String id;
@@ -183,6 +191,10 @@ class MyListing {
   final String details;
   final List<String> photos;
   final ListingPlace place;
+
+  /// Evento di gruppo: persone cercate e quante partecipano già.
+  final int? groupSpots;
+  final int participants;
 
   /// Punto che vedono gli altri (zona o punto scelto).
   final GeoPoint publicPoint;
@@ -208,6 +220,8 @@ class MyListing {
     availableNow: availableNow ?? this.availableNow,
     expiresAt: expiresAt,
     createdAt: createdAt,
+    groupSpots: groupSpots,
+    participants: participants,
   );
 
   bool get editable => state == ListingState.active;
@@ -305,6 +319,8 @@ class NearbyListing {
     required this.ownerPublicName,
     this.ownerAvatarThumbPath,
     this.ownerIsBusiness = false,
+    this.groupSpots,
+    this.participants = 0,
   });
 
   factory NearbyListing.fromJson(Map<String, dynamic> json) => NearbyListing(
@@ -325,6 +341,8 @@ class NearbyListing {
     ownerPublicName: json['owner_public_name'] as String? ?? '',
     ownerAvatarThumbPath: json['owner_avatar_thumb_path'] as String?,
     ownerIsBusiness: json['owner_is_business'] as bool? ?? false,
+    groupSpots: (json['group_spots'] as num?)?.toInt(),
+    participants: (json['participants'] as num?)?.toInt() ?? 0,
   );
 
   final String id;
@@ -346,6 +364,10 @@ class NearbyListing {
   final String ownerPublicName;
   final String? ownerAvatarThumbPath;
   final bool ownerIsBusiness;
+
+  /// Evento di gruppo: persone cercate (null = annuncio semplice) e partecipanti.
+  final int? groupSpots;
+  final int participants;
 
   /// Iniziale mostrata sul segnaposto della mappa (T2: foto o iniziale).
   String get initial {

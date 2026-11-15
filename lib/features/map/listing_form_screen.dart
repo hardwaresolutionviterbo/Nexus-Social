@@ -64,6 +64,9 @@ class _ListingFormScreenState extends State<ListingFormScreen> {
   /// null in modifica = scadenza lasciata com'è.
   ListingExpiry? _expiry;
   final List<_Photo> _photos = <_Photo>[];
+
+  /// Evento di gruppo (R3.12): persone cercate oltre a chi pubblica; null = no.
+  int? _groupSpots;
   bool _busy = false;
   String? _error;
   String? _titleError;
@@ -81,6 +84,7 @@ class _ListingFormScreenState extends State<ListingFormScreen> {
     _chosenPoint = e != null && e.place == ListingPlace.chosenPoint ? e.savedPoint : null;
     _expiry = e == null ? ListingExpiry.threeHours : null;
     if (e != null) _photos.addAll(e.photos.map(_Photo.kept));
+    _groupSpots = e?.groupSpots;
   }
 
   @override
@@ -162,6 +166,7 @@ class _ListingFormScreenState extends State<ListingFormScreen> {
       point: point,
       keptPhotos: <String>[for (final _Photo p in _photos) if (p.path != null) p.path!],
       newPhotos: <Uint8List>[for (final _Photo p in _photos) if (p.bytes != null) p.bytes!],
+      groupSpots: _groupSpots,
     );
     setState(() {
       _busy = true;
@@ -244,6 +249,12 @@ class _ListingFormScreenState extends State<ListingFormScreen> {
                     _AddPhotoTile(onTap: _busy ? null : _addPhoto),
                 ],
               ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            _GroupEventField(
+              spots: _groupSpots,
+              minSpots: _existing?.participants ?? 0,
+              onChanged: (int? v) => setState(() => _groupSpots = v),
             ),
             const SizedBox(height: AppSpacing.md),
             const _SectionTitle('Scadenza'),
@@ -539,6 +550,63 @@ class ListingPhotoView extends StatelessWidget {
         }
         return Image.memory(bytes, fit: BoxFit.cover, errorBuilder: _PhotoTile._broken);
       },
+    );
+  }
+}
+
+/// «Evento di gruppo»: quante persone servono, per mostrare «mancano N persone».
+class _GroupEventField extends StatelessWidget {
+  const _GroupEventField({required this.spots, required this.minSpots, required this.onChanged});
+
+  final int? spots;
+
+  /// In modifica non si scende sotto chi partecipa già.
+  final int minSpots;
+  final ValueChanged<int?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final int? n = spots;
+    final int lowest = minSpots < 1 ? 1 : minSpots;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SwitchListTile(
+          key: const ValueKey<String>('evento_gruppo'),
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Evento di gruppo'),
+          subtitle: const Text('Le persone toccano «Partecipo» e vedono quante ne mancano'),
+          value: n != null,
+          // Con partecipanti già iscritti l'evento non si può togliere.
+          onChanged: minSpots > 0 ? null : (bool on) => onChanged(on ? 3 : null),
+        ),
+        if (n != null)
+          Row(
+            children: [
+              Expanded(child: Text('Persone che cerchi', style: theme.textTheme.bodyMedium)),
+              IconButton.outlined(
+                tooltip: 'Una persona in meno',
+                onPressed: n > lowest ? () => onChanged(n - 1) : null,
+                icon: const Icon(Icons.remove_rounded),
+              ),
+              SizedBox(
+                width: 44,
+                child: Text(
+                  '$n',
+                  key: const ValueKey<String>('evento_posti'),
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.titleMedium,
+                ),
+              ),
+              IconButton.outlined(
+                tooltip: 'Una persona in più',
+                onPressed: n < 50 ? () => onChanged(n + 1) : null,
+                icon: const Icon(Icons.add_rounded),
+              ),
+            ],
+          ),
+      ],
     );
   }
 }

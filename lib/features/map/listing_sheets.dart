@@ -10,12 +10,26 @@ import '../profile/public_profile_screen.dart';
 import 'listing_form_screen.dart' show ListingPhotoView;
 import 'listing_models.dart';
 import 'listing_repository.dart';
+import 'listing_share.dart';
+import 'listing_social_panel.dart';
+import 'social_models.dart' show missingLabel;
+import 'social_repository.dart';
 
 /// Servizi usati dalla scheda di un annuncio altrui.
 class ListingSheetServices {
-  const ListingSheetServices({required this.listings, this.profiles, this.privacy});
+  const ListingSheetServices({
+    required this.listings,
+    this.profiles,
+    this.privacy,
+    this.social,
+    this.share = shareWithSystem,
+  });
 
   final MapListingRepository listings;
+
+  /// Eventi, reazioni, commenti (Blocco 4); null finché il server non c'è.
+  final SocialRepository? social;
+  final ShareListing share;
 
   /// Profilo pubblico dell'autore (nome abbreviato, @username, social).
   final ProfileRepository? profiles;
@@ -173,6 +187,12 @@ class ListingDetail extends StatelessWidget {
           spacing: 8,
           runSpacing: 8,
           children: [
+            if (listing.groupSpots != null)
+              _InfoChip(
+                icon: Icons.groups_rounded,
+                text: missingLabel(listing.groupSpots!, listing.participants),
+                color: AppColors.brandMint,
+              ),
             if (listing.availableNow)
               const _InfoChip(
                 icon: Icons.bolt_rounded,
@@ -203,7 +223,14 @@ class ListingDetail extends StatelessWidget {
           publishedLabel(listing.createdAt, now),
           style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
         ),
-        const SizedBox(height: AppSpacing.lg),
+        const SizedBox(height: AppSpacing.md),
+        ListingSocialPanel(
+          listing: listing,
+          listings: services.listings,
+          social: services.social,
+          share: services.share,
+        ),
+        const SizedBox(height: AppSpacing.md),
         if (listing.isMine)
           Text(
             'È un tuo annuncio: lo gestisci da «I miei annunci».',

@@ -8,16 +8,20 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:nexus_social/core/theme/app_theme.dart';
+import 'package:nexus_social/features/map/comments_screen.dart';
 import 'package:nexus_social/features/map/latest_listings_screen.dart';
 import 'package:nexus_social/features/map/listing_form_screen.dart';
 import 'package:nexus_social/features/map/listing_sheets.dart';
 import 'package:nexus_social/features/map/listing_models.dart';
 import 'package:nexus_social/features/map/map_location.dart';
 import 'package:nexus_social/features/map/my_listings_screen.dart';
+import 'package:nexus_social/features/map/notifications_screen.dart';
+import 'package:nexus_social/features/map/social_models.dart';
 import 'package:nexus_social/features/shell/app_shell.dart';
 
 import '../../test/support/fake_listings.dart';
 import '../../test/support/fake_map.dart';
+import '../../test/support/fake_social.dart';
 
 Future<void> _loadFonts() async {
   final String root = Platform.environment['FLUTTER_ROOT'] ?? '';
@@ -255,5 +259,73 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(ChoiceChip, 'Ultime 24 ore'));
     });
+  });
+
+  testWidgets('interazioni 1 · evento con Mi piace, commenti, Condividi', (tester) async {
+    await shootScreen(
+      tester,
+      'interazioni_1_evento',
+      Scaffold(
+        body: SafeArea(
+          child: ListingDetail(
+            listing: sampleNearby(
+              createdAt: adesso.subtract(const Duration(minutes: 25)),
+              expiresAt: adesso.add(const Duration(hours: 3)),
+            ),
+            now: adesso,
+            services: ListingSheetServices(
+              listings: FakeListingRepository(),
+              social: FakeSocialRepository(
+                initial: const ListingSocial(
+                  likes: 12, dislikes: 1, groupSpots: 3, participants: 1,
+                  myReaction: Reaction.like),
+              )..items.addAll(<ListingComment>[
+                  commentBy('a', 'Anna', 'Io ci sono!'),
+                  commentBy('b', 'Bruno', 'A che ora?'),
+                ]),
+            ),
+          ),
+        ),
+      ),
+    );
+  });
+
+  testWidgets('interazioni 2 · commenti e risposte', (tester) async {
+    final FakeSocialRepository social = FakeSocialRepository();
+    social.items.addAll(<ListingComment>[
+      commentBy('a', 'Anna V.', 'Io ci sono! Porto anche il pallone', minute: 1, likes: 3),
+      commentBy('r', 'Marco R.', 'Grande Anna, a stasera', parentId: 'a', minute: 4, likes: 1),
+      commentBy('b', 'Bruno C.', 'A che ora precisamente?', minute: 6),
+      commentBy('r2', 'Marco R.', 'Alle 21 al campo del quartiere', parentId: 'b', minute: 8),
+    ]);
+    await shootScreen(
+      tester,
+      'interazioni_2_commenti',
+      CommentsScreen(
+        listingId: 'n1',
+        listingTitle: 'Ci manca uno per il calcetto, chi viene?',
+        repository: social,
+        now: () => DateTime(2026, 11, 15, 10, 30),
+      ),
+      before: () async {
+        await tester.tap(find.text('Rispondi').at(2));
+      },
+    );
+  });
+
+  testWidgets('interazioni 3 · notifiche', (tester) async {
+    final FakeSocialRepository social = FakeSocialRepository();
+    social.inbox.addAll(<AppNotification>[
+      notificationOf('1', NotificationKind.listingLike, count: 4),
+      notificationOf('2', NotificationKind.commentReply, commentId: 'b'),
+      notificationOf('3', NotificationKind.followedComment),
+      notificationOf('4', NotificationKind.commentLike, read: true),
+      notificationOf('5', NotificationKind.listingComment, read: true),
+    ]);
+    await shootScreen(
+      tester,
+      'interazioni_3_notifiche',
+      NotificationsScreen(repository: social, now: () => DateTime(2026, 11, 15, 10, 45)),
+    );
   });
 }

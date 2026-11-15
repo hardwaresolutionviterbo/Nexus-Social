@@ -6,6 +6,7 @@ import 'listing_form_screen.dart';
 import 'listing_models.dart';
 import 'listing_repository.dart';
 import 'map_surface.dart';
+import 'social_models.dart' show missingLabel;
 
 /// Gestione dei propri annunci della Mappa: stato, scadenza, modalità di posizione,
 /// «Modifica» e «Chiudi» (Fase 3, Blocco 2).
@@ -219,6 +220,14 @@ class _ListingCard extends StatelessWidget {
                           ),
                         ],
                       ),
+                      if (item.groupSpots != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          '${missingLabel(item.groupSpots!, item.participants)} · '
+                          '${item.participants} su ${item.groupSpots} partecipano',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ],
                       if (active) ...[
                         const SizedBox(height: 4),
                         Text(

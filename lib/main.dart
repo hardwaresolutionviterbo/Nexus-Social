@@ -13,6 +13,7 @@ import 'core/services/firebase_services.dart';
 import 'features/contacts/contacts_sync.dart';
 import 'features/map/listing_repository.dart';
 import 'features/map/map_screen.dart';
+import 'features/map/social_repository.dart';
 import 'features/privacy/privacy_repository.dart';
 import 'features/profile/profile_repository.dart';
 import 'features/security/app_lock.dart';
@@ -51,6 +52,7 @@ Future<void> main() async {
               uid: () => FirebaseAuth.instance.currentUser?.uid ?? '',
             )
           : null,
+      social: profilesReady ? SupabaseSocialRepository(Supabase.instance.client) : null,
       privacy: profilesReady ? SupabasePrivacyRepository(Supabase.instance.client) : null,
       security: profilesReady ? SupabaseSecurityRepository(Supabase.instance.client) : null,
       biometricLock: profilesReady ? DeviceBiometricLock() : null,

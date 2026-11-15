@@ -9,6 +9,7 @@ import '../contacts/contacts_auto_sync.dart';
 import '../contacts/contacts_sync.dart';
 import '../map/listing_repository.dart';
 import '../map/map_screen.dart';
+import '../map/social_repository.dart';
 import '../privacy/privacy_checkup_screen.dart';
 import '../privacy/privacy_controller.dart';
 import '../privacy/privacy_repository.dart';
@@ -43,6 +44,7 @@ class AuthGate extends StatefulWidget {
     this.contacts,
     this.map,
     this.listings,
+    this.social,
   });
 
   final AuthGateway gateway;
@@ -64,6 +66,7 @@ class AuthGate extends StatefulWidget {
   final ContactsRepository? contacts;
   final MapServices? map;
   final MapListingRepository? listings;
+  final SocialRepository? social;
   final BackendStatus backend;
   final DateTime Function()? today;
 
@@ -279,6 +282,7 @@ class _AuthGateState extends State<AuthGate> {
               contacts: widget.contacts,
               map: widget.map,
               listings: widget.listings,
+              social: widget.social,
             );
             final ContactsRepository? contacts = widget.contacts;
             final Widget synced = contacts == null
