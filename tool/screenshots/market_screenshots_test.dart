@@ -81,6 +81,13 @@ void main() {
     await tester.pumpAndSettle();
     if (before != null) await before();
     await tester.pumpAndSettle();
+    // Le foto si decodificano solo fuori dal tempo finto dei test.
+    await tester.runAsync(() async {
+      for (final Element e in find.byType(Image).evaluate()) {
+        await precacheImage((e.widget as Image).image, e);
+      }
+    });
+    await tester.pumpAndSettle();
     await expectLater(find.byType(MaterialApp), matchesGoldenFile('out/$name.png'));
   }
 
