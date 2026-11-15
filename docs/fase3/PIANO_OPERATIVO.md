@@ -99,6 +99,11 @@ cuore dell'app)» (SHA-256 `7da25d52…b8561eb`).
   - «Disattiva notifiche per questo post», interruttori generali nelle preferenze, nessun avviso
     da persone bloccate né per le proprie azioni, Mi piace ravvicinati raggruppati;
   - in Fase 3 nella campanella dell'app; push ad app chiusa con il server attivo (Blaze, Fase 4).
+- **T3 · Chi vede il GPS live (decisione del titolare, 15/11/2026, sostituisce la proposta):**
+  come WhatsApp, la posizione in tempo reale si invia **solo ai contatti riconosciuti**, cioè le
+  persone il cui numero è salvato nella rubrica di chi condivide e che usano Piazly, **scelte
+  una per una**. Niente invio a chi ha solo contattato o partecipa a un evento. Come per
+  WhatsApp, la condivisione è legata alla chat con quella persona (Fase 4).
 - **Gratuità:** gli annunci delle persone sono sempre gratuiti; i post di promozione delle aziende
   costano 9,99 €/mese e si attivano in Fase 6 (scheda «Promozioni» vuota fino ad allora).
 
