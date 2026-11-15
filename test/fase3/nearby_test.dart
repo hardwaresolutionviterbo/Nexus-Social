@@ -231,7 +231,11 @@ void main() {
       final (FakeMap map, FakeListingRepository repo) = await pumpMap(tester);
       map.handle.tapMarker('n1');
       await tester.pumpAndSettle();
+      // Il foglio si allarga trascinandolo, come farebbe la persona.
+      await tester.drag(find.text('Marco R.'), const Offset(0, -400));
+      await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('Segnala annuncio'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Segnala annuncio'));
       await tester.pumpAndSettle();
 
