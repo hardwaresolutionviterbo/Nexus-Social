@@ -57,6 +57,10 @@ void main() {
   }
 
   Future<void> tapVisible(WidgetTester tester, Finder finder) async {
+    // Come quando si tocca fuori dalla tastiera: il campo di testo non riporta la pagina
+    // sul cursore subito dopo lo scorrimento.
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pumpAndSettle();
     await tester.ensureVisible(finder);
     await tester.pumpAndSettle();
     await tester.tap(finder);
