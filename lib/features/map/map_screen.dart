@@ -239,8 +239,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
               access: _access!,
               onAllow: _requestAccess,
               onLater: () => setState(() => _promptDismissed = true),
-              onOpenAppSettings: () => s!.location.openAppSettings(),
-              onOpenLocationSettings: () => s!.location.openLocationSettings(),
+              onOpenAppSettings: () => s.location.openAppSettings(),
+              onOpenLocationSettings: () => s.location.openLocationSettings(),
             ),
           ),
         if (_showNotice) ...[
