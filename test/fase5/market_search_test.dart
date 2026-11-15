@@ -6,7 +6,6 @@ import 'package:material_ui/material_ui.dart';
 import 'package:nexus_social/core/theme/app_theme.dart';
 import 'package:nexus_social/features/map/listing_models.dart';
 import 'package:nexus_social/features/map/map_location.dart';
-import 'package:nexus_social/features/market/market_catalog_data.dart';
 import 'package:nexus_social/features/market/market_listing_screen.dart';
 import 'package:nexus_social/features/market/market_models.dart';
 import 'package:nexus_social/features/market/market_section_screen.dart';
