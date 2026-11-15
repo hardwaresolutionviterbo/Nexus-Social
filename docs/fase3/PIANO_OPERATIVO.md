@@ -127,6 +127,10 @@ Ogni blocco ha un APK identificabile e si ferma per la tua verifica e approvazio
 5. **GPS in tempo reale.** Consenso esplicito, durata fino a 8 ore, «Interrompi», solo persone
    autorizzate, cancellazione immediata alla fine (P11), consenso in Autorizzazioni (P13), regole
    per i minorenni (M3, M4).
+   **Spostato nella Fase 4 (decisione del titolare, 15/11/2026):** come WhatsApp, la posizione
+   in tempo reale si invia dalla chat ai contatti in rubrica scelti uno per uno; si realizza
+   insieme alla chat. Tutti i requisiti qui sopra restano validi. La Fase 3 si chiude con i
+   Blocchi 1-4.
 
 ## 5. Azioni che spettano al titolare
 
