@@ -1,7 +1,6 @@
 # Fase 5 · Piano operativo
 
-Stato: **decisioni del titolare raccolte il 15/11/2026** (domande 1-11, sezione 3); piano da
-approvare prima di iniziare il Blocco 1.
+Stato: **piano approvato dal titolare il 15/11/2026**, con la richiesta «foto obbligatorie» (D11).
 
 Riferimenti:
 - `Nexus_Social_Piano_di_Lavoro_COMPLETO_AGGIORNATO.pdf`, «FASE 5 – Scambia, Vendita e feedback»
@@ -54,6 +53,7 @@ Riferimenti:
 | D7 | Notifiche dei Mi piace come sulla Mappa (Mi piace sì, raggruppati; Non mi piace mai) |
 | D8 | Commenti: modifica con «modificato», nascondi (autore dell'annuncio e amministratori) con l'identità invariata, segnalazione; vale anche per la Mappa |
 | D9 | Anti-spam: commenti 10 al minuto e 100 al giorno; annunci nuovi 20 al giorno; proposte 30 al giorno; pagine da 20 |
+| D11 | **Foto obbligatorie** (almeno una, fino a 10) per Vendita, Scambio e Regalo. Per «Cerco» restano facoltative, perché chi cerca spesso non ha l'oggetto: scelta mia da confermare |
 | D10 | Due sezioni, un solo sistema: «Scambia» mostra Scambio, Regalo e Cerco; «Vendita» mostra Vendita. La barra in basso non cambia. Questi annunci non vanno sulla Mappa |
 
 Scelte tecniche (proposte, approvate con il piano):
