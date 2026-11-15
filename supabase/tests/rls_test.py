@@ -1143,6 +1143,147 @@ def check_interactions_phase3() -> None:
           f"{[r[0] for r in direct]}, {[r[0] for r in anon]}")
 
 
+def check_marketplace_phase5() -> None:
+    """M · Scambia & Vendi, Blocco 1: catalogo e pubblicazione (Fase 5). Utenti A, B, D."""
+    ta, tb, td = token(UID_A), token(UID_B), token(UID_D)
+    RM = (41.9028, 12.4964)
+
+    s, cats = rpc("marketplace_categories_list", {}, ta)
+    cats = cats if isinstance(cats, list) else []
+    by_slug = {c["slug"]: c for c in cats}
+    parents = [c for c in cats if c["parent_id"] is None]
+    subs = [c for c in cats if c["parent_id"] is not None]
+    anon = rpc("marketplace_categories_list", {})
+    check("M1", "Catalogo: 19 categorie, 271 sottocategorie collegate, slug e ID univoci",
+          s == 200 and len(parents) == 19 and len(subs) == 271
+          and len({c["slug"] for c in cats}) == 290 and len({c["id"] for c in cats}) == 290
+          and all(any(p["id"] == c["parent_id"] for p in parents) for c in subs)
+          and "motori-auto" in by_slug and "elettronica-smartphone" in by_slug
+          and (anon[0] >= 400 or anon[1] == []),
+          f"HTTP {s}: {len(parents)} categorie, {len(subs)} sottocategorie")
+
+    phone = by_slug["elettronica-smartphone"]["id"]
+    car = by_slug["motori-auto"]["id"]
+    flat = by_slug["immobili-appartamenti-vendita"]["id"]
+    repair = by_slug["servizi-riparazioni-elettroniche"]["id"]
+    storage("POST", f"listing-photos/{UID_A}/mercatoA0001.jpg", ta, JPEG)
+    storage("POST", f"listing-photos/{UID_B}/mercatoB0001.jpg", tb, JPEG)
+    storage("POST", f"listing-photos/{UID_D}/mercatoD0001.jpg", td, JPEG)
+    pa, pb, pd = [f"{UID_A}/mercatoA0001.jpg"], [f"{UID_B}/mercatoB0001.jpg"], [f"{UID_D}/mercatoD0001.jpg"]
+
+    def publish(tok, **kw):
+        body = {"p_type": "sell", "p_category": phone, "p_title": "iPhone 13 128 GB",
+                "p_description": "Perfetto, con scatola", "p_price_cents": 35000,
+                "p_condition": "excellent", "p_ships": True, "p_pickup": True,
+                "p_attributes": {"memoria": "128 GB"}, "p_lat": RM[0], "p_lon": RM[1],
+                "p_location_mode": "approximate", "p_photos": pa, "p_wanted_in_exchange": None,
+                "p_no_prohibited_items": True}
+        body.update(kw)
+        return rpc("publish_market_listing", body, tok)
+
+    # M2 · Vendita completa: pubblicata, visibile agli altri, nei propri annunci
+    s, res = publish(ta)
+    sell_id = (res or {}).get("id") if isinstance(res, dict) else None
+    seen_b = rows(get(f"/rest/v1/listings?id=eq.{sell_id}&select=id,kind,market_type", tb))
+    mine = next((x for x in rows(rpc("my_market_listings", {}, ta)) if x["id"] == sell_id), None)
+    check("M2", "Vendita con foto, prezzo, condizioni e consegna: pubblicata e visibile",
+          s == 200 and res.get("review_status") == "published" and len(seen_b) == 1
+          and seen_b[0]["market_type"] == "sell" and mine is not None
+          and mine["price_cents"] == 35000 and mine["status"] == "active",
+          f"HTTP {s} {res}")
+
+    # M3 · Regole della specifica e delle decisioni del titolare
+    bad = {
+        "vendita senza prezzo": publish(ta, p_price_cents=None)[0],
+        "regalo con prezzo": publish(ta, p_type="free")[0],
+        "senza foto": publish(ta, p_photos=[])[0],
+        "categoria principale": publish(ta, p_category=by_slug["elettronica"]["id"])[0],
+        "condizioni mancanti": publish(ta, p_condition=None)[0],
+        "condizioni inventate": publish(ta, p_condition="quasi")[0],
+        "né ritiro né spedizione": publish(ta, p_ships=False, p_pickup=False)[0],
+        "campo non previsto": publish(ta, p_attributes={"km": 1000})[0],
+        "auto senza anno": publish(ta, p_category=car, p_attributes={"km": 90000})[0],
+        "immobile senza mq": publish(ta, p_category=flat, p_attributes={})[0],
+        "divieti non confermati": publish(ta, p_no_prohibited_items=False)[0],
+        "foto di un altro": publish(ta, p_photos=pb)[0],
+        "11 foto": publish(ta, p_photos=pa * 11)[0],
+        "anno assurdo": publish(ta, p_category=car, p_attributes={"anno": 1800})[0],
+        "cerco in cambio su vendita": publish(ta, p_wanted_in_exchange="una bici")[0],
+    }
+    ok = {
+        "cerco senza foto": publish(ta, p_type="wanted", p_photos=[], p_price_cents=None,
+                                    p_condition=None, p_ships=False, p_pickup=False)[0],
+        "regalo senza prezzo": publish(ta, p_type="free", p_price_cents=None)[0],
+        "scambio con cosa cerchi": publish(ta, p_type="swap", p_price_cents=None,
+                                           p_wanted_in_exchange="una bici da corsa")[0],
+        "auto con anno e km": publish(ta, p_category=car, p_title="Fiat Panda 2015",
+                                      p_attributes={"anno": 2015, "km": 90000})[0],
+        "servizio senza condizioni": publish(ta, p_category=repair, p_title="Riparo smartphone",
+                                             p_condition=None, p_ships=False, p_pickup=False,
+                                             p_attributes={})[0],
+        "immobile con mq": publish(ta, p_category=flat, p_title="Trilocale in centro",
+                                   p_price_cents=25000000000, p_condition=None, p_ships=False,
+                                   p_pickup=False, p_attributes={"mq": 85, "locali": 3})[0],
+    }
+    check("M3", "Prezzo, foto, condizioni, consegna, campi specifici, divieti: regole del server",
+          all(v >= 400 for v in bad.values()) and all(v == 200 for v in ok.values()),
+          ", ".join([f"{k}: {v}" for k, v in bad.items() if v < 400]
+                    + [f"{k}: {v}" for k, v in ok.items() if v != 200]))
+
+    # M4 · Parole a rischio: annuncio in revisione, invisibile agli altri
+    s, res = publish(tb, p_title="Vendo pistola softair", p_photos=pb)
+    flagged = (res or {}).get("id") if isinstance(res, dict) else None
+    b_mine = next((x for x in rows(rpc("my_market_listings", {}, tb)) if x["id"] == flagged), None)
+    a_sees = rows(get(f"/rest/v1/listings?id=eq.{flagged}&select=id", ta))
+    check("M4", "Prodotto a rischio: in revisione, visibile solo all'autore",
+          s == 200 and res.get("review_status") == "pending_review" and a_sees == []
+          and b_mine is not None and b_mine["review_status"] == "pending_review", f"HTTP {s} {res}")
+
+    # M5 · Categorie: nessuno le modifica dall'app; lo slug non cambia mai
+    ins = request("POST", "/rest/v1/marketplace_categories", jwt=ta,
+                  body={"id": "00000000-0000-0000-0000-000000000001", "name": "Finta", "slug": "finta"})
+    upd = request("PATCH", f"/rest/v1/marketplace_categories?id=eq.{phone}", jwt=ta,
+                  prefer="return=representation", body={"name": "Telefonini"})
+    try:
+        sql(f"update public.marketplace_categories set slug = 'telefonini' where id = '{phone}'")
+        slug_locked = False
+    except subprocess.CalledProcessError:
+        slug_locked = True
+    check("M5", "Categorie non modificabili dall'app; slug immutabile anche dal database",
+          denied(ins) and denied(upd) and slug_locked, f"HTTP {ins[0]}, {upd[0]}")
+
+    # M6 · Rinnovo a 30 giorni e chiusura solo dall'autore
+    sql("select set_config('nexus.internal', 'on', false); "
+        f"update public.listings set created_at = now() - interval '29 days', "
+        f"expires_at = now() + interval '1 day' where id = '{sell_id}'")
+    rn = rpc("renew_market_listing", {"p_id": sell_id}, ta)
+    rn_b = rpc("renew_market_listing", {"p_id": sell_id}, tb)
+    cl_b = rpc("close_market_listing", {"p_id": sell_id}, tb)
+    after = next((x for x in rows(rpc("my_market_listings", {}, ta)) if x["id"] == sell_id), {})
+    cl = rpc("close_market_listing", {"p_id": sell_id}, ta)
+    closed = next((x for x in rows(rpc("my_market_listings", {}, ta)) if x["id"] == sell_id), {})
+    check("M6", "Rinnovo di 30 giorni oltre la data di creazione; chiusura; nessun altro li usa",
+          rn[0] == 200 and rn_b[0] >= 400 and cl_b[0] >= 400 and cl[0] in (200, 204)
+          and after.get("status") == "active" and closed.get("status") == "completed",
+          f"HTTP {rn[0]}, {rn_b[0]}, {cl_b[0]}, {cl[0]}")
+
+    # M7 · Non sulla Mappa (D10) né nella vecchia ricerca generica
+    _, d_res = publish(td, p_photos=pd, p_title="Bici da corsa", p_attributes={})
+    d_id = (d_res or {}).get("id") if isinstance(d_res, dict) else None
+    m1 = rpc("map_listings_nearby", {"p_lat": RM[0], "p_lon": RM[1], "p_radius_m": 30000}, tb)[1] or []
+    m2 = rpc("nearby_listings", {"p_lat": RM[0], "p_lon": RM[1], "p_radius_m": 30000}, tb)[1] or []
+    check("M7", "Gli annunci di Scambia & Vendi non compaiono sulla Mappa",
+          d_id is not None and all(x["id"] != d_id for x in m1) and all(x["id"] != d_id for x in m2))
+
+    # M8 · Anti-spam (D9): al massimo 20 annunci nuovi al giorno
+    sql("insert into public.listings (owner_id, kind, title, approx_location, market_type, "
+        "market_category_id, expires_at) "
+        f"select owner_id, kind, title, approx_location, market_type, market_category_id, expires_at "
+        f"from public.listings, generate_series(1, 19) where id = '{d_id}'")
+    s21, _ = publish(td, p_photos=pd, p_title="Ventunesimo annuncio", p_attributes={})
+    check("M8", "Il ventunesimo annuncio della giornata viene rifiutato", s21 >= 400, f"HTTP {s21}")
+
+
 def main() -> int:
     try:
         ids = setup()
@@ -1157,6 +1298,7 @@ def main() -> int:
     check_map_listings_phase3()
     check_nearby_phase3()
     check_interactions_phase3()
+    check_marketplace_phase5()
     failed = [r for r in results if not r[2]]
     print(f"{'Caso':6} {'Esito':9} Descrizione")
     for case, desc, ok, detail in results:
