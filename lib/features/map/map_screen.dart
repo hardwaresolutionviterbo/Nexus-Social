@@ -289,15 +289,23 @@ class _MapHeader extends StatelessWidget {
               children: [
                 Icon(Icons.map_rounded, size: 18, color: scheme.primary),
                 const SizedBox(width: AppSpacing.sm),
-                Text('Mappa Sociale', style: theme.textTheme.titleSmall),
-                const Spacer(),
+                Expanded(
+                  child: Text(
+                    'Mappa Sociale',
+                    style: theme.textTheme.titleSmall,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
                 Icon(Icons.radar_rounded, size: 16, color: scheme.onSurfaceVariant),
                 const SizedBox(width: AppSpacing.xs),
-                Text(
-                  'Raggio $radiusKm km',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: scheme.primary,
-                    fontWeight: FontWeight.w700,
+                Flexible(
+                  child: Text(
+                    'Raggio $radiusKm km',
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: scheme.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ],
@@ -469,11 +477,13 @@ class _LocationPrompt extends StatelessWidget {
             const SizedBox(height: AppSpacing.sm),
             Text(body, style: theme.textTheme.bodySmall),
             const SizedBox(height: AppSpacing.sm),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+            // Su schermi stretti o con testo grande i pulsanti vanno a capo.
+            OverflowBar(
+              alignment: MainAxisAlignment.end,
+              spacing: AppSpacing.sm,
+              overflowAlignment: OverflowBarAlignment.end,
               children: [
                 TextButton(onPressed: onLater, child: const Text('Non ora')),
-                const SizedBox(width: AppSpacing.sm),
                 FilledButton(onPressed: onAction, child: Text(action)),
               ],
             ),
