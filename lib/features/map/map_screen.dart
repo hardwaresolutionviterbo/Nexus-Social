@@ -3,8 +3,14 @@ import 'dart:async';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../profile/profile_form_screen.dart' show PickImage, pickFromGallery;
+import 'listing_form_screen.dart';
+import 'listing_models.dart';
+import 'listing_repository.dart';
 import 'map_location.dart';
+import 'my_listings_screen.dart';
 import 'map_surface.dart';
+import 'safety_notice.dart';
 
 /// Servizi del telefono usati dalla Mappa. Senza (test di interfaccia, anteprime)
 /// la schermata mostra al posto della mappa un riquadro neutro.
@@ -27,12 +33,26 @@ class MapServices {
 ///
 /// La posizione resta sul telefono: in questo blocco non viene inviata a nessun server.
 class MapScreen extends StatefulWidget {
-  const MapScreen({super.key, this.active = true, this.services});
+  const MapScreen({
+    super.key,
+    this.active = true,
+    this.services,
+    this.listings,
+    this.isMinor = false,
+    this.pickImage = pickFromGallery,
+  });
 
   /// Vero quando la scheda Mappa è quella aperta: solo allora si crea la mappa e si
   /// ascolta la posizione.
   final bool active;
   final MapServices? services;
+
+  /// Annunci sul server (Blocco 2): null finché il collegamento al server è spento.
+  final MapListingRepository? listings;
+
+  /// Minorenne: avviso di sicurezza ripetuto prima di un annuncio con punto preciso (M3).
+  final bool isMinor;
+  final PickImage pickImage;
 
   static const List<int> radiusOptions = <int>[1, 5, 10, 30];
 
@@ -185,6 +205,62 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     unawaited(_handle?.flyTo(fix, threeD: _threeD));
   }
 
+  GeoPoint? get _currentPoint {
+    final GeoFix? f = _lastFix;
+    return f == null ? null : GeoPoint(f.latitude, f.longitude);
+  }
+
+  /// Pubblicare richiede il server; finché è spento lo si dice chiaramente.
+  bool _canPublish() {
+    if (widget.listings != null && _services != null) return true;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Per pubblicare serve il collegamento al server: si attiverà con il piano '
+            'Blaze. La mappa intanto funziona.',
+          ),
+        ),
+      );
+    return false;
+  }
+
+  Future<void> _publish() async {
+    if (!_canPublish()) return;
+    final bool? done = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => ListingFormScreen(
+          repository: widget.listings!,
+          surface: _services!.surface,
+          currentPosition: _currentPoint,
+          isMinor: widget.isMinor,
+          pickImage: widget.pickImage,
+        ),
+      ),
+    );
+    if ((done ?? false) && mounted) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('Annuncio pubblicato.')));
+    }
+  }
+
+  Future<void> _openMine() async {
+    if (!_canPublish()) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => MyListingsScreen(
+          repository: widget.listings!,
+          surface: _services!.surface,
+          currentPosition: _currentPoint,
+          isMinor: widget.isMinor,
+          pickImage: widget.pickImage,
+        ),
+      ),
+    );
+  }
+
   void _toggleThreeD() {
     setState(() => _threeD = !_threeD);
     unawaited(_handle?.setThreeD(_threeD));
@@ -223,8 +299,26 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             onSafety: () => setState(() => _showNotice = true),
             onToggleThreeD: _toggleThreeD,
             onCenter: _centerOnMe,
+            onMine: _openMine,
           ),
         ),
+        if (!askLocation)
+          Positioned(
+            left: 12,
+            bottom: _MapLayout.controlsBottom,
+            child: FilledButton.icon(
+              key: const ValueKey<String>('pubblica_annuncio'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.brandOrange,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(0, 48),
+                elevation: 3,
+              ),
+              onPressed: _publish,
+              icon: const Icon(Icons.add_location_alt_rounded),
+              label: const Text('Pubblica'),
+            ),
+          ),
         const Positioned(
           left: 12,
           bottom: _MapLayout.attributionBottom,
@@ -340,9 +434,11 @@ class _MapControls extends StatelessWidget {
     required this.onSafety,
     required this.onToggleThreeD,
     required this.onCenter,
+    required this.onMine,
   });
 
   final bool threeD;
+  final VoidCallback onMine;
   final VoidCallback onSafety;
   final VoidCallback onToggleThreeD;
   final VoidCallback onCenter;
@@ -360,6 +456,13 @@ class _MapControls extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        IconButton(
+          tooltip: 'I miei annunci',
+          style: style,
+          icon: const Icon(Icons.view_list_rounded),
+          onPressed: onMine,
+        ),
+        const SizedBox(height: 10),
         IconButton(
           tooltip: 'Consigli di sicurezza',
           style: style,
@@ -488,72 +591,6 @@ class _LocationPrompt extends StatelessWidget {
               ],
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Avviso di sicurezza della Mappa (M3): al primo accesso e sempre dall'icona dello scudo.
-class SafetyNoticeCard extends StatelessWidget {
-  const SafetyNoticeCard({super.key, required this.onAcknowledge});
-
-  final VoidCallback onAcknowledge;
-
-  static const List<(IconData, String)> tips = <(IconData, String)>[
-    (Icons.groups_2_outlined, 'Incontra le persone conosciute qui in luoghi pubblici e frequentati.'),
-    (Icons.share_location_outlined, 'Prima di vederti con qualcuno, avvisa una persona di fiducia: dove vai, con chi e a che ora.'),
-    (Icons.lock_outline, 'Non condividere indirizzo di casa, documenti, codici o dati bancari.'),
-    (Icons.blur_on_rounded, 'La tua posizione esatta non è mai mostrata: gli annunci compaiono in una zona approssimata.'),
-    (Icons.flag_outlined, 'Se qualcosa non ti convince, interrompi, blocca e segnala la persona.'),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    final ColorScheme scheme = theme.colorScheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 18),
-      child: Material(
-        key: const ValueKey<String>('avviso_sicurezza'),
-        color: scheme.surface,
-        borderRadius: BorderRadius.circular(26),
-        elevation: 8,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.health_and_safety_rounded, color: scheme.primary, size: 28),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: Text('Sicurezza sulla mappa', style: theme.textTheme.titleLarge),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.md),
-              for (final (IconData icon, String text) in tips)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(icon, size: 20, color: scheme.onSurfaceVariant),
-                      const SizedBox(width: 12),
-                      Expanded(child: Text(text, style: theme.textTheme.bodyMedium)),
-                    ],
-                  ),
-                ),
-              const SizedBox(height: AppSpacing.xs),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(onPressed: onAcknowledge, child: const Text('Ho capito')),
-              ),
-            ],
-          ),
         ),
       ),
     );

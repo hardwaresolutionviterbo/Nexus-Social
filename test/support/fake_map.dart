@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:material_ui/material_ui.dart';
+import 'package:nexus_social/features/map/listing_models.dart';
 import 'package:nexus_social/features/map/map_location.dart';
 import 'package:nexus_social/features/map/map_screen.dart';
 import 'package:nexus_social/features/map/map_surface.dart';
@@ -88,6 +89,12 @@ class FakeMapHandle implements MapSurfaceHandle {
 
   @override
   Future<void> setThreeD(bool threeD) async => tilts.add(threeD);
+
+  /// Centro della vista finta: si cambia nei test per «spostare la mappa».
+  GeoPoint centerPoint = const GeoPoint(43.7731, 11.2560);
+
+  @override
+  Future<GeoPoint?> center() async => centerPoint;
 }
 
 class FakeMapSurface extends StatefulWidget {

@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:nexus_social/core/theme/app_theme.dart';
 import 'package:nexus_social/features/map/map_location.dart';
 import 'package:nexus_social/features/map/map_screen.dart';
+import 'package:nexus_social/features/map/safety_notice.dart';
 import 'package:nexus_social/features/shell/app_shell.dart';
 
 import '../support/app_helpers.dart';

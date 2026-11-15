@@ -7,6 +7,7 @@ import '../../core/services/backend_bootstrap.dart';
 import '../../core/widgets/nexus_ui.dart';
 import '../contacts/contacts_auto_sync.dart';
 import '../contacts/contacts_sync.dart';
+import '../map/listing_repository.dart';
 import '../map/map_screen.dart';
 import '../privacy/privacy_checkup_screen.dart';
 import '../privacy/privacy_controller.dart';
@@ -41,6 +42,7 @@ class AuthGate extends StatefulWidget {
     this.biometricLock,
     this.contacts,
     this.map,
+    this.listings,
   });
 
   final AuthGateway gateway;
@@ -61,6 +63,7 @@ class AuthGate extends StatefulWidget {
   /// Rubrica (Blocco 5): con il server collegato.
   final ContactsRepository? contacts;
   final MapServices? map;
+  final MapListingRepository? listings;
   final BackendStatus backend;
   final DateTime Function()? today;
 
@@ -275,6 +278,7 @@ class _AuthGateState extends State<AuthGate> {
               biometricLock: widget.biometricLock,
               contacts: widget.contacts,
               map: widget.map,
+              listings: widget.listings,
             );
             final ContactsRepository? contacts = widget.contacts;
             final Widget synced = contacts == null

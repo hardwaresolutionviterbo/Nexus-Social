@@ -8,9 +8,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:nexus_social/core/theme/app_theme.dart';
+import 'package:nexus_social/features/map/listing_form_screen.dart';
+import 'package:nexus_social/features/map/listing_models.dart';
 import 'package:nexus_social/features/map/map_location.dart';
+import 'package:nexus_social/features/map/my_listings_screen.dart';
 import 'package:nexus_social/features/shell/app_shell.dart';
 
+import '../../test/support/fake_listings.dart';
 import '../../test/support/fake_map.dart';
 
 Future<void> _loadFonts() async {
@@ -91,6 +95,107 @@ void main() {
       'mappa_3_mappa',
       map,
       before: () async => map.location.emit(fixAt(42.42, 12.10)),
+    );
+  });
+
+  Future<void> shootScreen(WidgetTester tester, String name, Widget screen,
+      {Future<void> Function()? before}) async {
+    tester.view.physicalSize = const Size(1080, 2340);
+    tester.view.devicePixelRatio = 2.75;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: _withRoboto(AppTheme.light),
+      home: screen,
+    ));
+    await tester.pumpAndSettle();
+    if (before != null) await before();
+    await tester.pumpAndSettle();
+    await expectLater(find.byType(MaterialApp), matchesGoldenFile('out/$name.png'));
+  }
+
+  final DateTime now = DateTime(2026, 11, 15, 10, 30);
+
+  testWidgets('annuncio 1 · nuovo annuncio, zona approssimata', (tester) async {
+    await shootScreen(
+      tester,
+      'annuncio_1_nuovo',
+      ListingFormScreen(
+        repository: FakeListingRepository(),
+        surface: FakeMap().services.surface,
+        currentPosition: const GeoPoint(43.7696, 11.2558),
+        now: () => now,
+      ),
+      before: () async {
+        await tester.enterText(
+            find.byKey(const ValueKey<String>('annuncio_testo')), 'Chi viene a prendere un caffè?');
+        await tester.enterText(
+            find.byKey(const ValueKey<String>('annuncio_dettagli')), 'Verso le 17, centro storico');
+        FocusManager.instance.primaryFocus?.unfocus();
+      },
+    );
+  });
+
+  testWidgets('annuncio 2 · scelta del punto sulla mappa', (tester) async {
+    final FakeMap map = FakeMap();
+    await shootScreen(
+      tester,
+      'annuncio_2_scegli_punto',
+      ListingFormScreen(
+        repository: FakeListingRepository(),
+        surface: map.services.surface,
+        currentPosition: const GeoPoint(43.7696, 11.2558),
+        now: () => now,
+      ),
+      before: () async {
+        await tester.ensureVisible(find.text('Scegli il punto'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Scegli il punto'));
+      },
+    );
+  });
+
+  testWidgets('annuncio 3 · punto scelto, modalità mostrata', (tester) async {
+    await shootScreen(
+      tester,
+      'annuncio_3_punto_scelto',
+      ListingFormScreen(
+        repository: FakeListingRepository(),
+        surface: FakeMap().services.surface,
+        currentPosition: const GeoPoint(43.7696, 11.2558),
+        now: () => now,
+      ),
+      before: () async {
+        await tester.enterText(find.byKey(const ValueKey<String>('annuncio_testo')),
+            'Ci manca uno per il calcetto, chi viene?');
+        FocusManager.instance.primaryFocus?.unfocus();
+        await tester.ensureVisible(find.text('Scegli il punto'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Scegli il punto'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Usa questo punto'));
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(find.byKey(const ValueKey<String>('annuncio_pubblica')));
+      },
+    );
+  });
+
+  testWidgets('annuncio 4 · i miei annunci', (tester) async {
+    await shootScreen(
+      tester,
+      'annuncio_4_miei_annunci',
+      MyListingsScreen(
+        repository: FakeListingRepository(items: <MyListing>[
+          sampleListing(),
+          sampleListing(id: 'a2', title: 'Ci manca uno per il calcetto, chi viene?',
+              place: ListingPlace.chosenPoint, expiresAt: DateTime(2026, 11, 18, 10, 30)),
+          sampleListing(id: 'a3', title: 'Partita a carte al circolo',
+              state: ListingState.expired),
+          sampleListing(id: 'a4', title: 'Regalo libri di scuola', state: ListingState.completed),
+        ]),
+        surface: FakeMap().services.surface,
+        now: () => now,
+      ),
     );
   });
 }

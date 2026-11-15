@@ -6,6 +6,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/widgets/nexus_ui.dart';
 import '../chat/chat_screen.dart';
 import '../listings/listings_screen.dart';
+import '../map/listing_repository.dart';
 import '../map/map_screen.dart';
 import '../contacts/contacts_sync.dart';
 import '../privacy/privacy_repository.dart';
@@ -33,6 +34,8 @@ class AppShell extends StatefulWidget {
     this.biometricLock,
     this.contacts,
     this.map,
+    this.listings,
+    this.today,
   });
 
   final BackendStatus backend;
@@ -48,6 +51,12 @@ class AppShell extends StatefulWidget {
 
   /// Posizione, avviso di sicurezza e mappa del telefono (Fase 3, Blocco 1).
   final MapServices? map;
+
+  /// Annunci della Mappa sul server (Fase 3, Blocco 2).
+  final MapListingRepository? listings;
+
+  /// Data di oggi per il calcolo dell'età (nei test si fissa).
+  final DateTime Function()? today;
 
   /// Uscita dall'account (presente solo con un utente collegato).
   final Future<void> Function()? onSignOut;
@@ -71,7 +80,12 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   List<Widget> get _screens => <Widget>[
     const ChatScreen(),
-    MapScreen(active: _index == 1, services: widget.map),
+    MapScreen(
+      active: _index == 1,
+      services: widget.map,
+      listings: widget.listings,
+      isMinor: _isMinor,
+    ),
     const ListingsScreen(),
     const SaleScreen(),
     ProfileScreen(
@@ -88,6 +102,15 @@ class _AppShellState extends State<AppShell> {
   ];
 
   int _index = AppShell.initialIndex;
+
+  /// Minorenne secondo la data di nascita del profilo (M3).
+  bool get _isMinor {
+    final DateTime? birth = widget.profile?.birthDate;
+    if (birth == null) return false;
+    final DateTime now = (widget.today ?? DateTime.now)();
+    final DateTime adult = DateTime(birth.year + 18, birth.month, birth.day);
+    return now.isBefore(adult);
+  }
 
   @override
   Widget build(BuildContext context) {

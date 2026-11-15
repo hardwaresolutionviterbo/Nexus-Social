@@ -11,6 +11,7 @@ import 'core/services/auth_gateway.dart';
 import 'core/services/backend_bootstrap.dart';
 import 'core/services/firebase_services.dart';
 import 'features/contacts/contacts_sync.dart';
+import 'features/map/listing_repository.dart';
 import 'features/map/map_screen.dart';
 import 'features/privacy/privacy_repository.dart';
 import 'features/profile/profile_repository.dart';
@@ -56,6 +57,12 @@ Future<void> main() async {
       contacts: profilesReady ? SupabaseContactsRepository(Supabase.instance.client) : null,
       // La mappa non usa il server: funziona anche senza accesso e senza Blaze.
       map: MapServices.device(),
+      listings: profilesReady
+          ? SupabaseMapListingRepository(
+              Supabase.instance.client,
+              uid: () => FirebaseAuth.instance.currentUser?.uid ?? '',
+            )
+          : null,
     ),
   );
 }

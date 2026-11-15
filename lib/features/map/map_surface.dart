@@ -4,6 +4,7 @@ import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/theme/app_theme.dart';
+import 'listing_models.dart';
 import 'map_location.dart';
 
 /// Comandi che lo schermo della Mappa dà alla mappa disegnata.
@@ -17,6 +18,9 @@ abstract class MapSurfaceHandle {
 
   /// Inclina o raddrizza la vista lasciandola dov'è.
   Future<void> setThreeD(bool threeD);
+
+  /// Punto al centro della vista (per scegliere a mano il luogo di un annuncio).
+  Future<GeoPoint?> center();
 }
 
 typedef MapSurfaceBuilder =
@@ -75,6 +79,12 @@ class _MapLibreSurfaceState extends State<MapLibreSurface> implements MapSurface
       CameraUpdate.tiltTo(threeD ? MapRules.tilt3d : MapRules.tilt2d),
       duration: const Duration(milliseconds: 600),
     );
+  }
+
+  @override
+  Future<GeoPoint?> center() async {
+    final LatLng? target = _controller?.cameraPosition?.target;
+    return target == null ? null : GeoPoint(target.latitude, target.longitude);
   }
 
   @override
