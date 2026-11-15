@@ -1001,6 +1001,148 @@ def check_nearby_phase3() -> None:
           (n1[0] >= 400 or n1[1] == []) and n2[0] >= 400, f"HTTP {n1[0]}, {n2[0]}")
 
 
+def check_interactions_phase3() -> None:
+    """L · Eventi di gruppo, reazioni, commenti, notifiche (Fase 3, Blocco 4). A, B, C, D."""
+    ta, tb, tc, td = token(UID_A), token(UID_B), token(UID_C), token(UID_D)
+    soon = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + 3 * 3600))
+    PD = (45.4064, 11.8768)
+
+    s, ev = rpc("publish_map_listing", {
+        "p_title": "Ci mancano due persone per il calcetto", "p_details": "", "p_lat": PD[0],
+        "p_lon": PD[1], "p_location_mode": "precise", "p_expires_at": soon, "p_photos": [],
+        "p_group_spots": 2}, ta)
+
+    def social(tok):
+        return rpc("listing_social", {"p_listing": ev}, tok)[1] or {}
+
+    def people(tok, what):
+        return [x["user_id"] for x in rows(rpc("listing_people", {"p_listing": ev, "p_what": what}, tok))]
+
+    def notes(tok):
+        return rows(rpc("my_notifications", {}, tok))
+
+    # L1 · Evento di gruppo: partecipo, conteggio, «mancano N persone», al completo
+    j_b = rpc("join_listing", {"p_listing": ev}, tb)
+    j_d = rpc("join_listing", {"p_listing": ev}, td)
+    j_c = rpc("join_listing", {"p_listing": ev}, tc)
+    j_a = rpc("join_listing", {"p_listing": ev}, ta)
+    full = social(tb)
+    near_items = rpc("map_listings_nearby", {"p_lat": PD[0], "p_lon": PD[1]}, tc)[1] or []
+    seen = next((x for x in near_items if x["id"] == ev), {})
+    rpc("leave_listing", {"p_listing": ev}, tb)
+    after = social(tc)
+    check("L1", "Evento: partecipano in 2 su 2, poi al completo; l'autore non partecipa; si può uscire",
+          s == 200 and j_b[0] in (200, 204) and j_d[0] in (200, 204) and j_c[0] >= 400
+          and j_a[0] >= 400 and full.get("participants") == 2 and full.get("i_participate") is True
+          and full.get("group_spots") == 2 and seen.get("participants") == 2
+          and seen.get("group_spots") == 2 and after.get("participants") == 1,
+          f"HTTP {s}, {j_b[0]}, {j_d[0]}, {j_c[0]}, {j_a[0]}")
+
+    # L2 · Mi piace avvisa l'autore (raggruppati); Non mi piace mai
+    rpc("set_listing_reaction", {"p_listing": ev, "p_kind": "like"}, tb)
+    rpc("set_listing_reaction", {"p_listing": ev, "p_kind": "like"}, td)
+    rpc("set_listing_reaction", {"p_listing": ev, "p_kind": "dislike"}, tc)
+    rpc("set_listing_reaction", {"p_listing": ev, "p_kind": "dislike"}, tb)
+    likes_a = [n for n in notes(ta) if n["listing_id"] == ev and n["kind"] == "listing_like"]
+    kinds_a = {n["kind"] for n in notes(ta) if n["listing_id"] == ev}
+    counts = social(tc)
+    check("L2", "Mi piace raggruppati in una notifica all'autore; i Non mi piace non avvisano",
+          len(likes_a) == 1 and likes_a[0]["actor_count"] == 2 and kinds_a == {"listing_like"}
+          and counts.get("likes") == 1 and counts.get("dislikes") == 2
+          and counts.get("my_reaction") == "dislike",
+          f"notifiche {[(n['kind'], n['actor_count']) for n in notes(ta)]}, conteggi {counts}")
+
+    # L3 · Elenchi di chi ha reagito e di chi partecipa
+    check("L3", "Elenchi nominativi di Mi piace, Non mi piace e partecipanti",
+          people(tc, "like") == [UID_D] and set(people(tc, "dislike")) == {UID_B, UID_C}
+          and people(tc, "participant") == [UID_D])
+
+    # L4 · Commenti e risposte: chi commenta segue il post e riceve le risposte
+    _, c_b = rpc("add_listing_comment", {"p_listing": ev, "p_body": "Io ci sono!"}, tb)
+    _, r_d = rpc("add_listing_comment", {"p_listing": ev, "p_body": "Anche io", "p_parent": c_b}, td)
+    _, r_a = rpc("add_listing_comment", {"p_listing": ev, "p_body": "Perfetto, a stasera",
+                                         "p_parent": r_d}, ta)
+    nb = {(n["kind"], n["actor_id"]) for n in notes(tb) if n["listing_id"] == ev}
+    nd = {(n["kind"], n["actor_id"]) for n in notes(td) if n["listing_id"] == ev}
+    na = {(n["kind"], n["actor_id"]) for n in notes(ta) if n["listing_id"] == ev}
+    lst = rows(rpc("listing_comments_list", {"p_listing": ev}, tc))
+    parents = {x["id"]: x["parent_id"] for x in lst}
+    check("L4", "Commenti e risposte (un livello): avvisati autore, chi riceve la risposta e chi segue",
+          ("comment_reply", UID_D) in nb and ("followed_comment", UID_A) in nb
+          and ("comment_reply", UID_A) in nd
+          and ("listing_comment", UID_B) in na and ("listing_comment", UID_D) in na
+          and not any(k[1] == UID_A for k in na)
+          and parents.get(c_b) is None and parents.get(r_d) == c_b and parents.get(r_a) == c_b,
+          f"B {nb}, D {nd}, A {na}")
+
+    # L5 · Mi piace a un commento: avvisato chi l'ha scritto
+    rpc("set_comment_like", {"p_comment": c_b, "p_like": True}, ta)
+    rpc("set_comment_like", {"p_comment": c_b, "p_like": True}, td)
+    lk = [n for n in notes(tb) if n["kind"] == "comment_like" and n["comment_id"] == c_b]
+    item = next((x for x in rows(rpc("listing_comments_list", {"p_listing": ev}, ta)) if x["id"] == c_b), {})
+    check("L5", "Mi piace ai commenti raggruppati per chi ha scritto il commento",
+          len(lk) == 1 and lk[0]["actor_count"] == 2 and item.get("likes") == 2
+          and item.get("liked_by_me") is True)
+
+    # L6 · «Disattiva notifiche per questo post»
+    before_b = len(notes(tb))
+    rpc("set_listing_muted", {"p_listing": ev, "p_muted": True}, tb)
+    before_a = len([n for n in notes(ta) if n["kind"] == "listing_comment"])
+    rpc("add_listing_comment", {"p_listing": ev, "p_body": "Porto il pallone"}, td)
+    after_a = len([n for n in notes(ta) if n["kind"] == "listing_comment"])
+    check("L6", "Post silenziato: chi lo ha disattivato non riceve più avvisi, l'autore sì",
+          len(notes(tb)) == before_b and after_a == before_a + 1 and social(tb).get("muted") is True)
+
+    # L7 · Blocchi (P12): niente interazioni né visibilità tra A e D
+    rpc("block_user", {"p_user_id": UID_D}, ta)
+    d_comment = rpc("add_listing_comment", {"p_listing": ev, "p_body": "Ci sei?"}, td)
+    d_react = rpc("set_listing_reaction", {"p_listing": ev, "p_kind": "like"}, td)
+    a_list = rows(rpc("listing_comments_list", {"p_listing": ev}, ta))
+    a_people = people(ta, "like") + people(ta, "participant")
+    a_notes = [n for n in notes(ta) if n["actor_id"] == UID_D]
+    a_social = social(ta)
+    rpc("unblock_user", {"p_user_id": UID_D}, ta)
+    check("L7", "Con un blocco: niente commenti né reazioni, e l'autore non vede quelli dell'altro",
+          d_comment[0] >= 400 and d_react[0] >= 400
+          and all(x["author_id"] != UID_D for x in a_list) and UID_D not in a_people
+          and a_notes == [] and a_social.get("likes") == 0,
+          f"HTTP {d_comment[0]}, {d_react[0]}")
+
+    # L8 · Cancellare: il proprio commento, o qualsiasi commento del proprio annuncio
+    del_other = rpc("delete_my_comment", {"p_comment": c_b}, tc)
+    del_owner = rpc("delete_my_comment", {"p_comment": r_d}, ta)
+    still = {x["id"] for x in rows(rpc("listing_comments_list", {"p_listing": ev}, tc))}
+    check("L8", "Commento cancellato dall'autore dell'annuncio; nessun altro cancella quelli altrui",
+          del_other[0] >= 400 and del_owner[0] in (200, 204) and r_d not in still and c_b in still,
+          f"HTTP {del_other[0]}, {del_owner[0]}")
+
+    # L9 · Lette: contatore azzerato solo per sé
+    _, unread_a = rpc("unread_notifications_count", {}, ta)
+    _, unread_b = rpc("unread_notifications_count", {}, tb)
+    rpc("mark_notifications_read", {}, ta)
+    _, zero_a = rpc("unread_notifications_count", {}, ta)
+    _, same_b = rpc("unread_notifications_count", {}, tb)
+    check("L9", "«Segna come lette» azzera solo le proprie notifiche",
+          unread_a > 0 and zero_a == 0 and same_b == unread_b and unread_b > 0,
+          f"{unread_a} → {zero_a}; B {unread_b} → {same_b}")
+
+    # L10 · Nessun accesso diretto alle tabelle; senza token nessuna funzione
+    direct = [
+        get("/rest/v1/notifications?select=id", ta),
+        get("/rest/v1/listing_comments?select=id", ta),
+        request("POST", "/rest/v1/listing_reactions", jwt=tb,
+                body={"listing_id": ev, "user_id": UID_B, "kind": "like"}),
+        request("POST", "/rest/v1/notifications", jwt=tb,
+                body={"recipient_id": UID_A, "kind": "listing_like", "listing_id": ev,
+                      "actor_id": UID_B}),
+    ]
+    anon = [rpc("listing_social", {"p_listing": ev}), rpc("my_notifications", {}),
+            rpc("set_listing_reaction", {"p_listing": ev, "p_kind": "like"})]
+    check("L10", "Tabelle delle interazioni non accessibili direttamente; senza token niente",
+          all(denied(r) for r in direct) and all(r[0] >= 400 for r in anon),
+          f"{[r[0] for r in direct]}, {[r[0] for r in anon]}")
+
+
 def main() -> int:
     try:
         ids = setup()
@@ -1014,6 +1156,7 @@ def main() -> int:
     check_contacts_block5()
     check_map_listings_phase3()
     check_nearby_phase3()
+    check_interactions_phase3()
     failed = [r for r in results if not r[2]]
     print(f"{'Caso':6} {'Esito':9} Descrizione")
     for case, desc, ok, detail in results:
