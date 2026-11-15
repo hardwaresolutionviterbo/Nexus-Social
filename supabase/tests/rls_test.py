@@ -1487,6 +1487,172 @@ def check_marketplace_search_phase5() -> None:
           and not set(ids(p1)) & set(ids(p2)), f"{len(p1)}, {len(p2)}")
 
 
+def check_swap_proposals_phase5() -> None:
+    """O · Scambia & Vendi, Blocco 3: proposte di scambio (Fase 5). Utenti A, B, D."""
+    ta, tb, td = token(UID_A), token(UID_B), token(UID_D)
+    FI = (43.7696, 11.2558)
+    for t, other in ((ta, UID_B), (tb, UID_A), (ta, UID_D), (td, UID_A), (tb, UID_D), (td, UID_B)):
+        rpc("unblock_user", {"p_user_id": other}, t)
+    _, cats = rpc("marketplace_categories_list", {}, ta)
+    by_slug = {c["slug"]: c for c in (cats if isinstance(cats, list) else [])}
+    games = by_slug["giochi-hobby-videogiochi"]["id"] if "giochi-hobby-videogiochi" in by_slug \
+        else next(c["id"] for c in cats if c["slug"].startswith("giochi-hobby-"))
+    bikes = by_slug["sport-outdoor-ciclismo"]["id"]
+    pa, pb = [f"{UID_A}/mercatoA0001.jpg"], [f"{UID_B}/mercatoB0001.jpg"]
+
+    def publish(tok, photos, **kw):
+        body = {"p_type": "sell", "p_category": games, "p_title": "Oggetto", "p_description": "",
+                "p_price_cents": 5000, "p_condition": "good", "p_ships": False, "p_pickup": True,
+                "p_attributes": {}, "p_lat": FI[0], "p_lon": FI[1], "p_location_mode": "approximate",
+                "p_photos": photos, "p_no_prohibited_items": True}
+        body.update(kw)
+        s, res = rpc("publish_market_listing", body, tok)
+        return res.get("id") if s == 200 and isinstance(res, dict) else None
+
+    def mine(tok):
+        return {x["id"]: x for x in rows(rpc("my_swap_proposals", {}, tok))}
+
+    def notes(tok, kind):
+        return [n for n in rows(rpc("my_notifications", {}, tok)) if n.get("kind") == kind]
+
+    console = publish(ta, pa, p_type="swap", p_price_cents=None, p_title="Console PS4 con giochi",
+                      p_wanted_in_exchange="una bici", p_cash_adjustment=True)
+    lamp = publish(ta, pa, p_title="Lampada da tavolo")
+    tent = publish(ta, pa, p_title="Tenda da campeggio", p_open_to_swap=True)
+    books = publish(ta, pa, p_type="swap", p_price_cents=None, p_title="Libri fantasy")
+    bike = publish(tb, pb, p_category=bikes, p_title="Bici da città")
+    scooter = publish(tb, pb, p_category=bikes, p_title="Monopattino elettrico")
+    flagged = publish(tb, pb, p_title="Casco moto")
+    check("O0", "Annunci di prova per le proposte pubblicati",
+          None not in (console, lamp, tent, books, bike, scooter, flagged),
+          f"{[console, lamp, tent, books, bike, scooter, flagged]}")
+    if None in (console, lamp, tent, books, bike, scooter, flagged):
+        return
+    sql("select set_config('nexus.internal', 'on', false); "
+        f"update public.listings set review_status = 'pending_review' where id = '{flagged}'")
+
+    def propose(tok, target, items, **kw):
+        body = {"p_listing": target, "p_items": items, "p_cash_cents": None,
+                "p_cash_direction": None, "p_message": ""}
+        body.update(kw)
+        s, res = rpc("propose_swap", body, tok)
+        return s, (res if s == 200 and isinstance(res, str) else None)
+
+    # O1 · Proposta con un annuncio e un conguaglio; la vedono solo le due parti
+    s, p1 = propose(tb, console, [bike], p_cash_cents=2000, p_cash_direction="requester_pays",
+                    p_message="Ti do la bici e 20 €")
+    a_view, b_view = mine(ta).get(p1, {}), mine(tb).get(p1, {})
+    check("O1", "Proposta con annuncio e conguaglio: stato «In attesa», notifica all'autore",
+          s == 200 and a_view.get("status") == "pending" and not a_view.get("from_me")
+          and a_view.get("i_am_owner") and b_view.get("from_me")
+          and [i["id"] for i in a_view.get("items", [])] == [bike]
+          and a_view.get("cash_cents") == 2000 and a_view.get("other_username") == "utente_b"
+          and any(n["listing_id"] == console for n in notes(ta, "swap_proposal")),
+          f"HTTP {s}, {a_view.get('status')}")
+
+    # O2 · Regole: annunci propri, scambiabili, conguaglio ammesso, nessun estraneo
+    bad = {
+        "proprio annuncio": propose(ta, console, [lamp])[0],
+        "non scambiabile": propose(tb, lamp, [bike])[0],
+        "nessun annuncio": propose(tb, tent, [])[0],
+        "annuncio altrui": propose(tb, tent, [lamp])[0],
+        "sei annunci": propose(tb, tent, [bike] * 6)[0],
+        "conguaglio non accettato": propose(tb, tent, [bike], p_cash_cents=1000,
+                                            p_cash_direction="owner_pays")[0],
+        "conguaglio sotto 1 €": propose(tb, books, [bike], p_cash_cents=50,
+                                        p_cash_direction="owner_pays")[0],
+        "direzione inventata": propose(tb, console, [scooter], p_cash_cents=1000,
+                                       p_cash_direction="a_metà")[0],
+        "seconda in attesa": propose(tb, console, [scooter])[0],
+        "annuncio in revisione": propose(tb, books, [flagged])[0],
+    }
+    d_sees = mine(td)
+    d_answer = rpc("respond_swap", {"p_proposal": p1, "p_accept": True}, td)
+    d_cancel = rpc("cancel_swap", {"p_proposal": p1}, td)
+    d_cand = rpc("swap_offer_candidates", {"p_proposal": p1}, td)
+    direct = get(f"/rest/v1/swap_proposals?id=eq.{p1}", tb)
+    check("O2", "Regole delle proposte; chi non è parte non vede né tocca nulla",
+          all(v >= 400 for v in bad.values()) and p1 not in d_sees and d_answer[0] >= 400
+          and d_cancel[0] >= 400 and d_cand[0] >= 400 and denied(direct),
+          ", ".join(f"{k}: {v}" for k, v in bad.items() if v < 400)
+          + f" | D: {p1 in d_sees}, {d_answer[0]}, {d_cancel[0]}, {d_cand[0]}")
+
+    # O3 · Controproposta: chiude la precedente e la gira all'altra parte
+    cand_a = {x["id"] for x in rows(rpc("swap_offer_candidates", {"p_proposal": p1}, ta))}
+    cand_b = {x["id"] for x in rows(rpc("swap_offer_candidates", {}, tb))}
+    s, p2 = (lambda r: (r[0], r[1] if r[0] == 200 else None))(rpc("counter_swap", {
+        "p_proposal": p1, "p_items": [bike, scooter], "p_cash_cents": None,
+        "p_cash_direction": None, "p_message": "Mi servono bici e monopattino"}, ta))
+    own_answer = rpc("respond_swap", {"p_proposal": p2, "p_accept": True}, ta)
+    old_again = rpc("respond_swap", {"p_proposal": p1, "p_accept": True}, ta)
+    view = mine(tb)
+    check("O3", "Controproposta: la precedente diventa «Controproposta», la nuova va a chi aveva proposto",
+          s == 200 and view.get(p1, {}).get("status") == "countered"
+          and view.get(p2, {}).get("status") == "pending" and not view.get(p2, {}).get("from_me")
+          and view.get(p2, {}).get("parent_id") == p1
+          and {i["id"] for i in view.get(p2, {}).get("items", [])} == {bike, scooter}
+          and {bike, scooter} <= cand_a and {bike, scooter} <= cand_b and flagged not in cand_b
+          and own_answer[0] >= 400 and old_again[0] >= 400
+          and any(n.get("proposal_id") == p2 for n in notes(tb, "swap_counter")),
+          f"HTTP {s}, {own_answer[0]}, {old_again[0]}")
+
+    # O4 · Accettazione, notifica, nessun ripensamento
+    acc = rpc("respond_swap", {"p_proposal": p2, "p_accept": True}, tb)
+    again = rpc("respond_swap", {"p_proposal": p2, "p_accept": False}, tb)
+    cancel_acc = rpc("cancel_swap", {"p_proposal": p2}, ta)
+    check("O4", "Accettata: stato «Accettata», notifica a chi l'aveva fatta; non si cambia più",
+          acc[0] == 200 and acc[1] == "accepted" and mine(ta).get(p2, {}).get("status") == "accepted"
+          and again[0] >= 400 and cancel_acc[0] >= 400
+          and any(n.get("proposal_id") == p2 for n in notes(ta, "swap_accepted")),
+          f"HTTP {acc[0]}, {again[0]}, {cancel_acc[0]}")
+
+    # O5 · Annullare: solo chi l'ha fatta e solo in attesa
+    _, p3 = propose(tb, tent, [bike])
+    a_cancel = rpc("cancel_swap", {"p_proposal": p3}, ta)
+    b_cancel = rpc("cancel_swap", {"p_proposal": p3}, tb)
+    late = rpc("respond_swap", {"p_proposal": p3, "p_accept": True}, ta)
+    check("O5", "Annullata da chi l'ha fatta, prima della risposta; poi non si accetta più",
+          p3 is not None and a_cancel[0] >= 400 and b_cancel[0] in (200, 204)
+          and mine(ta).get(p3, {}).get("status") == "cancelled" and late[0] >= 400,
+          f"{p3}, {a_cancel[0]}, {b_cancel[0]}, {late[0]}")
+
+    # O6 · Rifiutare
+    _, p4 = propose(tb, tent, [scooter], p_message="E questo?")
+    rej = rpc("respond_swap", {"p_proposal": p4, "p_accept": False}, ta)
+    check("O6", "Rifiutata: stato «Rifiutata»",
+          p4 is not None and rej[1] == "rejected" and mine(tb).get(p4, {}).get("status") == "rejected",
+          f"{p4}, {rej}")
+
+    # O7 · Si accetta solo se gli annunci sono ancora disponibili
+    _, p5 = propose(tb, books, [scooter])
+    rpc("close_market_listing", {"p_id": scooter}, tb)
+    gone = rpc("respond_swap", {"p_proposal": p5, "p_accept": True}, ta)
+    item = next(iter(mine(ta).get(p5, {}).get("items", [])), {})
+    check("O7", "Annuncio offerto chiuso: la proposta non si può accettare",
+          p5 is not None and gone[0] >= 400 and item.get("available") is False
+          and mine(ta).get(p5, {}).get("status") == "pending", f"{p5}, {gone[0]}")
+
+    # O8 · Blocchi: niente proposte né elenchi tra persone bloccate
+    rpc("block_user", {"p_user_id": UID_B}, ta)
+    blocked_new = propose(tb, tent, [bike])[0]
+    blocked_list = p5 in mine(ta) or p5 in mine(tb)
+    blocked_answer = rpc("respond_swap", {"p_proposal": p5, "p_accept": False}, ta)
+    rpc("unblock_user", {"p_user_id": UID_B}, ta)
+    check("O8", "Con un blocco: nessuna nuova proposta, elenco e risposte nascosti",
+          blocked_new >= 400 and not blocked_list and blocked_answer[0] >= 400,
+          f"{blocked_new}, {blocked_list}, {blocked_answer[0]}")
+
+    # O9 · Anti-spam (D9): 30 proposte al giorno
+    sql("insert into public.swap_proposals (target_listing_id, owner_id, requester_id, from_id, "
+        "to_id, status) "
+        f"select '{lamp}', '{UID_A}', '{UID_D}', '{UID_D}', '{UID_A}', 'rejected' "
+        "from generate_series(1, 30)")
+    d_items = [x["id"] for x in rows(rpc("swap_offer_candidates", {}, td))][:1]
+    s31 = propose(td, console, d_items)[0]
+    check("O9", "La trentunesima proposta della giornata viene rifiutata",
+          len(d_items) == 1 and s31 >= 400, f"{len(d_items)}, HTTP {s31}")
+
+
 def main() -> int:
     try:
         ids = setup()
@@ -1503,6 +1669,7 @@ def main() -> int:
     check_interactions_phase3()
     check_marketplace_phase5()
     check_marketplace_search_phase5()
+    check_swap_proposals_phase5()
     failed = [r for r in results if not r[2]]
     print(f"{'Caso':6} {'Esito':9} Descrizione")
     for case, desc, ok, detail in results:
