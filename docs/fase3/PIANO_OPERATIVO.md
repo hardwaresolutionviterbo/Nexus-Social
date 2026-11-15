@@ -1,6 +1,7 @@
 # Fase 3 · Piano operativo (proposta)
 
-Stato: **proposta da approvare dal titolare**. Nessun codice della Fase 3 prima dell'approvazione.
+Stato: **piano approvato dal titolare il 15/11/2026** con le modifiche della sezione 3.1;
+in attesa delle **categorie e sottocategorie** del titolare (sostituiscono T4) prima del Blocco 2.
 
 Riferimento: `Nexus_Social_Piano_di_Lavoro_COMPLETO_AGGIORNATO.pdf`, «FASE 3 – Mappa Sociale (il
 cuore dell'app)» (SHA-256 `7da25d52…b8561eb`).
@@ -63,6 +64,33 @@ cuore dell'app)» (SHA-256 `7da25d52…b8561eb`).
 | T6 | Commenti in Fase 3 | Fase 3: Mi piace/Non mi piace con conteggi, elenco commenti e commento. Fase 5: modifica, moderazione, elenchi nominativi completi delle reazioni |
 | T7 | «Contatta» prima della chat | In Fase 3 il pulsante c'è ma apre l'avviso «disponibile con la chat (Fase 4)» |
 
+### 3.1 Decisioni del titolare (15/11/2026)
+
+- **T1, T2, T3, T5, T7:** approvate come proposte.
+- **T4 · Categorie:** sostituita dall'elenco di categorie e sottocategorie che fornirà il titolare.
+- **T6 · Interazioni come Facebook (modifica):** già in Fase 3, sotto ogni annuncio o post:
+  - Mi piace, Non mi piace e Commenta, con i conteggi; una sola reazione per persona,
+    sostituibile o rimovibile;
+  - elenchi visibili di chi ha messo Mi piace / Non mi piace e di chi ha commentato (solo nome
+    abbreviato e @username);
+  - risposte ai commenti, mostrate sotto il commento;
+  - blocchi rispettati (P12).
+- **Condividi (anticipato dalla fase finale del PDF):** pulsante su ogni annuncio o post per
+  inviarlo ai social e alle altre app. Testo e foto con zona approssimata; mai posizione esatta né
+  numero. Il link che apre l'annuncio nell'app arriverà con la pagina web (oggi i link diretti
+  all'app non sono ammessi, F10).
+- **Notifiche delle interazioni (modifica al PDF, Fase 4: «non inviare notifiche per Mi piace e
+  Non mi piace»):**
+  - all'autore: per i **Mi piace** (non per i Non mi piace) e per i commenti;
+  - chi commenta **segue il post** in automatico: avvisi per i nuovi commenti e per le risposte;
+  - chi riceve una risposta al proprio commento viene avvisato; la notifica apre il post sul
+    commento;
+  - «Disattiva notifiche per questo post», interruttori generali nelle preferenze, nessun avviso
+    da persone bloccate né per le proprie azioni, Mi piace ravvicinati raggruppati;
+  - in Fase 3 nella campanella dell'app; push ad app chiusa con il server attivo (Blaze, Fase 4).
+- **Gratuità:** gli annunci delle persone sono sempre gratuiti; i post di promozione delle aziende
+  costano 9,99 €/mese e si attivano in Fase 6 (scheda «Promozioni» vuota fino ad allora).
+
 ## 4. Blocchi di lavoro
 
 Ogni blocco ha un APK identificabile e si ferma per la tua verifica e approvazione.
@@ -78,7 +106,8 @@ Ogni blocco ha un APK identificabile e si ferma per la tua verifica e approvazio
    partenza), scheda della persona con «Contatta», «Ultimi annunci» con le schede Annunci e
    Promozioni (vuota fino alla Fase 6), filtri, «Disponibile ora», segnala annuncio.
 4. **Eventi di gruppo e interazioni.** Partecipo/non partecipo con conteggio e «mancano N
-   persone»; Mi piace / Non mi piace (una sola reazione per persona), commenti; blocchi rispettati.
+   persone»; Mi piace / Non mi piace con elenchi, commenti con risposte, «Condividi», notifiche
+   nella campanella (sezione 3.1); blocchi rispettati.
 5. **GPS in tempo reale.** Consenso esplicito, durata fino a 8 ore, «Interrompi», solo persone
    autorizzate, cancellazione immediata alla fine (P11), consenso in Autorizzazioni (P13), regole
    per i minorenni (M3, M4).
