@@ -3,8 +3,7 @@
 Ricevuta dal titolare il 15/11/2026 come «PIAZLY – SPECIFICA TECNICA · Marketplace SCAMBIA & VENDI ·
 Versione 1.0 – Catalogo categorie e sottocategorie». Trascritta senza modifiche nel contenuto.
 
-**Nota:** il messaggio ricevuto si interrompe a metà della sezione 6 (dopo «Possibilità di
-aggiungere un conguaglio economico.»). Il resto è da ricevere.
+Sezioni 1-5 ricevute nel messaggio; sezioni 6-12 ricevute come file allegato lo stesso giorno.
 
 ## 1. Obiettivo
 
@@ -392,12 +391,138 @@ Condizioni dell'oggetto: Nuovo; Come nuovo; Ottimo stato; Buono stato; Discreto;
 
 Il prezzo deve essere obbligatorio per la vendita, facoltativo per lo scambio e non previsto per il regalo.
 
-## 6. Sistema Scambia (parziale: il messaggio si interrompe qui)
+## 6. Sistema scambia
 
-Per gli annunci di scambio:
+Per gli annunci di scambio implementare un sistema completo di proposte tra utenti.
+
+Funzionalità richieste:
 
 - Possibilità di indicare cosa si cerca in cambio.
-- Possibilità di ricevere proposte.
-- Possibilità di allegare annunci propri come proposta.
+- Possibilità di ricevere proposte da altri utenti.
+- Possibilità di allegare uno o più annunci propri come proposta.
 - Possibilità di aggiungere un conguaglio economico.
-- *(testo mancante)*
+- Possibilità di formulare una controproposta.
+- Possibilità di accettare o rifiutare una proposta.
+- Chat privata tra le parti.
+- Conferma della conclusione dello scambio da entrambe le parti.
+- Storico degli scambi effettuati.
+- Possibilità di annullare una proposta prima che venga accettata.
+- Notifiche per nuove proposte, controproposte e accettazioni.
+
+Ogni proposta deve avere uno stato:
+
+- In attesa.
+- Accettata.
+- Rifiutata.
+- Controproposta.
+- Annullata.
+- Completata.
+
+## 7. Filtri di ricerca
+
+Implementare i seguenti filtri:
+
+- Categoria.
+- Sottocategoria.
+- Tipologia annuncio.
+- Prezzo minimo e massimo.
+- Condizioni dell'oggetto.
+- Località.
+- Raggio chilometrico.
+- Privato o azienda.
+- Spedizione disponibile.
+- Ritiro a mano.
+- Disponibilità allo scambio.
+- Scambio con conguaglio.
+- Data di pubblicazione.
+
+Aggiungere le seguenti modalità di ordinamento:
+
+- Più recenti.
+- Prezzo crescente.
+- Prezzo decrescente.
+- Più vicini.
+- Più pertinenti.
+
+## 8. Gestione amministrativa
+
+Prevedere un pannello amministrativo per:
+
+- Creare categorie.
+- Creare sottocategorie.
+- Modificare nomi e descrizioni.
+- Attivare e disattivare categorie.
+- Cambiare l'ordine di visualizzazione.
+- Visualizzare il numero di annunci per categoria.
+- Gestire categorie non più utilizzate.
+
+Non eliminare categorie già utilizzate dagli annunci: disattivarle o archiviarle, mantenendo l'integrità dei dati.
+
+## 9. Regole di sicurezza
+
+Implementare controlli sui prodotti vietati, illegali o regolamentati.
+
+Prevedere moderazione e segnalazione degli annunci.
+
+Non consentire la vendita di:
+
+- Armi e munizioni non autorizzate.
+- Droghe e sostanze illegali.
+- Farmaci soggetti a prescrizione.
+- Prodotti contraffatti.
+- Beni rubati.
+- Prodotti pericolosi o vietati dalla normativa.
+- Altri beni proibiti dalle leggi applicabili.
+
+La categoria animali deve essere limitata agli accessori e alle attrezzature nella prima versione, senza compravendita di animali.
+
+## 10. Requisiti grafici e ux
+
+L'interfaccia deve essere moderna, premium e coerente con il design Piazly.
+
+La selezione categoria deve funzionare così:
+
+1. L'utente sceglie una categoria principale.
+2. L'app mostra soltanto le sottocategorie corrispondenti.
+3. L'utente seleziona la sottocategoria.
+4. Il sistema mostra i campi specifici eventualmente previsti per quella categoria.
+
+Utilizzare icone coerenti e immagini rappresentative delle categorie.
+
+La navigazione deve essere ottimizzata per smartphone, senza testi tagliati o scorrimenti orizzontali indesiderati.
+
+## 11. Istruzioni per lo sviluppo
+
+Prima di implementare:
+
+1. Analizzare l'attuale struttura Flutter.
+2. Analizzare il database Supabase.
+3. Verificare se esistono già tabelle categorie o annunci.
+4. Evitare duplicazioni.
+5. Preparare una migrazione incrementale.
+
+La migrazione deve essere provata esclusivamente su un database temporaneo.
+
+NON applicare la migrazione sul database Supabase reale senza autorizzazione esplicita.
+
+Non modificare Firebase Authentication, le configurazioni Android o le altre funzionalità già approvate.
+
+## 12. Test di accettazione
+
+Il lavoro sarà considerato pronto per la revisione quando:
+
+- Tutte le 19 categorie sono presenti.
+- Tutte le sottocategorie sono correttamente associate.
+- Gli ID sono univoci.
+- La selezione gerarchica funziona.
+- La ricerca per categoria funziona.
+- I quattro tipi di annuncio sono gestiti.
+- I filtri funzionano.
+- La pubblicazione è utilizzabile da smartphone.
+- Le policy di sicurezza sono testate.
+- Le migrazioni sono verificate su database temporaneo.
+- Non ci sono regressioni sulle funzionalità esistenti.
+
+IMPORTANTE: non eseguire merge su main e non applicare modifiche al database reale prima della mia approvazione.
+
+Obiettivo: realizzare un marketplace completo, scalabile e amministrabile, che costituisca una delle sezioni centrali di Piazly.
