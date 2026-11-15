@@ -291,16 +291,15 @@ void main() {
           sampleListing(id: 'p$i', title: 'Oggetto $i',
               createdAt: DateTime(2026, 11, 14).subtract(Duration(minutes: i))),
       ]);
-      await tester.scrollUntilVisible(find.byKey(const ValueKey<String>('mercato_altri')), 300,
-          scrollable: find.byType(Scrollable).first);
-      expect(find.byKey(const ValueKey<String>('mercato_altri')), findsOneWidget);
       expect(repo.searches.single.$3, 0);
-      await tapVisible(tester, find.byKey(const ValueKey<String>('mercato_altri')));
-      expect(repo.searches.last.$3, 20);
-      expect(find.byKey(const ValueKey<String>('mercato_altri')), findsNothing);
+      expect(find.byKey(const ValueKey<String>('risultato_p20')), findsNothing);
+      // Arrivando in fondo si carica la pagina successiva (o con «Mostra altri annunci»).
       await tester.scrollUntilVisible(find.byKey(const ValueKey<String>('risultato_p24')), 300,
           scrollable: find.byType(Scrollable).first);
+      await tester.pumpAndSettle();
+      expect(repo.searches.map(((MarketSection, MarketQuery, int) s) => s.$3), <int>[0, 20]);
       expect(find.byKey(const ValueKey<String>('risultato_p24')), findsOneWidget);
+      expect(find.byKey(const ValueKey<String>('mercato_altri')), findsNothing);
     });
 
     testWidgets('scheda: prezzo, condizioni, consegna, antitruffa, Contatta e Segnala', (
