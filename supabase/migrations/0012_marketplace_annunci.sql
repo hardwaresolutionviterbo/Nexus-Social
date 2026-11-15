@@ -288,6 +288,7 @@ declare
   v_id uuid;
   v_reason text;
   v_slug text;
+  v_exact extensions.geography;
 begin
   if v_uid is null then
     raise exception 'Autenticazione richiesta' using errcode = '42501';
@@ -308,27 +309,38 @@ begin
     raise exception 'Hai raggiunto il limite di 20 annunci al giorno' using errcode = '22023';
   end if;
 
+  if p_lat is null or p_lon is null or p_lat not between -90 and 90 or p_lon not between -180 and 180 then
+    raise exception 'Posizione non valida' using errcode = '22023';
+  end if;
+  if exists (
+    select 1 from public.user_moderation m
+    where m.user_id = v_uid and m.banned_until is not null and m.banned_until > now()
+  ) then
+    raise exception 'Account sospeso' using errcode = '42501';
+  end if;
+
   select slug into v_slug from public.marketplace_categories where id = p_category;
-  v_id := public.create_listing(
-    'market', p_title, coalesce(p_description, ''), p_lat, p_lon, v_slug, null,
-    coalesce(p_photos, '{}'), false, now() + interval '30 days', p_location_mode
-  );
   v_reason := private.market_flag_reason(
     coalesce(p_title, '') || ' ' || coalesce(p_description, '') || ' ' || coalesce(p_wanted_in_exchange, '')
   );
-  perform set_config('nexus.internal', 'on', true);
-  update public.listings
-  set market_type = p_type,
-      market_category_id = p_category,
-      market_price_cents = p_price_cents,
-      item_condition = p_condition,
-      ships = coalesce(p_ships, false),
-      pickup = coalesce(p_pickup, false),
-      attributes = coalesce(p_attributes, '{}'::jsonb),
-      wanted_in_exchange = nullif(btrim(coalesce(p_wanted_in_exchange, '')), ''),
-      review_status = case when v_reason is null then 'published' else 'pending_review' end
-  where id = v_id;
-  perform set_config('nexus.internal', 'off', true);
+  v_exact := st_setsrid(st_makepoint(p_lon, p_lat), 4326)::extensions.geography;
+  -- Inserimento diretto (non create_listing): i campi di Scambia & Vendi sono obbligatori
+  -- fin dalla nascita della riga (vincolo market_fields).
+  insert into public.listings (
+    owner_id, kind, title, description, category, photos, approx_location, location_mode,
+    expires_at, market_type, market_category_id, market_price_cents, item_condition, ships,
+    pickup, attributes, wanted_in_exchange, review_status
+  )
+  values (
+    v_uid, 'market', btrim(p_title), coalesce(p_description, ''), v_slug, coalesce(p_photos, '{}'),
+    public.public_point(v_exact, p_location_mode), p_location_mode, now() + interval '30 days',
+    p_type, p_category, p_price_cents, p_condition, coalesce(p_ships, false),
+    coalesce(p_pickup, false), coalesce(p_attributes, '{}'::jsonb),
+    nullif(btrim(coalesce(p_wanted_in_exchange, '')), ''),
+    case when v_reason is null then 'published' else 'pending_review' end
+  )
+  returning id into v_id;
+  insert into public.listing_locations (listing_id, exact_location) values (v_id, v_exact);
   return jsonb_build_object(
     'id', v_id,
     'review_status', case when v_reason is null then 'published' else 'pending_review' end

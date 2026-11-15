@@ -1253,6 +1253,9 @@ def check_marketplace_phase5() -> None:
           denied(ins) and denied(upd) and slug_locked, f"HTTP {ins[0]}, {upd[0]}")
 
     # M6 · Rinnovo a 30 giorni e chiusura solo dall'autore
+    if sell_id is None:
+        check("M6", "Rinnovo e chiusura (annuncio di prova non pubblicato)", False)
+        return
     sql("select set_config('nexus.internal', 'on', false); "
         f"update public.listings set created_at = now() - interval '29 days', "
         f"expires_at = now() + interval '1 day' where id = '{sell_id}'")
@@ -1270,6 +1273,9 @@ def check_marketplace_phase5() -> None:
     # M7 · Non sulla Mappa (D10) né nella vecchia ricerca generica
     _, d_res = publish(td, p_photos=pd, p_title="Bici da corsa", p_attributes={})
     d_id = (d_res or {}).get("id") if isinstance(d_res, dict) else None
+    if d_id is None:
+        check("M7", "Annuncio di prova di D non pubblicato", False, f"{d_res}")
+        return
     m1 = rpc("map_listings_nearby", {"p_lat": RM[0], "p_lon": RM[1], "p_radius_m": 30000}, tb)[1] or []
     m2 = rpc("nearby_listings", {"p_lat": RM[0], "p_lon": RM[1], "p_radius_m": 30000}, tb)[1] or []
     check("M7", "Gli annunci di Scambia & Vendi non compaiono sulla Mappa",
