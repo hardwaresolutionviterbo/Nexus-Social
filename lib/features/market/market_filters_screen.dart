@@ -315,7 +315,7 @@ class _MarketFiltersScreenState extends State<MarketFiltersScreen> {
             spacing: 8,
             runSpacing: 8,
             children: [
-              for (final PublishedWithin p in PublishedWithin.values)
+              for (final MarketPublished p in MarketPublished.values)
                 ChoiceChip(
                   key: ValueKey<String>('filtro_data_${p.name}'),
                   label: Text(p.label),

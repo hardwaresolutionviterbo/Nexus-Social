@@ -29,7 +29,7 @@ void main() {
         ships: true,
         openToSwap: true,
         cashAdjustment: true,
-        published: PublishedWithin.week,
+        published: MarketPublished.week,
         sort: MarketSort.nearest,
       );
       final Map<String, Object?> sale = q.toParams(MarketSection.sale, offset: 20);
@@ -204,7 +204,7 @@ void main() {
       expect(q.conditions, <ItemCondition>{ItemCondition.fair});
       expect(q.seller, SellerKind.private);
       expect(q.openToSwap, isTrue);
-      expect(q.published, PublishedWithin.week);
+      expect(q.published, MarketPublished.week);
       expect(find.text('Filtri (5)'), findsOneWidget);
       expect(find.byKey(const ValueKey<String>('risultato_c')), findsOneWidget);
       expect(find.byKey(const ValueKey<String>('risultato_a')), findsNothing);

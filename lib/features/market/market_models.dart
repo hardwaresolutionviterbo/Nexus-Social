@@ -523,13 +523,13 @@ enum SellerKind {
 }
 
 /// Data di pubblicazione.
-enum PublishedWithin {
+enum MarketPublished {
   any(null, 'Qualsiasi'),
   day(1, 'Ultime 24 ore'),
   week(7, 'Ultimi 7 giorni'),
   month(30, 'Ultimi 30 giorni');
 
-  const PublishedWithin(this.days, this.label);
+  const MarketPublished(this.days, this.label);
 
   final int? days;
   final String label;
@@ -557,7 +557,7 @@ class MarketQuery {
     this.pickup = false,
     this.openToSwap = false,
     this.cashAdjustment = false,
-    this.published = PublishedWithin.any,
+    this.published = MarketPublished.any,
     this.sort = MarketSort.recent,
   });
 
@@ -587,7 +587,7 @@ class MarketQuery {
   final bool pickup;
   final bool openToSwap;
   final bool cashAdjustment;
-  final PublishedWithin published;
+  final MarketPublished published;
   final MarketSort sort;
 
   bool get hasPoint => origin != SearchOrigin.anywhere && point != null;
@@ -605,7 +605,7 @@ class MarketQuery {
       (pickup ? 1 : 0) +
       (openToSwap ? 1 : 0) +
       (cashAdjustment ? 1 : 0) +
-      (published != PublishedWithin.any ? 1 : 0);
+      (published != MarketPublished.any ? 1 : 0);
 
   /// Parametri della funzione `market_search` (migrazione 0013).
   Map<String, Object?> toParams(MarketSection section, {int offset = 0}) {
@@ -657,7 +657,7 @@ class MarketQuery {
     bool? pickup,
     bool? openToSwap,
     bool? cashAdjustment,
-    PublishedWithin? published,
+    MarketPublished? published,
     MarketSort? sort,
   }) => MarketQuery(
     text: text ?? this.text,
