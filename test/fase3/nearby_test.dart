@@ -137,6 +137,9 @@ void main() {
 
     testWidgets('cambiare il raggio rifà la ricerca con quel raggio', (WidgetTester tester) async {
       final (_, FakeListingRepository repo) = await pumpMap(tester);
+      // Il carattere dei test è più largo di quello vero: si scorre la fila dei raggi.
+      await tester.ensureVisible(find.widgetWithText(ChoiceChip, '30 km'));
+      await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(ChoiceChip, '30 km'));
       await tester.pumpAndSettle();
       expect(repo.nearbyCalls.last.$2.radiusKm, 30);
