@@ -899,6 +899,108 @@ def check_map_listings_phase3() -> None:
           n1[0] >= 400 and n2[0] >= 400, f"HTTP {n1[0]}, {n2[0]}")
 
 
+def check_nearby_phase3() -> None:
+    """K · Annunci vicini, filtri, «Disponibile ora», segnalazione (Fase 3, Blocco 3)."""
+    ta, tb = token(UID_A), token(UID_B)
+    soon = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + 3 * 3600))
+    BO = (44.4949, 11.3426)
+
+    def publish(tok, title, lat, lon, mode="approximate"):
+        s, body = rpc("publish_map_listing", {
+            "p_title": title, "p_details": "", "p_lat": lat, "p_lon": lon,
+            "p_location_mode": mode, "p_expires_at": soon, "p_photos": []}, tok)
+        return body if s == 200 else None
+
+    def nearby(tok, lat=BO[0], lon=BO[1], **kw):
+        params = {"p_lat": lat, "p_lon": lon}
+        params.update(kw)
+        s, body = rpc("map_listings_nearby", params, tok)
+        return s, (body if isinstance(body, list) else [])
+
+    def find(items, lid):
+        return next((x for x in items if x["id"] == lid), None)
+
+    a_here = publish(ta, "Aperitivo in piazza Maggiore?", *BO)
+    a_20km = publish(ta, "Giro in bici sui colli", 44.6710, 11.3426, "precise")
+    a_40km = publish(ta, "Pesca al lago", 44.8550, 11.3426, "precise")
+
+    # K1 · Annunci vicini con il profilo pubblico essenziale, mai il punto salvato
+    s, items = nearby(tb, p_radius_m=10000)
+    seen = find(items, a_here)
+    _, mine = nearby(ta, p_radius_m=10000)
+    own = find(mine, a_here)
+    check("K1", "Annunci vicini: zona pubblica, distanza arrotondata, @username; nessun punto salvato",
+          s == 200 and seen is not None and seen["is_mine"] is False
+          and seen["owner_id"] == UID_A and seen["owner_username"]
+          and seen["category"] == "libera" and seen["distance_band_m"] % 250 == 0
+          and (abs(seen["lat"] - BO[0]) > 1e-4 or abs(seen["lon"] - BO[1]) > 1e-4)
+          and "exact" not in json.dumps(seen) and own is not None and own["is_mine"] is True,
+          f"HTTP {s}")
+
+    # K2 · Raggio: 10 km di partenza, fino a 30 km, mai oltre (Milano non vede Torino)
+    _, r10 = nearby(tb, p_radius_m=10000)
+    _, r30 = nearby(tb, p_radius_m=30000)
+    _, r99 = nearby(tb, p_radius_m=99000)
+    check("K2", "Raggio rispettato: 20 km fuori a 10 km, dentro a 30 km; 40 km mai, anche chiedendo 99 km",
+          find(r10, a_20km) is None and find(r30, a_20km) is not None
+          and find(r30, a_40km) is None and find(r99, a_40km) is None)
+
+    # K3 · Categoria: la scheda Promozioni non mostra gli annunci Liberi (vuota fino alla Fase 6)
+    _, promo = nearby(tb, p_radius_m=30000, p_category="promozione")
+    check("K3", "Scheda Promozioni separata dagli annunci delle persone",
+          find(promo, a_here) is None and find(promo, a_20km) is None)
+
+    # K4 · Orario: pubblicati nell'ultima ora (gli annunci appena creati ci sono)
+    sql("select set_config('nexus.internal', 'on', false); "
+        f"update public.listings set created_at = now() - interval '5 hours' where id = '{a_20km}'")
+    _, last_hour = nearby(tb, p_radius_m=30000, p_published_within_hours=1)
+    _, today = nearby(tb, p_radius_m=30000, p_published_within_hours=24)
+    check("K4", "Filtro orario: nell'ultima ora solo i recenti; in 24 ore anche quello di 5 ore fa",
+          find(last_hour, a_here) is not None and find(last_hour, a_20km) is None
+          and find(today, a_20km) is not None)
+
+    # K5 · «Disponibile ora»: lo imposta solo l'autore; il filtro lo rispetta
+    _, before = nearby(tb, p_radius_m=10000, p_available_now=True)
+    on = rpc("set_my_listing_available", {"p_id": a_here, "p_available": True}, ta)
+    other = rpc("set_my_listing_available", {"p_id": a_here, "p_available": False}, tb)
+    _, after = nearby(tb, p_radius_m=10000, p_available_now=True)
+    mine_list = rows(rpc("my_map_listings", {}, ta))
+    own = next((x for x in mine_list if x["id"] == a_here), None)
+    check("K5", "«Disponibile ora» solo dall'autore e filtrabile",
+          find(before, a_here) is None and on[0] in (200, 204) and other[0] >= 400
+          and find(after, a_here) is not None and own is not None and own["available_now"] is True,
+          f"HTTP {on[0]}, {other[0]}")
+
+    # K6 · Blocchi: spariscono dagli annunci vicini, in entrambe le direzioni
+    b_here = publish(tb, "Partita a scacchi al parco", 44.4960, 11.3440)
+    rpc("block_user", {"p_user_id": UID_A}, tb)
+    _, b_view = nearby(tb, p_radius_m=10000)
+    _, a_view = nearby(ta, p_radius_m=10000)
+    rpc("unblock_user", {"p_user_id": UID_A}, tb)
+    _, b_back = nearby(tb, p_radius_m=10000)
+    check("K6", "Con un blocco gli annunci vicini spariscono per entrambi; dopo lo sblocco tornano",
+          b_here is not None and find(b_view, a_here) is None and find(a_view, b_here) is None
+          and find(b_back, a_here) is not None)
+
+    # K7 · Segnalazione: motivo da elenco, una sola aperta, mai sui propri annunci
+    r1 = rpc("report_listing", {"p_listing": a_here, "p_reason": "spam"}, tb)
+    r2 = rpc("report_listing", {"p_listing": a_here, "p_reason": "spam"}, tb)
+    bad = rpc("report_listing", {"p_listing": a_here, "p_reason": "non mi piace"}, tb)
+    selfrep = rpc("report_listing", {"p_listing": a_here, "p_reason": "spam"}, ta)
+    mine_reports = rows(get(f"/rest/v1/reports?target_id=eq.{a_here}&select=id,reason,status", tb))
+    a_reads = rows(get(f"/rest/v1/reports?target_id=eq.{a_here}&select=id", ta))
+    check("K7", "Segnalazione registrata una volta; motivo libero e autosegnalazione rifiutati; l'autore non la vede",
+          r1[0] in (200, 204) and r2[0] in (200, 204) and bad[0] >= 400 and selfrep[0] >= 400
+          and len(mine_reports) == 1 and mine_reports[0]["status"] == "open" and a_reads == [],
+          f"HTTP {r1[0]}, {r2[0]}, {bad[0]}, {selfrep[0]}, segnalazioni {len(mine_reports)}")
+
+    # K8 · Senza token: nessun annuncio vicino, nessuna segnalazione
+    n1 = rpc("map_listings_nearby", {"p_lat": BO[0], "p_lon": BO[1]})
+    n2 = rpc("report_listing", {"p_listing": a_here, "p_reason": "spam"})
+    check("K8", "Senza token: niente annunci vicini né segnalazioni",
+          (n1[0] >= 400 or n1[1] == []) and n2[0] >= 400, f"HTTP {n1[0]}, {n2[0]}")
+
+
 def main() -> int:
     try:
         ids = setup()
@@ -911,6 +1013,7 @@ def main() -> int:
     check_security_block4()
     check_contacts_block5()
     check_map_listings_phase3()
+    check_nearby_phase3()
     failed = [r for r in results if not r[2]]
     print(f"{'Caso':6} {'Esito':9} Descrizione")
     for case, desc, ok, detail in results:
