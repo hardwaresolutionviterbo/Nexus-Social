@@ -28,3 +28,6 @@ Ramo `fase5/blocco2` (parte da `fase5/blocco1`). Nessuna modifica a `main` né a
   Scambia & Vendi (stesso codice, nessun cambiamento visibile sulla Mappa).
 - Raggio massimo 200 km oppure «Ovunque»; la posizione non viene mai salvata.
 - Aggiunte 2 schermate all'elenco chiuso del controllo F10 (filtri e scheda).
+
+## Approvazione
+- 16/11/2026: Blocco 2 approvato dal titolare.
