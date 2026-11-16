@@ -1029,7 +1029,10 @@ def check_interactions_phase3() -> None:
     j_c = rpc("join_listing", {"p_listing": ev}, tc)
     j_a = rpc("join_listing", {"p_listing": ev}, ta)
     full = social(tb)
-    near_items = rpc("map_listings_nearby", {"p_lat": PD[0], "p_lon": PD[1]}, tc)[1] or []
+    near_resp = rpc("map_listings_nearby", {"p_lat": PD[0], "p_lon": PD[1]}, tc)
+    if near_resp[0] != 200:
+        print(f"map_listings_nearby (C): HTTP {near_resp[0]} {str(near_resp[1])[:300]}")
+    near_items = rows(near_resp)
     seen = next((x for x in near_items if x["id"] == ev), {})
     rpc("leave_listing", {"p_listing": ev}, tb)
     after = social(tc)
