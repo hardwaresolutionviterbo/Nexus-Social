@@ -24,3 +24,6 @@ Ramo `fase5/blocco5` (parte da `fase5/blocco4`). Nessuna modifica a `main` né a
 ## Da dichiarare al titolare
 - Il pannello per gestire le categorie non c'è ancora: le funzioni sono pronte per il pannello
   amministratori previsto più avanti nel PDF.
+
+## Approvazione
+- 16/11/2026: Blocco 5 approvato dal titolare (menu «⋯» con icone e spiegazioni); autorizzata l'unione della Fase 5 in main.
