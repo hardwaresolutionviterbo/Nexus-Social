@@ -385,7 +385,49 @@ class _CommentTile extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(c.author.publicName, style: theme.textTheme.labelLarge),
+                      Row(
+                        children: [
+                          Expanded(child: Text(c.author.publicName, style: theme.textTheme.labelLarge)),
+                          if (menu)
+                            SizedBox(
+                              width: 28,
+                              height: 24,
+                              child: PopupMenuButton<String>(
+                        key: ValueKey<String>('menu_commento_${c.id}'),
+                        tooltip: 'Altre azioni',
+                        padding: EdgeInsets.zero,
+                        icon: const Icon(Icons.more_horiz_rounded, size: 20),
+                        onSelected: (String v) {
+                          if (v == 'modifica') {
+                            onEdit?.call();
+                          } else if (v == 'nascondi') {
+                            onHide?.call();
+                          } else {
+                            onReport?.call();
+                          }
+                        },
+                        itemBuilder: (_) => [
+                          if (onEdit != null)
+                            const PopupMenuItem<String>(
+                              key: ValueKey<String>('azione_modifica'),
+                              value: 'modifica',
+                              child: Text('Modifica'),
+                            ),
+                          if (onHide != null)
+                            PopupMenuItem<String>(
+                              key: const ValueKey<String>('azione_nascondi'),
+                              value: 'nascondi',
+                              child: Text(c.hidden ? 'Mostra di nuovo' : 'Nascondi'),
+                            ),
+                          if (onReport != null)
+                            const PopupMenuItem<String>(
+                              key: ValueKey<String>('azione_segnala'),
+                              value: 'segnala',
+                              child: Text('Segnala'),
+                            ),
+                            ),
+                        ],
+                      ),
                       const SizedBox(height: 2),
                       if (c.textHidden)
                         Text(
@@ -446,40 +488,7 @@ class _CommentTile extends StatelessWidget {
                         ),
                         child: const Text('Elimina'),
                       ),
-                    if (menu)
-                      PopupMenuButton<String>(
-                        key: ValueKey<String>('menu_commento_${c.id}'),
-                        tooltip: 'Altre azioni',
-                        icon: const Icon(Icons.more_horiz_rounded, size: 20),
-                        onSelected: (String v) {
-                          if (v == 'modifica') {
-                            onEdit?.call();
-                          } else if (v == 'nascondi') {
-                            onHide?.call();
-                          } else {
-                            onReport?.call();
-                          }
-                        },
-                        itemBuilder: (_) => [
-                          if (onEdit != null)
-                            const PopupMenuItem<String>(
-                              key: ValueKey<String>('azione_modifica'),
-                              value: 'modifica',
-                              child: Text('Modifica'),
-                            ),
-                          if (onHide != null)
-                            PopupMenuItem<String>(
-                              key: const ValueKey<String>('azione_nascondi'),
-                              value: 'nascondi',
-                              child: Text(c.hidden ? 'Mostra di nuovo' : 'Nascondi'),
-                            ),
-                          if (onReport != null)
-                            const PopupMenuItem<String>(
-                              key: ValueKey<String>('azione_segnala'),
-                              value: 'segnala',
-                              child: Text('Segnala'),
-                            ),
-                        ],
+                  ],
                       ),
                   ],
                 ),
