@@ -1697,6 +1697,8 @@ def check_deals_feedback_phase5() -> None:
           and not_mine[0] >= 400 and s == 200 and twice[0] >= 400
           and any(n.get("deal_id") == d1 for n in kinds(tb, "deal_confirm")),
           f"{cand == [UID_B]}, {b_cand[0]}, {stranger[0]}, {on_swap[0]}, {not_mine[0]}, {s}, {twice[0]}")
+    if s != 200 or not isinstance(d1, str):
+        return
 
     # P2 · Feedback solo dopo la conclusione; la conferma dell'altra parte chiude l'annuncio
     early = rpc("leave_feedback", {"p_deal": d1, "p_stars": 5, "p_comment": ""}, ta)
@@ -1732,8 +1734,10 @@ def check_deals_feedback_phase5() -> None:
 
     # P4 · «Non è avvenuto» e annullamento
     _, d2 = rpc("mark_listing_concluded", {"p_listing": tent, "p_other": UID_B}, ta)
+    d2 = d2 if isinstance(d2, str) else None
     no = rpc("answer_deal", {"p_deal": d2, "p_confirm": False}, tb)
     s3, d3 = rpc("mark_listing_concluded", {"p_listing": tent, "p_other": UID_B}, ta)
+    d3 = d3 if isinstance(d3, str) else None
     cancel_b = rpc("cancel_deal", {"p_deal": d3}, tb)
     cancel_a = rpc("cancel_deal", {"p_deal": d3}, ta)
     late = rpc("answer_deal", {"p_deal": d3, "p_confirm": True}, tb)
