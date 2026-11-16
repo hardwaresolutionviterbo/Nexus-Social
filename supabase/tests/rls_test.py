@@ -1653,6 +1653,125 @@ def check_swap_proposals_phase5() -> None:
           len(d_items) == 1 and s31 >= 400, f"{len(d_items)}, HTTP {s31}")
 
 
+def check_deals_feedback_phase5() -> None:
+    """P · Scambia & Vendi, Blocco 4: conclusione e feedback (Fase 5). Utenti A, B, D."""
+    ta, tb, td = token(UID_A), token(UID_B), token(UID_D)
+    for t, other in ((ta, UID_B), (tb, UID_A), (ta, UID_D), (td, UID_A), (tb, UID_D), (td, UID_B)):
+        rpc("unblock_user", {"p_user_id": other}, t)
+    mine_a = {x["title"]: x for x in rows(rpc("my_market_listings", {}, ta))}
+    lamp = mine_a.get("Lampada da tavolo", {}).get("id")
+    tent = mine_a.get("Tenda da campeggio", {}).get("id")
+    console = mine_a.get("Console PS4 con giochi", {}).get("id")
+    accepted = [p for p in rows(rpc("my_swap_proposals", {}, ta))
+                if p.get("status") == "accepted" and p.get("target_id") == console]
+    p2 = accepted[0]["id"] if accepted else None
+    bike = next((i["id"] for i in (accepted[0]["items"] if accepted else [])
+                 if i["title"] == "Bici da città"), None)
+    check("P0", "Annunci e proposta accettata del Blocco 3 disponibili",
+          None not in (lamp, tent, console, p2, bike), f"{[lamp, tent, console, p2, bike]}")
+    if None in (lamp, tent, console, p2, bike):
+        return
+    # Le 30 proposte finte di O9 (D su «Lampada») non devono fare di D un interlocutore.
+    sql(f"delete from public.swap_proposals where requester_id = '{UID_D}' and target_listing_id = '{lamp}'")
+    rpc("add_listing_comment", {"p_listing": lamp, "p_body": "Mi interessa, è ancora disponibile?"}, tb)
+
+    def deals(tok):
+        return {d["id"]: d for d in rows(rpc("my_deals", {}, tok))}
+
+    def kinds(tok, kind):
+        return [n for n in rows(rpc("my_notifications", {}, tok)) if n.get("kind") == kind]
+
+    def status_of(listing):
+        return sql(f"select status from public.listings where id = '{listing}'")
+
+    # P1 · L'autore indica la persona tra chi ha commentato o proposto
+    cand = [c["id"] for c in rows(rpc("deal_candidates", {"p_listing": lamp}, ta))]
+    b_cand = rpc("deal_candidates", {"p_listing": lamp}, tb)
+    stranger = rpc("mark_listing_concluded", {"p_listing": lamp, "p_other": UID_D}, ta)
+    on_swap = rpc("mark_listing_concluded", {"p_listing": console, "p_other": UID_B}, ta)
+    not_mine = rpc("mark_listing_concluded", {"p_listing": lamp, "p_other": UID_B}, tb)
+    s, d1 = rpc("mark_listing_concluded", {"p_listing": lamp, "p_other": UID_B}, ta)
+    twice = rpc("mark_listing_concluded", {"p_listing": lamp, "p_other": UID_B}, ta)
+    check("P1", "Conclusione indicata dall'autore solo verso chi ha commentato o proposto",
+          cand == [UID_B] and b_cand[0] >= 400 and stranger[0] >= 400 and on_swap[0] >= 400
+          and not_mine[0] >= 400 and s == 200 and twice[0] >= 400
+          and any(n.get("deal_id") == d1 for n in kinds(tb, "deal_confirm")),
+          f"{cand == [UID_B]}, {b_cand[0]}, {stranger[0]}, {on_swap[0]}, {not_mine[0]}, {s}, {twice[0]}")
+
+    # P2 · Feedback solo dopo la conclusione; la conferma dell'altra parte chiude l'annuncio
+    early = rpc("leave_feedback", {"p_deal": d1, "p_stars": 5, "p_comment": ""}, ta)
+    owner_answer = rpc("answer_deal", {"p_deal": d1, "p_confirm": True}, ta)
+    ok = rpc("answer_deal", {"p_deal": d1, "p_confirm": True}, tb)
+    again = rpc("answer_deal", {"p_deal": d1, "p_confirm": False}, tb)
+    d = deals(ta).get(d1, {})
+    check("P2", "Prima della conferma nessun feedback; confermata: conclusa e annuncio chiuso",
+          early[0] >= 400 and owner_answer[0] >= 400 and ok[1] == "completed" and again[0] >= 400
+          and d.get("completed") is True and status_of(lamp) == "completed"
+          and any(n.get("deal_id") == d1 for n in kinds(ta, "deal_completed")),
+          f"{early[0]}, {owner_answer[0]}, {ok}, {again[0]}, {d.get('completed')}, {status_of(lamp)}")
+
+    # P3 · Un feedback a testa, 1-5 stelle, non modificabile; media e elenco
+    f_a = rpc("leave_feedback", {"p_deal": d1, "p_stars": 5, "p_comment": "Puntuale e gentile"}, ta)
+    f_a2 = rpc("leave_feedback", {"p_deal": d1, "p_stars": 1, "p_comment": "ripensamento"}, ta)
+    f_bad = rpc("leave_feedback", {"p_deal": d1, "p_stars": 6, "p_comment": ""}, tb)
+    f_d = rpc("leave_feedback", {"p_deal": d1, "p_stars": 1, "p_comment": ""}, td)
+    f_b = rpc("leave_feedback", {"p_deal": d1, "p_stars": 4, "p_comment": ""}, tb)
+    sum_b = (rows(rpc("feedback_summary", {"p_user": UID_B}, td)) or [{}])[0]
+    sum_a = (rows(rpc("feedback_summary", {"p_user": UID_A}, td)) or [{}])[0]
+    lst = rows(rpc("feedback_list", {"p_user": UID_B}, td))
+    upd = request("PATCH", f"/rest/v1/market_feedback?deal_id=eq.{d1}", jwt=ta, body={"stars": 1},
+                  prefer="return=representation")
+    check("P3", "Feedback a testa dopo la conclusione; media e elenco; nessuna modifica",
+          f_a[0] == 200 and f_a2[0] >= 400 and f_bad[0] >= 400 and f_d[0] >= 400 and f_b[0] == 200
+          and float(sum_b.get("average") or 0) == 5.0 and sum_b.get("count") == 1
+          and float(sum_a.get("average") or 0) == 4.0 and sum_b.get("completed_deals") == 1
+          and len(lst) == 1 and lst[0].get("author_username") == "utente_a"
+          and lst[0].get("comment") == "Puntuale e gentile" and denied(upd)
+          and any(n.get("deal_id") == d1 for n in kinds(tb, "feedback_received")),
+          f"{f_a[0]}, {f_a2[0]}, {f_bad[0]}, {f_d[0]}, {f_b[0]}, {sum_b}, {sum_a}, {len(lst)}")
+
+    # P4 · «Non è avvenuto» e annullamento
+    _, d2 = rpc("mark_listing_concluded", {"p_listing": tent, "p_other": UID_B}, ta)
+    no = rpc("answer_deal", {"p_deal": d2, "p_confirm": False}, tb)
+    s3, d3 = rpc("mark_listing_concluded", {"p_listing": tent, "p_other": UID_B}, ta)
+    cancel_b = rpc("cancel_deal", {"p_deal": d3}, tb)
+    cancel_a = rpc("cancel_deal", {"p_deal": d3}, ta)
+    late = rpc("answer_deal", {"p_deal": d3, "p_confirm": True}, tb)
+    no_fb = rpc("leave_feedback", {"p_deal": d2, "p_stars": 3, "p_comment": ""}, ta)
+    check("P4", "«Non è avvenuto» riapre; l'autore annulla finché l'altro non risponde",
+          no[1] == "declined" and s3 == 200 and cancel_b[0] >= 400 and cancel_a[0] in (200, 204)
+          and late[0] >= 400 and no_fb[0] >= 400 and status_of(tent) == "active",
+          f"{no}, {s3}, {cancel_b[0]}, {cancel_a[0]}, {late[0]}, {no_fb[0]}, {status_of(tent)}")
+
+    # P5 · Scambio: conclusione confermata da entrambi
+    w = rpc("confirm_swap_concluded", {"p_proposal": p2}, ta)
+    w2 = rpc("confirm_swap_concluded", {"p_proposal": p2}, ta)
+    wd = rpc("confirm_swap_concluded", {"p_proposal": p2}, td)
+    c = rpc("confirm_swap_concluded", {"p_proposal": p2}, tb)
+    prop = next((x for x in rows(rpc("my_swap_proposals", {}, tb)) if x["id"] == p2), {})
+    swap_deal = next((x for x in deals(tb).values() if x.get("proposal_id") == p2), {})
+    fb_swap = rpc("leave_feedback", {"p_deal": swap_deal.get("id"), "p_stars": 5, "p_comment": ""}, tb)
+    check("P5", "Scambio: «Completata» solo con la conferma di entrambi; annunci chiusi",
+          w[1] == "waiting" and w2[0] >= 400 and wd[0] >= 400 and c[1] == "completed"
+          and prop.get("status") == "completed" and status_of(console) == "completed"
+          and status_of(bike) == "completed" and fb_swap[0] == 200
+          and any(n.get("proposal_id") == p2 for n in kinds(tb, "deal_confirm")),
+          f"{w}, {w2[0]}, {wd[0]}, {c}, {prop.get('status')}, {status_of(console)}, {fb_swap[0]}")
+
+    # P6 · Blocchi: i feedback e le conclusioni tra persone bloccate non si vedono
+    rpc("block_user", {"p_user_id": UID_B}, ta)
+    hidden_sum = (rows(rpc("feedback_summary", {"p_user": UID_B}, ta)) or [{}])[0]
+    hidden_list = rows(rpc("feedback_list", {"p_user": UID_B}, ta))
+    hidden_deals = d1 in deals(ta)
+    d_sees = (rows(rpc("feedback_summary", {"p_user": UID_B}, td)) or [{}])[0]
+    rpc("unblock_user", {"p_user_id": UID_B}, ta)
+    direct = get("/rest/v1/market_deals?select=id", ta)
+    check("P6", "Con un blocco feedback e conclusioni spariscono; tabelle mai accessibili direttamente",
+          (hidden_sum.get("count") or 0) == 0 and hidden_list == [] and not hidden_deals
+          and d_sees.get("count") == 1 and denied(direct),
+          f"{hidden_sum}, {len(hidden_list)}, {hidden_deals}, {d_sees}, {direct[0]}")
+
+
 def main() -> int:
     try:
         ids = setup()
@@ -1670,6 +1789,7 @@ def main() -> int:
     check_marketplace_phase5()
     check_marketplace_search_phase5()
     check_swap_proposals_phase5()
+    check_deals_feedback_phase5()
     failed = [r for r in results if not r[2]]
     print(f"{'Caso':6} {'Esito':9} Descrizione")
     for case, desc, ok, detail in results:
