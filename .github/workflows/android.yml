@@ -219,9 +219,10 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          # Collegamento al server: si accende dalla variabile del repository
-          # SERVER_LINK_ENABLED=true (Settings → Variables), solo dopo le migrazioni.
-          SERVER_LINK_ENABLED: ${{ vars.SERVER_LINK_ENABLED == 'true' && 'true' || 'false' }}
+          # Collegamento al server: acceso (migrazioni applicate il 16/11/2026 e
+          # Firebase aggiunto come accesso esterno su Supabase). Per spegnerlo
+          # senza toccare il codice: variabile del repository SERVER_LINK_ENABLED=false.
+          SERVER_LINK_ENABLED: ${{ vars.SERVER_LINK_ENABLED == 'false' && 'false' || 'true' }}
         run: |
           if [ -f android/app/google-services.json ]; then
             FIREBASE_ENABLED=true
