@@ -352,7 +352,15 @@ class _InfoChip extends StatelessWidget {
 
 /// Segnalazione di un annuncio: motivo da un elenco chiuso e dettagli facoltativi.
 class ReportListingForm extends StatefulWidget {
-  const ReportListingForm({super.key, required this.listingId, required this.report});
+  const ReportListingForm({
+    super.key,
+    required this.listingId,
+    required this.report,
+    this.title = 'Segnala annuncio',
+  });
+
+  /// «Segnala annuncio» o «Segnala commento» (Fase 5, Blocco 5).
+  final String title;
 
   final String listingId;
 
@@ -403,7 +411,7 @@ class _ReportListingFormState extends State<ReportListingForm> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Segnala annuncio', style: theme.textTheme.titleLarge),
+          Text(widget.title, style: theme.textTheme.titleLarge),
           const SizedBox(height: 4),
           Text(
             'La segnalazione arriva alla moderazione. L\'autore non sa chi l\'ha inviata.',

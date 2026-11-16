@@ -1,3 +1,4 @@
+import 'package:nexus_social/features/map/listing_models.dart' show ReportReason;
 import 'package:nexus_social/features/map/listing_repository.dart';
 import 'package:nexus_social/features/map/social_models.dart';
 import 'package:nexus_social/features/map/social_repository.dart';
@@ -106,6 +107,26 @@ class FakeSocialRepository implements SocialRepository {
   }
 
   @override
+  Future<void> editComment(String commentId, String body) async {
+    calls.add('edit:$commentId:$body');
+    _maybeFail();
+    final int i = items.indexWhere((ListingComment c) => c.id == commentId);
+    items[i] = items[i].copyWith(body: body, edited: true);
+  }
+
+  @override
+  Future<void> setCommentHidden(String commentId, bool hidden) async {
+    calls.add('hidden:$commentId:$hidden');
+    final int i = items.indexWhere((ListingComment c) => c.id == commentId);
+    items[i] = items[i].copyWith(hidden: hidden);
+  }
+
+  @override
+  Future<void> reportComment(String commentId, ReportReason reason, {String? details}) async {
+    calls.add('reportComment:$commentId:${reason.serverValue}');
+  }
+
+  @override
   Future<void> setMuted(String listingId, bool muted) async {
     calls.add('muted:$muted');
     state = state.copyWith(muted: muted);
@@ -134,6 +155,10 @@ ListingComment commentBy(
   int minute = 0,
   int likes = 0,
   bool canDelete = false,
+  bool isMine = false,
+  bool edited = false,
+  bool hidden = false,
+  bool canHide = false,
 }) => ListingComment(
   id: id,
   parentId: parentId,
@@ -142,6 +167,10 @@ ListingComment commentBy(
   author: PersonRef(id: 'u-$id', username: name.toLowerCase(), publicName: name),
   likes: likes,
   canDelete: canDelete,
+  isMine: isMine,
+  edited: edited,
+  hidden: hidden,
+  canHide: canHide,
 );
 
 AppNotification notificationOf(

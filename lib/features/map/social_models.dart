@@ -153,6 +153,9 @@ class ListingComment {
     this.likedByMe = false,
     this.isMine = false,
     this.canDelete = false,
+    this.edited = false,
+    this.hidden = false,
+    this.canHide = false,
   });
 
   factory ListingComment.fromJson(Map<String, dynamic> json) => ListingComment(
@@ -170,6 +173,9 @@ class ListingComment {
     likedByMe: json['liked_by_me'] as bool? ?? false,
     isMine: json['is_mine'] as bool? ?? false,
     canDelete: json['can_delete'] as bool? ?? false,
+    edited: json['edited'] as bool? ?? false,
+    hidden: json['hidden'] as bool? ?? false,
+    canHide: json['can_hide'] as bool? ?? false,
   );
 
   final String id;
@@ -183,6 +189,35 @@ class ListingComment {
   final bool likedByMe;
   final bool isMine;
   final bool canDelete;
+
+  /// Modificato dopo la pubblicazione (Fase 5, Blocco 5).
+  final bool edited;
+
+  /// Nascosto dall'autore dell'annuncio o dalla moderazione: il testo arriva solo a chi
+  /// l'ha scritto, all'autore dell'annuncio e alla moderazione.
+  final bool hidden;
+
+  /// Chi guarda può nascondere o rimostrare (autore dell'annuncio o moderazione).
+  final bool canHide;
+
+  /// Nascosto e senza testo per chi guarda.
+  bool get textHidden => hidden && body.isEmpty;
+
+  ListingComment copyWith({String? body, bool? edited, bool? hidden, int? likes, bool? likedByMe}) =>
+      ListingComment(
+        id: id,
+        parentId: parentId,
+        body: body ?? this.body,
+        createdAt: createdAt,
+        author: author,
+        likes: likes ?? this.likes,
+        likedByMe: likedByMe ?? this.likedByMe,
+        isMine: isMine,
+        canDelete: canDelete,
+        edited: edited ?? this.edited,
+        hidden: hidden ?? this.hidden,
+        canHide: canHide,
+      );
 }
 
 /// Commenti principali seguiti dalle loro risposte, in ordine di tempo (come Facebook).

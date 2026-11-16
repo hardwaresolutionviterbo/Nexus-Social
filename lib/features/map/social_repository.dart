@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException, SupabaseClient;
 
+import 'listing_models.dart' show ReportReason;
 import 'listing_repository.dart';
 import 'social_models.dart';
 
@@ -23,6 +24,14 @@ abstract class SocialRepository {
   Future<void> deleteComment(String commentId);
 
   Future<void> likeComment(String commentId, bool like);
+
+  /// Modifica del proprio commento (Fase 5, Blocco 5).
+  Future<void> editComment(String commentId, String body);
+
+  /// Nascondi o rimostra: autore dell'annuncio o moderazione.
+  Future<void> setCommentHidden(String commentId, bool hidden);
+
+  Future<void> reportComment(String commentId, ReportReason reason, {String? details});
 
   /// «Disattiva notifiche per questo post».
   Future<void> setMuted(String listingId, bool muted);
@@ -130,6 +139,25 @@ class SupabaseSocialRepository implements SocialRepository {
   @override
   Future<void> likeComment(String commentId, bool like) async {
     await _rpc('set_comment_like', <String, Object?>{'p_comment': commentId, 'p_like': like});
+  }
+
+  @override
+  Future<void> editComment(String commentId, String body) async {
+    await _rpc('edit_my_comment', <String, Object?>{'p_comment': commentId, 'p_body': body.trim()});
+  }
+
+  @override
+  Future<void> setCommentHidden(String commentId, bool hidden) async {
+    await _rpc('set_comment_hidden', <String, Object?>{'p_comment': commentId, 'p_hidden': hidden});
+  }
+
+  @override
+  Future<void> reportComment(String commentId, ReportReason reason, {String? details}) async {
+    await _rpc('report_comment', <String, Object?>{
+      'p_comment': commentId,
+      'p_reason': reason.serverValue,
+      'p_details': details?.trim().isEmpty ?? true ? null : details!.trim(),
+    });
   }
 
   @override

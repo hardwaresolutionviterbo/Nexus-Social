@@ -1,4 +1,4 @@
-// Anteprime per il titolare (Fase 5, Blocchi 1-4): Scambia & Vendi con dati finti.
+// Anteprime per il titolare (Fase 5, Blocchi 1-5): Scambia & Vendi con dati finti.
 // Non fa parte dei test di regressione: lo esegue solo il workflow «Anteprime schermate».
 import 'dart:io';
 
@@ -7,7 +7,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:material_ui/material_ui.dart';
 import 'package:nexus_social/core/theme/app_theme.dart';
+import 'package:nexus_social/features/map/comments_screen.dart';
 import 'package:nexus_social/features/map/map_location.dart';
+import 'package:nexus_social/features/map/social_models.dart';
 import 'package:nexus_social/features/market/market_catalog_data.dart';
 import 'package:nexus_social/features/market/market_listing_screen.dart';
 import 'package:nexus_social/features/market/market_models.dart';
@@ -20,6 +22,7 @@ import 'package:nexus_social/features/market/swap_proposals_screen.dart';
 
 import '../../test/support/fake_map.dart';
 import '../../test/support/fake_market.dart';
+import '../../test/support/fake_social.dart';
 
 Future<void> _loadFonts() async {
   final String root = Platform.environment['FLUTTER_ROOT'] ?? '';
@@ -372,6 +375,34 @@ void main() {
         name: 'Luca R.',
         summary: const FeedbackSummary(average: 4.7, count: 3, completedDeals: 4),
       ),
+    );
+  });
+
+  // ---------------------------------------------------------------- Blocco 5
+  testWidgets('mercato 15 · commenti: modificato, nascosto, menu', (tester) async {
+    final FakeSocialRepository social = FakeSocialRepository()
+      ..items.addAll(<ListingComment>[
+        commentBy('a', 'Giulia B.', 'È ancora disponibile? Potrei passare sabato.', likes: 2, canHide: true,
+            canDelete: true),
+        commentBy('b', 'Io P.', 'Sì, sabato mattina va benissimo!', parentId: 'a', minute: 4, isMine: true,
+            canDelete: true, edited: true, canHide: true),
+        commentBy('c', 'Marco T.', 'Pagami fuori dall\'app con una ricarica', minute: 8, hidden: true,
+            canHide: true, canDelete: true),
+        commentBy('d', 'Sara L.', 'Ci sono anche i giochi originali?', minute: 12, canHide: true, canDelete: true),
+      ]);
+    await shoot(
+      tester,
+      'mercato_15_commenti',
+      CommentsScreen(
+        listingId: 'x',
+        listingTitle: 'Console PS4 con giochi',
+        repository: social,
+        now: () => DateTime(2026, 11, 15, 10, 30),
+      ),
+      before: () async {
+        await tester.tap(find.byKey(const ValueKey<String>('menu_commento_d')));
+        await tester.pumpAndSettle();
+      },
     );
   });
 }

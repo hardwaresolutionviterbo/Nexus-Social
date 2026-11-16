@@ -3,12 +3,15 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/theme/app_theme.dart';
 import 'listing_models.dart' show publishedLabel;
 import 'listing_repository.dart';
+import 'listing_sheets.dart' show ReportListingForm;
 import 'social_models.dart';
 import 'social_repository.dart';
 
 /// Commenti di un annuncio, come Facebook: commenti principali con le risposte sotto,
 /// «Mi piace» e «Rispondi» su ogni commento, «Elimina» per i propri (e per l'autore
 /// dell'annuncio su tutti). Chi commenta segue il post e riceve gli avvisi successivi.
+/// Fase 5, Blocco 5 (D8): «Modifica» per i propri con l'indicazione «modificato»,
+/// «Nascondi» per l'autore dell'annuncio e la moderazione, «Segnala» per gli altri.
 class CommentsScreen extends StatefulWidget {
   const CommentsScreen({
     super.key,
@@ -37,6 +40,7 @@ class _CommentsScreenState extends State<CommentsScreen> {
   List<ListingComment>? _items;
   String? _error;
   ListingComment? _replyTo;
+  ListingComment? _editing;
   bool _sending = false;
 
   @override
@@ -71,9 +75,18 @@ class _CommentsScreenState extends State<CommentsScreen> {
     if (body.isEmpty || _sending) return;
     setState(() => _sending = true);
     try {
-      await widget.repository.addComment(widget.listingId, body, parentId: _replyTo?.id);
+      final ListingComment? editing = _editing;
+      if (editing != null) {
+        await widget.repository.editComment(editing.id, body);
+      } else {
+        await widget.repository.addComment(widget.listingId, body, parentId: _replyTo?.id);
+      }
       _text.clear();
-      setState(() => _replyTo = null);
+      setState(() {
+        _replyTo = null;
+        _editing = null;
+        _error = null;
+      });
       await _load();
     } on ListingFailure catch (f) {
       if (mounted) setState(() => _error = f.message);
@@ -113,9 +126,69 @@ class _CommentsScreenState extends State<CommentsScreen> {
   }
 
   void _reply(ListingComment c) {
-    setState(() => _replyTo = c);
+    setState(() {
+      _replyTo = c;
+      _editing = null;
+    });
     _focus.requestFocus();
   }
+
+  void _edit(ListingComment c) {
+    setState(() {
+      _editing = c;
+      _replyTo = null;
+      _text.text = c.body;
+    });
+    _focus.requestFocus();
+  }
+
+  Future<void> _setHidden(ListingComment c, bool hidden) async {
+    try {
+      await widget.repository.setCommentHidden(c.id, hidden);
+      await _load();
+      _toast(hidden ? 'Commento nascosto.' : 'Commento di nuovo visibile.');
+    } on ListingFailure catch (f) {
+      if (mounted) setState(() => _error = f.message);
+    }
+  }
+
+  Future<void> _report(ListingComment c) async {
+    final bool? sent = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (BuildContext ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(ctx).bottom),
+        child: ReportListingForm(
+          listingId: c.id,
+          report: widget.repository.reportComment,
+          title: 'Segnala commento',
+        ),
+      ),
+    );
+    if (sent ?? false) _toast('Grazie: la segnalazione è stata inviata alla moderazione.');
+  }
+
+  void _toast(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  _CommentTile _tile(ListingComment c, DateTime now) => _CommentTile(
+    comment: c,
+    now: now,
+    highlighted: c.id == widget.highlightCommentId,
+    onLike: c.hidden ? null : () => _toggleLike(c),
+    // Si risponde sempre nel filo del commento principale.
+    onReply: c.hidden ? null : () => _reply(c),
+    onDelete: c.canDelete ? () => _delete(c) : null,
+    onEdit: c.isMine && !c.hidden ? () => _edit(c) : null,
+    onHide: c.canHide ? () => _setHidden(c, !c.hidden) : null,
+    onReport: c.isMine ? null : () => _report(c),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -156,26 +229,11 @@ class _CommentsScreenState extends State<CommentsScreen> {
                     children: [
                       for (final (ListingComment root, List<ListingComment> replies)
                           in threadComments(items)) ...[
-                        _CommentTile(
-                          comment: root,
-                          now: now,
-                          highlighted: root.id == widget.highlightCommentId,
-                          onLike: () => _toggleLike(root),
-                          onReply: () => _reply(root),
-                          onDelete: root.canDelete ? () => _delete(root) : null,
-                        ),
+                        _tile(root, now),
                         for (final ListingComment r in replies)
                           Padding(
                             padding: const EdgeInsets.only(left: 44),
-                            child: _CommentTile(
-                              comment: r,
-                              now: now,
-                              highlighted: r.id == widget.highlightCommentId,
-                              onLike: () => _toggleLike(r),
-                              // Si risponde sempre nel filo del commento principale.
-                              onReply: () => _reply(r),
-                              onDelete: r.canDelete ? () => _delete(r) : null,
-                            ),
+                            child: _tile(r, now),
                           ),
                       ],
                     ],
@@ -191,6 +249,27 @@ class _CommentsScreenState extends State<CommentsScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    if (_editing != null)
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Modifica il tuo commento',
+                              key: const ValueKey<String>('modifica_in_corso'),
+                              style: theme.textTheme.labelMedium,
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'Annulla modifica',
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => setState(() {
+                              _editing = null;
+                              _text.clear();
+                            }),
+                            icon: const Icon(Icons.close_rounded, size: 18),
+                          ),
+                        ],
+                      ),
                     if (_replyTo != null)
                       Row(
                         children: [
@@ -253,21 +332,31 @@ class _CommentTile extends StatelessWidget {
     required this.onLike,
     required this.onReply,
     this.onDelete,
+    this.onEdit,
+    this.onHide,
+    this.onReport,
   });
 
   final ListingComment comment;
   final DateTime now;
   final bool highlighted;
-  final VoidCallback onLike;
-  final VoidCallback onReply;
+
+  /// null sui commenti nascosti: niente Mi piace né risposte.
+  final VoidCallback? onLike;
+  final VoidCallback? onReply;
   final VoidCallback? onDelete;
+  final VoidCallback? onEdit;
+  final VoidCallback? onHide;
+  final VoidCallback? onReport;
 
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     final ColorScheme scheme = theme.colorScheme;
     final ListingComment c = comment;
-    final String when = publishedLabel(c.createdAt, now).replaceFirst('pubblicato ', '');
+    final String when = publishedLabel(c.createdAt, now).replaceFirst('pubblicato ', '') +
+        (c.edited ? ' · modificato' : '');
+    final bool menu = onEdit != null || onHide != null || onReport != null;
     return Padding(
       padding: const EdgeInsets.only(top: 10),
       child: Row(
@@ -298,7 +387,27 @@ class _CommentTile extends StatelessWidget {
                     children: [
                       Text(c.author.publicName, style: theme.textTheme.labelLarge),
                       const SizedBox(height: 2),
-                      Text(c.body, style: theme.textTheme.bodyMedium),
+                      if (c.textHidden)
+                        Text(
+                          'Commento nascosto dall\'autore dell\'annuncio',
+                          key: ValueKey<String>('nascosto_${c.id}'),
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontStyle: FontStyle.italic,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        )
+                      else ...[
+                        Text(c.body, style: theme.textTheme.bodyMedium),
+                        if (c.hidden)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              'Nascosto: lo vedono solo chi l\'ha scritto e chi gestisce l\'annuncio',
+                              key: ValueKey<String>('nascosto_${c.id}'),
+                              style: theme.textTheme.labelSmall?.copyWith(color: scheme.error),
+                            ),
+                          ),
+                      ],
                     ],
                   ),
                 ),
@@ -310,6 +419,7 @@ class _CommentTile extends StatelessWidget {
                       padding: const EdgeInsets.only(left: 8, right: 4),
                       child: Text(when, style: theme.textTheme.labelSmall),
                     ),
+                    if (onLike != null)
                     TextButton(
                       onPressed: onLike,
                       style: TextButton.styleFrom(
@@ -318,6 +428,7 @@ class _CommentTile extends StatelessWidget {
                       ),
                       child: Text(c.likes > 0 ? 'Mi piace · ${c.likes}' : 'Mi piace'),
                     ),
+                    if (onReply != null)
                     TextButton(
                       onPressed: onReply,
                       style: TextButton.styleFrom(
@@ -334,6 +445,41 @@ class _CommentTile extends StatelessWidget {
                           foregroundColor: scheme.error,
                         ),
                         child: const Text('Elimina'),
+                      ),
+                    if (menu)
+                      PopupMenuButton<String>(
+                        key: ValueKey<String>('menu_commento_${c.id}'),
+                        tooltip: 'Altre azioni',
+                        icon: const Icon(Icons.more_horiz_rounded, size: 20),
+                        onSelected: (String v) {
+                          if (v == 'modifica') {
+                            onEdit?.call();
+                          } else if (v == 'nascondi') {
+                            onHide?.call();
+                          } else {
+                            onReport?.call();
+                          }
+                        },
+                        itemBuilder: (_) => [
+                          if (onEdit != null)
+                            const PopupMenuItem<String>(
+                              key: ValueKey<String>('azione_modifica'),
+                              value: 'modifica',
+                              child: Text('Modifica'),
+                            ),
+                          if (onHide != null)
+                            PopupMenuItem<String>(
+                              key: const ValueKey<String>('azione_nascondi'),
+                              value: 'nascondi',
+                              child: Text(c.hidden ? 'Mostra di nuovo' : 'Nascondi'),
+                            ),
+                          if (onReport != null)
+                            const PopupMenuItem<String>(
+                              key: ValueKey<String>('azione_segnala'),
+                              value: 'segnala',
+                              child: Text('Segnala'),
+                            ),
+                        ],
                       ),
                   ],
                 ),
