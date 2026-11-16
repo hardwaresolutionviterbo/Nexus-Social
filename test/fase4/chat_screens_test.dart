@@ -222,8 +222,9 @@ void main() {
     await b.refresh();
     expect(b.messages(conv).last.quote?.authorId, bruno);
 
-    // Reazione al messaggio di Bruno.
-    await tester.longPress(find.text('Domani alle 18?').first);
+    // Reazione al messaggio di Bruno (l'ultimo trovato: la lista parte dal basso e il primo
+    // è la citazione dentro la risposta).
+    await tester.longPress(find.text('Domani alle 18?').last);
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey<String>('reazione_❤️')));
     await tester.pumpAndSettle();
