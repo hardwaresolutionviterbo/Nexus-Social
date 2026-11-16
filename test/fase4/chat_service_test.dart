@@ -164,4 +164,59 @@ void main() {
     a.dispose();
     b.dispose();
   });
+
+  test('Blocco 2 · risposta, reazione, inoltro ed elimina per tutti, cifrati', () async {
+    final ChatService a = await phone(hub, anna);
+    final ChatService b = await phone(hub, bruno);
+    final ChatService d = await phone(hub, dario);
+    final String ab = await a.openDirect(bruno);
+    await a.send(ab, 'La bici costa 120 euro');
+    await b.refresh();
+    final ChatMessage price = b.messages(ab).single;
+
+    // B risponde citando il messaggio di A.
+    await b.send(ab, 'Va bene, la prendo', replyTo: price);
+    await a.refresh();
+    final ChatMessage reply = a.messages(ab).last;
+    expect(reply.quote?.text, 'La bici costa 120 euro');
+    expect(reply.quote?.authorId, anna, reason: 'A vede che la citazione è sua');
+
+    // A reagisce; B vede la reazione; toccandola di nuovo si toglie.
+    await a.react(reply, '👍');
+    expect(a.messages(ab).last.myReaction, '👍');
+    await b.refresh();
+    expect(b.messages(ab).last.peerReaction, '👍');
+    await a.react(a.messages(ab).last, '👍');
+    await b.refresh();
+    expect(b.messages(ab).last.peerReaction, '');
+
+    // A elimina per tutti il suo messaggio: sparisce il testo anche da B.
+    final ChatMessage first = a.messages(ab).first;
+    await a.deleteForEveryone(first);
+    expect(a.messages(ab).first.deleted, isTrue);
+    await b.refresh();
+    expect(b.messages(ab).first.deleted, isTrue);
+    expect(b.messages(ab).first.body, isEmpty);
+    // B non può eliminare per tutti un messaggio di A.
+    await expectLater(b.deleteForEveryone(b.messages(ab).first), throwsA(isA<ChatFailure>()));
+
+    // B inoltra la sua risposta a D (richiesta, perché D non ha B in rubrica).
+    await b.forward(b.messages(ab).last, <String>[await b.openDirect(dario)]);
+    await d.refresh();
+    final ChatMessage fwd = d.requests.single.last!;
+    expect(fwd.forwarded, isTrue);
+    expect(fwd.body, 'Va bene, la prendo');
+
+    // Elimina per me: solo su questo telefono.
+    await a.deleteForMe(a.messages(ab).last);
+    expect(a.messages(ab).where((m) => m.body == 'Va bene, la prendo'), isEmpty);
+    expect(b.messages(ab).where((m) => m.body == 'Va bene, la prendo'), hasLength(1));
+
+    // Le reazioni e le eliminazioni non contano come messaggi non letti: per B resta solo
+    // il primo messaggio di A (mai aperto).
+    expect(b.threads.firstWhere((t) => t.conversation.id == ab).unread, 1);
+    a.dispose();
+    b.dispose();
+    d.dispose();
+  });
 }

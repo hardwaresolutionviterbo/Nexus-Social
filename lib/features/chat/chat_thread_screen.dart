@@ -1,10 +1,11 @@
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../profile/avatar_view.dart';
 import '../profile/profile_repository.dart';
 import 'chat_models.dart';
-import 'chat_screen.dart' show TicksIcon, chatTimeLabel;
+import 'chat_screen.dart' show TicksIcon, chatPreview, chatTimeLabel;
 import 'chat_service.dart';
 
 /// La chat attiva dell'app (una per accesso): la usano i pulsanti «Contatta» degli annunci,
@@ -83,7 +84,11 @@ class ChatThreadScreen extends StatefulWidget {
 
 class _ChatThreadScreenState extends State<ChatThreadScreen> {
   final TextEditingController _text = TextEditingController();
+  final FocusNode _focus = FocusNode();
   bool _answering = false;
+
+  /// Messaggio a cui si sta rispondendo (barra sopra il campo di testo).
+  ChatMessage? _replyTo;
 
   @override
   void initState() {
@@ -98,6 +103,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     widget.chat.removeListener(_onChange);
     widget.chat.setOpenConversation(null);
     _text.dispose();
+    _focus.dispose();
     super.dispose();
   }
 
@@ -119,9 +125,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   Future<void> _send() async {
     final String text = _text.text;
     if (text.trim().isEmpty) return;
+    final ChatMessage? replyTo = _replyTo;
     _text.clear();
+    setState(() => _replyTo = null);
     try {
-      await widget.chat.send(widget.conversationId, text);
+      await widget.chat.send(widget.conversationId, text, replyTo: replyTo);
     } on ChatFailure catch (f) {
       if (mounted) _toast(f.message);
     }
@@ -137,6 +145,77 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     } finally {
       if (mounted) setState(() => _answering = false);
     }
+  }
+
+  String _authorName(ChatConversation? c, String authorId) =>
+      authorId == widget.chat.myId ? 'Tu' : (c?.peerName.isNotEmpty ?? false ? c!.peerName : widget.fallbackName);
+
+  /// Tieni premuto un messaggio: reazioni, Rispondi, Copia, Inoltra, Elimina.
+  Future<void> _actions(ChatMessage m) async {
+    final DateTime now = widget.now();
+    final String? choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (BuildContext ctx) => _MessageActions(message: m, now: now),
+    );
+    if (!mounted || choice == null) return;
+    try {
+      switch (choice) {
+        case 'rispondi':
+          setState(() => _replyTo = m);
+          _focus.requestFocus();
+        case 'copia':
+          await Clipboard.setData(ClipboardData(text: m.body));
+          _toast('Messaggio copiato');
+        case 'inoltra':
+          await Navigator.of(context).push<void>(
+            MaterialPageRoute<void>(
+              builder: (_) => ForwardScreen(chat: widget.chat, message: m, profiles: widget.profiles),
+            ),
+          );
+        case 'elimina':
+          await _delete(m);
+        default:
+          if (choice.startsWith('reazione:')) {
+            await widget.chat.react(m, choice.substring('reazione:'.length));
+          }
+      }
+    } on ChatFailure catch (f) {
+      if (mounted) _toast(f.message);
+    }
+  }
+
+  Future<void> _delete(ChatMessage m) async {
+    final bool forEveryone = m.canDeleteForEveryone(widget.now());
+    final String? how = await showDialog<String>(
+      context: context,
+      builder: (BuildContext ctx) => AlertDialog(
+        title: const Text('Eliminare il messaggio?'),
+        content: Text(
+          forEveryone
+              ? '«Elimina per tutti» lo toglie anche dal telefono dell\'altra persona.'
+              : 'Il messaggio sparisce solo da questo telefono.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Annulla')),
+          TextButton(
+            key: const ValueKey<String>('elimina_per_me'),
+            onPressed: () => Navigator.of(ctx).pop('me'),
+            child: const Text('Elimina per me'),
+          ),
+          if (forEveryone)
+            FilledButton(
+              key: const ValueKey<String>('elimina_per_tutti'),
+              style: FilledButton.styleFrom(backgroundColor: Theme.of(ctx).colorScheme.error),
+              onPressed: () => Navigator.of(ctx).pop('tutti'),
+              child: const Text('Elimina per tutti'),
+            ),
+        ],
+      ),
+    );
+    if (how == 'me') await widget.chat.deleteForMe(m);
+    if (how == 'tutti') await widget.chat.deleteForEveryone(m);
+    if (_replyTo?.localId == m.localId && mounted) setState(() => _replyTo = null);
   }
 
   @override
@@ -189,12 +268,22 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                       message: m,
                       ticks: m.ticksFor(c),
                       now: now,
+                      quoteAuthor: m.quote == null ? null : _authorName(c, m.quote!.authorId),
                       onRetry: m.ticks == MessageTicks.failed ? () => widget.chat.retry(m) : null,
+                      onLongPress: m.kind == MessageKind.notice || m.ticks == MessageTicks.sending
+                          ? null
+                          : () => _actions(m),
                     );
                   },
                 ),
               ),
-              _Composer(controller: _text, onSend: _send),
+              if (_replyTo != null)
+                _ReplyBar(
+                  author: _authorName(c, _replyTo!.mine ? widget.chat.myId : (c?.peerId ?? '')),
+                  text: chatPreview(_replyTo),
+                  onClose: () => setState(() => _replyTo = null),
+                ),
+              _Composer(controller: _text, focus: _focus, onSend: _send),
             ],
           ),
         );
@@ -294,12 +383,21 @@ class _RequestBanner extends StatelessWidget {
 }
 
 class _Bubble extends StatelessWidget {
-  const _Bubble({required this.message, required this.ticks, required this.now, this.onRetry});
+  const _Bubble({
+    required this.message,
+    required this.ticks,
+    required this.now,
+    this.quoteAuthor,
+    this.onRetry,
+    this.onLongPress,
+  });
 
   final ChatMessage message;
   final MessageTicks ticks;
   final DateTime now;
+  final String? quoteAuthor;
   final VoidCallback? onRetry;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -326,18 +424,63 @@ class _Bubble extends StatelessWidget {
         ? chatTimeLabel(message.at, now)
         : '${chatTimeLabel(message.at, now)} '
               '${message.at.hour.toString().padLeft(2, '0')}:${message.at.minute.toString().padLeft(2, '0')}';
-    final Widget content = message.kind == MessageKind.unreadable
-        ? Text(
-            'Messaggio non disponibile su questo telefono',
-            style: theme.textTheme.bodyMedium?.copyWith(fontStyle: FontStyle.italic,
-                color: theme.colorScheme.onSurfaceVariant),
-          )
-        : Text(message.body, style: theme.textTheme.bodyLarge);
+    final TextStyle? faint = theme.textTheme.bodyMedium?.copyWith(
+      fontStyle: FontStyle.italic,
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    final Widget content;
+    if (message.kind == MessageKind.unreadable) {
+      content = Text('Messaggio non disponibile su questo telefono', style: faint);
+    } else if (message.deleted) {
+      content = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.block_rounded, size: 16, color: theme.colorScheme.onSurfaceVariant),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              mine ? 'Hai eliminato questo messaggio' : 'Questo messaggio è stato eliminato',
+              style: faint,
+            ),
+          ),
+        ],
+      );
+    } else {
+      content = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (message.forwarded)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 2),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.shortcut_rounded, size: 15, color: theme.colorScheme.onSurfaceVariant),
+                  const SizedBox(width: 4),
+                  Text('Inoltrato', style: theme.textTheme.labelSmall?.copyWith(
+                    fontStyle: FontStyle.italic,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  )),
+                ],
+              ),
+            ),
+          if (message.quote != null)
+            _QuoteBox(author: quoteAuthor ?? '', text: message.quote!.text, mine: mine),
+          Text(message.body, style: theme.textTheme.bodyLarge),
+        ],
+      );
+    }
     return Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
       child: GestureDetector(
         onTap: onRetry,
-        child: Container(
+        onLongPress: onLongPress,
+        child: Column(
+          crossAxisAlignment: mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
           constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.78),
           margin: const EdgeInsets.symmetric(vertical: 3),
           padding: const EdgeInsets.fromLTRB(12, 8, 10, 6),
@@ -380,15 +523,20 @@ class _Bubble extends StatelessWidget {
             ],
           ),
         ),
+            if (message.myReaction.isNotEmpty || message.peerReaction.isNotEmpty)
+              _Reactions(mine: message.myReaction, peer: message.peerReaction),
+          ],
+        ),
       ),
     );
   }
 }
 
 class _Composer extends StatelessWidget {
-  const _Composer({required this.controller, required this.onSend});
+  const _Composer({required this.controller, required this.focus, required this.onSend});
 
   final TextEditingController controller;
+  final FocusNode focus;
   final VoidCallback onSend;
 
   @override
@@ -406,6 +554,7 @@ class _Composer extends StatelessWidget {
               child: TextField(
                 key: const ValueKey<String>('chat_testo'),
                 controller: controller,
+                focusNode: focus,
                 minLines: 1,
                 maxLines: 5,
                 maxLength: ChatContent.maxTextLength,
@@ -436,6 +585,263 @@ class _Composer extends StatelessWidget {
               tooltip: 'Invia',
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Citazione dentro il fumetto di una risposta.
+class _QuoteBox extends StatelessWidget {
+  const _QuoteBox({required this.author, required this.text, required this.mine});
+
+  final String author;
+  final String text;
+  final bool mine;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final Color accent = author == 'Tu' ? AppColors.brandOrange : AppColors.brandBlue;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: mine ? 0.06 : 0.04),
+        borderRadius: BorderRadius.circular(10),
+        border: Border(left: BorderSide(color: accent, width: 4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(author, style: theme.textTheme.labelMedium?.copyWith(color: accent, fontWeight: FontWeight.w700)),
+          Text(text, maxLines: 3, overflow: TextOverflow.ellipsis, style: theme.textTheme.bodySmall),
+        ],
+      ),
+    );
+  }
+}
+
+/// Reazioni sotto il fumetto.
+class _Reactions extends StatelessWidget {
+  const _Reactions({required this.mine, required this.peer});
+
+  final String mine;
+  final String peer;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final String shown = mine == peer ? mine : '$peer$mine';
+    final bool both = mine.isNotEmpty && peer.isNotEmpty;
+    return Transform.translate(
+      offset: const Offset(0, -6),
+      child: Container(
+        key: const ValueKey<String>('reazioni'),
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: theme.colorScheme.outlineVariant),
+        ),
+        child: Text(both && mine == peer ? '$shown 2' : shown, style: const TextStyle(fontSize: 14)),
+      ),
+    );
+  }
+}
+
+/// Barra «Rispondi a…» sopra il campo di testo.
+class _ReplyBar extends StatelessWidget {
+  const _ReplyBar({required this.author, required this.text, required this.onClose});
+
+  final String author;
+  final String text;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final Color accent = author == 'Tu' ? AppColors.brandOrange : AppColors.brandBlue;
+    return Container(
+      key: const ValueKey<String>('risposta_barra'),
+      margin: const EdgeInsets.fromLTRB(10, 4, 10, 0),
+      padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border(left: BorderSide(color: accent, width: 4)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Rispondi a $author',
+                    style: theme.textTheme.labelMedium?.copyWith(color: accent, fontWeight: FontWeight.w700)),
+                Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: theme.textTheme.bodySmall),
+              ],
+            ),
+          ),
+          IconButton(
+            key: const ValueKey<String>('risposta_chiudi'),
+            onPressed: onClose,
+            icon: const Icon(Icons.close_rounded),
+            tooltip: 'Annulla risposta',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Foglio delle azioni su un messaggio. Restituisce la scelta.
+class _MessageActions extends StatelessWidget {
+  const _MessageActions({required this.message, required this.now});
+
+  final ChatMessage message;
+  final DateTime now;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final bool text = message.isText;
+    final bool sent = message.serverId != null;
+    Widget action(String key, IconData icon, String label, {Color? color}) => ListTile(
+      key: ValueKey<String>('azione_$key'),
+      leading: Icon(icon, color: color),
+      title: Text(label, style: color == null ? null : TextStyle(color: color)),
+      onTap: () => Navigator.of(context).pop(key),
+    );
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (text && sent)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  for (final String e in chatReactions)
+                    InkWell(
+                      key: ValueKey<String>('reazione_$e'),
+                      borderRadius: BorderRadius.circular(24),
+                      onTap: () => Navigator.of(context).pop('reazione:$e'),
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: message.myReaction == e
+                              ? AppColors.brandOrange.withValues(alpha: 0.18)
+                              : Colors.transparent,
+                        ),
+                        child: Text(e, style: const TextStyle(fontSize: 26)),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          if (text && sent) action('rispondi', Icons.reply_rounded, 'Rispondi'),
+          if (text) action('copia', Icons.copy_rounded, 'Copia'),
+          if (text && sent) action('inoltra', Icons.shortcut_rounded, 'Inoltra'),
+          action('elimina', Icons.delete_outline_rounded, 'Elimina', color: theme.colorScheme.error),
+        ],
+      ),
+    );
+  }
+}
+
+/// «Inoltra»: scegli fino a 5 chat.
+class ForwardScreen extends StatefulWidget {
+  const ForwardScreen({super.key, required this.chat, required this.message, this.profiles});
+
+  final ChatService chat;
+  final ChatMessage message;
+  final ProfileRepository? profiles;
+
+  @override
+  State<ForwardScreen> createState() => _ForwardScreenState();
+}
+
+class _ForwardScreenState extends State<ForwardScreen> {
+  final Set<String> _chosen = <String>{};
+  bool _sending = false;
+
+  Future<void> _send() async {
+    setState(() => _sending = true);
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    try {
+      await widget.chat.forward(widget.message, _chosen.toList());
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      messenger.showSnackBar(SnackBar(
+        content: Text(_chosen.length == 1 ? 'Messaggio inoltrato' : 'Messaggio inoltrato a ${_chosen.length} chat'),
+      ));
+    } on ChatFailure catch (f) {
+      if (!mounted) return;
+      setState(() => _sending = false);
+      messenger.showSnackBar(SnackBar(content: Text(f.message)));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final List<ChatThread> threads = widget.chat.threads;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Inoltra a…')),
+      body: ListView(
+        children: [
+          Container(
+            margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(widget.message.body, maxLines: 3, overflow: TextOverflow.ellipsis),
+          ),
+          for (final ChatThread t in threads)
+            CheckboxListTile(
+              key: ValueKey<String>('inoltra_${t.conversation.id}'),
+              value: _chosen.contains(t.conversation.id),
+              onChanged: _sending || (!_chosen.contains(t.conversation.id) && _chosen.length >= 5)
+                  ? null
+                  : (bool? v) => setState(() {
+                      if (v ?? false) {
+                        _chosen.add(t.conversation.id);
+                      } else {
+                        _chosen.remove(t.conversation.id);
+                      }
+                    }),
+              secondary: AvatarView(
+                name: t.conversation.peerName,
+                repository: widget.profiles,
+                path: t.conversation.peerAvatarPath,
+                size: 40,
+              ),
+              title: Text(t.conversation.peerName.isEmpty
+                  ? '@${t.conversation.peerUsername}'
+                  : t.conversation.peerName),
+              subtitle: Text('@${t.conversation.peerUsername}'),
+            ),
+          if (threads.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(32),
+              child: Center(child: Text('Nessuna chat a cui inoltrare')),
+            ),
+        ],
+      ),
+      bottomNavigationBar: SafeArea(
+        minimum: const EdgeInsets.all(16),
+        child: FilledButton.icon(
+          key: const ValueKey<String>('inoltra_invia'),
+          onPressed: _chosen.isEmpty || _sending ? null : _send,
+          icon: const Icon(Icons.send_rounded),
+          label: Text(_chosen.isEmpty ? 'Scegli fino a 5 chat' : 'Inoltra (${_chosen.length})'),
         ),
       ),
     );

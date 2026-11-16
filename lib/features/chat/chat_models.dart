@@ -125,23 +125,79 @@ class ClaimedKeyPackage {
   final String signatureKey;
 }
 
-/// Contenuto in chiaro, cifrato prima di partire. Versione 1: solo testo.
-class ChatContent {
-  const ChatContent.text(this.body, {required this.localId}) : type = 'text';
+/// Reazioni rapide (Fase 4, Blocco 2).
+const List<String> chatReactions = <String>['👍', '❤️', '😂', '😮', '😢', '🙏'];
 
-  const ChatContent._(this.type, this.body, this.localId);
+/// «Elimina per tutti» possibile fino a 48 ore dopo l'invio.
+const Duration deleteForEveryoneWindow = Duration(hours: 48);
+
+/// Citazione di un messaggio nella risposta.
+class ChatQuote {
+  const ChatQuote({required this.localId, required this.authorId, required this.text});
+
+  final String localId;
+  final String authorId;
+
+  /// Inizio del testo citato (al massimo 200 caratteri).
+  final String text;
+
+  static const int maxText = 200;
+}
+
+/// Contenuto in chiaro, cifrato prima di partire.
+///
+/// Tipi: `text` (con citazione e «inoltrato» facoltativi), `del` (elimina per tutti il
+/// messaggio [target]), `react` (reazione [emoji] al messaggio [target]; vuota = tolta).
+class ChatContent {
+  const ChatContent.text(this.body, {required this.localId, this.quote, this.forwarded = false})
+    : type = 'text',
+      target = null,
+      emoji = null;
+
+  const ChatContent.delete({required this.localId, required String this.target})
+    : type = 'del',
+      body = '',
+      quote = null,
+      forwarded = false,
+      emoji = null;
+
+  const ChatContent.react({required this.localId, required String this.target, required String this.emoji})
+    : type = 'react',
+      body = '',
+      quote = null,
+      forwarded = false;
+
+  const ChatContent._(
+    this.type,
+    this.body,
+    this.localId, {
+    this.quote,
+    this.forwarded = false,
+    this.target,
+    this.emoji,
+  });
 
   final String type;
   final String body;
   final String localId;
+  final ChatQuote? quote;
+  final bool forwarded;
+  final String? target;
+  final String? emoji;
 
   static const int maxTextLength = 4000;
+
+  bool get isText => type == 'text';
 
   List<int> encode() => utf8.encode(jsonEncode(<String, Object>{
     'v': 1,
     't': type,
     'id': localId,
     'b': body,
+    if (quote != null) 'q': <String, String>{'id': quote!.localId, 'a': quote!.authorId, 'x': quote!.text},
+    if (forwarded) 'f': true,
+    if (target != null) 'tg': target!,
+    if (emoji != null) 'e': emoji!,
   }));
 
   /// null se il contenuto non è riconosciuto (versioni future: «aggiorna l'app»).
@@ -153,7 +209,30 @@ class ChatContent {
       final Object? body = json['b'];
       final Object? id = json['id'];
       if (type is! String || body is! String || id is! String) return null;
-      return ChatContent._(type, body, id);
+      ChatQuote? quote;
+      final Object? q = json['q'];
+      if (q is Map && q['id'] is String && q['a'] is String && q['x'] is String) {
+        final String text = q['x'] as String;
+        quote = ChatQuote(
+          localId: q['id'] as String,
+          authorId: q['a'] as String,
+          text: text.length > ChatQuote.maxText ? text.substring(0, ChatQuote.maxText) : text,
+        );
+      }
+      final Object? target = json['tg'];
+      final Object? emoji = json['e'];
+      switch (type) {
+        case 'text':
+          return ChatContent._(type, body, id, quote: quote, forwarded: json['f'] == true);
+        case 'del':
+          return target is String ? ChatContent._(type, '', id, target: target) : null;
+        case 'react':
+          if (target is! String || emoji is! String) return null;
+          if (emoji.isNotEmpty && !chatReactions.contains(emoji)) return null;
+          return ChatContent._(type, '', id, target: target, emoji: emoji);
+        default:
+          return ChatContent._(type, body, id);
+      }
     } catch (_) {
       return null;
     }
@@ -174,6 +253,55 @@ enum MessageKind {
   notice,
 }
 
+/// Evento su un messaggio già salvato: elimina per tutti, reazione, elimina per me.
+enum ChatEventKind { delete, react, hide }
+
+class ChatEvent {
+  const ChatEvent({
+    required this.conversationId,
+    required this.kind,
+    required this.target,
+    required this.byMe,
+    required this.at,
+    this.emoji = '',
+    this.serverId,
+  });
+
+  final String conversationId;
+  final ChatEventKind kind;
+
+  /// localId del messaggio interessato.
+  final String target;
+  final bool byMe;
+  final DateTime at;
+  final String emoji;
+  final int? serverId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'ev': kind.name,
+    't': target,
+    'm': byMe,
+    'a': at.toUtc().toIso8601String(),
+    if (emoji.isNotEmpty) 'x': emoji,
+    's': serverId,
+  };
+
+  static ChatEvent? fromJson(String conversationId, Map<String, dynamic> j) {
+    final ChatEventKind? kind = ChatEventKind.values.where((k) => k.name == j['ev']).firstOrNull;
+    final DateTime? at = DateTime.tryParse('${j['a']}');
+    if (kind == null || at == null || j['t'] is! String) return null;
+    return ChatEvent(
+      conversationId: conversationId,
+      kind: kind,
+      target: j['t'] as String,
+      byMe: j['m'] == true,
+      at: at.toLocal(),
+      emoji: (j['x'] as String?) ?? '',
+      serverId: (j['s'] as num?)?.toInt(),
+    );
+  }
+}
+
 /// Messaggio salvato sul telefono (in chiaro, solo qui).
 class ChatMessage {
   const ChatMessage({
@@ -185,6 +313,11 @@ class ChatMessage {
     required this.at,
     this.serverId,
     this.ticks = MessageTicks.sent,
+    this.quote,
+    this.forwarded = false,
+    this.deleted = false,
+    this.myReaction = '',
+    this.peerReaction = '',
   });
 
   final String localId;
@@ -198,15 +331,40 @@ class ChatMessage {
   /// Solo per i messaggi in uscita non ancora sul server (in memoria).
   final MessageTicks ticks;
 
-  ChatMessage copyWith({int? serverId, MessageTicks? ticks}) => ChatMessage(
+  final ChatQuote? quote;
+  final bool forwarded;
+
+  /// Eliminato per tutti da chi l'aveva scritto: il testo non c'è più.
+  final bool deleted;
+  final String myReaction;
+  final String peerReaction;
+
+  bool get isText => kind == MessageKind.text && !deleted;
+
+  /// Si può eliminare per tutti: mio, già inviato, entro 48 ore.
+  bool canDeleteForEveryone(DateTime now) =>
+      mine && isText && serverId != null && now.difference(at) < deleteForEveryoneWindow;
+
+  ChatMessage copyWith({
+    int? serverId,
+    MessageTicks? ticks,
+    bool? deleted,
+    String? myReaction,
+    String? peerReaction,
+  }) => ChatMessage(
     localId: localId,
     conversationId: conversationId,
     serverId: serverId ?? this.serverId,
     mine: mine,
     kind: kind,
-    body: body,
+    body: (deleted ?? this.deleted) ? '' : body,
     at: at,
     ticks: ticks ?? this.ticks,
+    quote: (deleted ?? this.deleted) ? null : quote,
+    forwarded: forwarded,
+    deleted: deleted ?? this.deleted,
+    myReaction: myReaction ?? this.myReaction,
+    peerReaction: peerReaction ?? this.peerReaction,
   );
 
   Map<String, Object?> toJson() => <String, Object?>{
@@ -216,12 +374,15 @@ class ChatMessage {
     'k': kind.name,
     'b': body,
     'a': at.toUtc().toIso8601String(),
+    if (quote != null) 'q': <String, String>{'id': quote!.localId, 'a': quote!.authorId, 'x': quote!.text},
+    if (forwarded) 'f': true,
   };
 
   static ChatMessage? fromJson(String conversationId, Map<String, dynamic> j) {
     final MessageKind? kind = MessageKind.values.where((k) => k.name == j['k']).firstOrNull;
     final DateTime? at = DateTime.tryParse('${j['a']}');
     if (kind == null || at == null || j['l'] is! String || j['b'] is! String) return null;
+    final Object? q = j['q'];
     return ChatMessage(
       localId: j['l'] as String,
       conversationId: conversationId,
@@ -230,6 +391,10 @@ class ChatMessage {
       kind: kind,
       body: j['b'] as String,
       at: at.toLocal(),
+      quote: q is Map && q['id'] is String && q['a'] is String && q['x'] is String
+          ? ChatQuote(localId: q['id'] as String, authorId: q['a'] as String, text: q['x'] as String)
+          : null,
+      forwarded: j['f'] == true,
     );
   }
 
@@ -243,6 +408,32 @@ class ChatMessage {
     if (c.peerDeliveredUpto >= id) return MessageTicks.delivered;
     return MessageTicks.sent;
   }
+}
+
+/// Applica gli eventi ai messaggi: eliminazioni, reazioni, «elimina per me».
+List<ChatMessage> foldChatEvents(List<ChatMessage> messages, List<ChatEvent> events) {
+  if (events.isEmpty) return messages;
+  final Map<String, int> index = <String, int>{
+    for (int i = 0; i < messages.length; i++) messages[i].localId: i,
+  };
+  final List<ChatMessage?> out = List<ChatMessage?>.of(messages);
+  for (final ChatEvent e in events) {
+    final int? i = index[e.target];
+    if (i == null) continue;
+    final ChatMessage? m = out[i];
+    if (m == null) continue;
+    switch (e.kind) {
+      case ChatEventKind.hide:
+        out[i] = null;
+      case ChatEventKind.delete:
+        // Solo chi l'ha scritto può eliminarlo per tutti.
+        if (e.byMe == m.mine && m.kind == MessageKind.text) out[i] = m.copyWith(deleted: true);
+      case ChatEventKind.react:
+        if (m.deleted || m.kind != MessageKind.text) continue;
+        out[i] = e.byMe ? m.copyWith(myReaction: e.emoji) : m.copyWith(peerReaction: e.emoji);
+    }
+  }
+  return out.whereType<ChatMessage>().toList();
 }
 
 /// Riga della lista delle chat.

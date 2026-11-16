@@ -23,9 +23,16 @@ abstract class ChatStore {
 
   Future<void> setSession(String conversationId, LocalSession? session);
 
+  /// Messaggi con eliminazioni e reazioni già applicate.
   Future<List<ChatMessage>> messages(String conversationId);
 
   Future<void> append(ChatMessage message);
+
+  /// Eventi (elimina per tutti, reazioni, elimina per me) su messaggi già salvati.
+  Future<void> appendEvent(ChatEvent event);
+
+  /// Il messaggio del server [serverId] è già stato elaborato (messaggio o evento).
+  Future<bool> hasServerId(String conversationId, int serverId);
 
   Future<void> deleteConversation(String conversationId);
 }
@@ -35,6 +42,7 @@ class MemoryChatStore implements ChatStore {
   int _cursor = 0;
   final Map<String, LocalSession> _sessions = <String, LocalSession>{};
   final Map<String, List<ChatMessage>> _messages = <String, List<ChatMessage>>{};
+  final Map<String, List<ChatEvent>> _events = <String, List<ChatEvent>>{};
 
   @override
   Future<int> cursor() async => _cursor;
@@ -55,16 +63,28 @@ class MemoryChatStore implements ChatStore {
   }
 
   @override
-  Future<List<ChatMessage>> messages(String conversationId) async =>
-      List<ChatMessage>.of(_messages[conversationId] ?? const <ChatMessage>[]);
+  Future<List<ChatMessage>> messages(String conversationId) async => foldChatEvents(
+    List<ChatMessage>.of(_messages[conversationId] ?? const <ChatMessage>[]),
+    _events[conversationId] ?? const <ChatEvent>[],
+  );
 
   @override
   Future<void> append(ChatMessage message) async =>
       (_messages[message.conversationId] ??= <ChatMessage>[]).add(message);
 
   @override
+  Future<void> appendEvent(ChatEvent event) async =>
+      (_events[event.conversationId] ??= <ChatEvent>[]).add(event);
+
+  @override
+  Future<bool> hasServerId(String conversationId, int serverId) async =>
+      (_messages[conversationId] ?? const <ChatMessage>[]).any((m) => m.serverId == serverId) ||
+      (_events[conversationId] ?? const <ChatEvent>[]).any((e) => e.serverId == serverId);
+
+  @override
   Future<void> deleteConversation(String conversationId) async {
     _messages.remove(conversationId);
+    _events.remove(conversationId);
     _sessions.remove(conversationId);
   }
 }
@@ -79,6 +99,7 @@ class FileChatStore implements ChatStore {
   Directory? _dir;
   Map<String, Object?>? _state;
   final Map<String, List<ChatMessage>> _cache = <String, List<ChatMessage>>{};
+  final Map<String, List<ChatEvent>> _eventCache = <String, List<ChatEvent>>{};
 
   Future<Directory> get _d async => _dir ??= await _directory;
 
@@ -145,42 +166,70 @@ class FileChatStore implements ChatStore {
     await _save();
   }
 
-  @override
-  Future<List<ChatMessage>> messages(String conversationId) async {
-    final List<ChatMessage>? cached = _cache[conversationId];
-    if (cached != null) return List<ChatMessage>.of(cached);
+  /// Legge il file della chat una volta: messaggi ed eventi.
+  Future<void> _read(String conversationId) async {
+    if (_cache.containsKey(conversationId)) return;
     final List<ChatMessage> list = <ChatMessage>[];
+    final List<ChatEvent> events = <ChatEvent>[];
     final File f = await _thread(conversationId);
     if (f.existsSync()) {
       for (final String line in await f.readAsLines()) {
         if (line.trim().isEmpty) continue;
         try {
-          final ChatMessage? m = ChatMessage.fromJson(
-            conversationId,
-            Map<String, dynamic>.from(jsonDecode(line) as Map),
-          );
-          if (m != null) list.add(m);
+          final Map<String, dynamic> j = Map<String, dynamic>.from(jsonDecode(line) as Map);
+          if (j.containsKey('ev')) {
+            final ChatEvent? e = ChatEvent.fromJson(conversationId, j);
+            if (e != null) events.add(e);
+          } else {
+            final ChatMessage? m = ChatMessage.fromJson(conversationId, j);
+            if (m != null) list.add(m);
+          }
         } catch (_) {
           // Riga rovinata (spegnimento a metà scrittura): si salta.
         }
       }
     }
     _cache[conversationId] = list;
-    return List<ChatMessage>.of(list);
+    _eventCache[conversationId] = events;
+  }
+
+  Future<void> _write(String conversationId, Map<String, Object?> json) async {
+    (await _d).createSync(recursive: true);
+    await (await _thread(conversationId))
+        .writeAsString('${jsonEncode(json)}\n', mode: FileMode.append, flush: true);
+  }
+
+  @override
+  Future<List<ChatMessage>> messages(String conversationId) async {
+    await _read(conversationId);
+    return foldChatEvents(List<ChatMessage>.of(_cache[conversationId]!), _eventCache[conversationId]!);
   }
 
   @override
   Future<void> append(ChatMessage message) async {
-    await messages(message.conversationId);
-    (await _d).createSync(recursive: true);
-    await (await _thread(message.conversationId))
-        .writeAsString('${jsonEncode(message.toJson())}\n', mode: FileMode.append, flush: true);
+    await _read(message.conversationId);
+    await _write(message.conversationId, message.toJson());
     _cache[message.conversationId]!.add(message);
+  }
+
+  @override
+  Future<void> appendEvent(ChatEvent event) async {
+    await _read(event.conversationId);
+    await _write(event.conversationId, event.toJson());
+    _eventCache[event.conversationId]!.add(event);
+  }
+
+  @override
+  Future<bool> hasServerId(String conversationId, int serverId) async {
+    await _read(conversationId);
+    return _cache[conversationId]!.any((m) => m.serverId == serverId) ||
+        _eventCache[conversationId]!.any((e) => e.serverId == serverId);
   }
 
   @override
   Future<void> deleteConversation(String conversationId) async {
     _cache.remove(conversationId);
+    _eventCache.remove(conversationId);
     final File f = await _thread(conversationId);
     if (f.existsSync()) f.deleteSync();
     await setSession(conversationId, null);

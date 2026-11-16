@@ -268,6 +268,7 @@ String chatPreview(ChatMessage? m) {
   if (m == null) return '';
   switch (m.kind) {
     case MessageKind.text:
+      if (m.deleted) return m.mine ? 'Hai eliminato questo messaggio' : 'Questo messaggio è stato eliminato';
       return m.body.replaceAll('\n', ' ');
     case MessageKind.unreadable:
       return 'Messaggio non disponibile';
@@ -308,7 +309,7 @@ class ChatThreadTile extends StatelessWidget {
       ),
       subtitle: Row(
         children: [
-          if (last != null && last.mine && last.kind == MessageKind.text) ...[
+          if (last != null && last.mine && last.isText) ...[
             TicksIcon(last.ticksFor(c), size: 15),
             const SizedBox(width: 3),
           ],

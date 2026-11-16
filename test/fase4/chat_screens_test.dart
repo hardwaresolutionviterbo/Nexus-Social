@@ -185,6 +185,77 @@ void main() {
     await finish(tester, <ChatService>[me, d]);
   });
 
+  testWidgets('Blocco 2 · tieni premuto: rispondi, reazione, elimina per tutti, inoltra', (
+    WidgetTester tester,
+  ) async {
+    tall(tester);
+    final ChatService me = await fakePhone(hub, io);
+    final ChatService b = await fakePhone(hub, bruno);
+    final String conv = await b.openDirect(io);
+    await b.send(conv, 'Domani alle 18?');
+    await me.refresh();
+    await tester.pumpWidget(app(Scaffold(
+      body: Builder(
+        builder: (BuildContext context) => TextButton(
+          onPressed: () => ChatThreadScreen.open(context, chat: me, conversationId: conv),
+          child: const Text('apri'),
+        ),
+      ),
+    )));
+    await tester.tap(find.text('apri'));
+    await tester.pumpAndSettle();
+
+    // Rispondi.
+    await tester.longPress(find.text('Domani alle 18?'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey<String>('azione_inoltra')), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('reazione_👍')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey<String>('azione_rispondi')));
+    await tester.pumpAndSettle();
+    expect(find.text('Rispondi a Bruno B.'), findsOneWidget);
+    await tester.enterText(find.byKey(const ValueKey<String>('chat_testo')), 'Perfetto');
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey<String>('chat_invia')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey<String>('risposta_barra')), findsNothing);
+    expect(find.text('Domani alle 18?'), findsNWidgets(2), reason: 'messaggio e citazione');
+    await b.refresh();
+    expect(b.messages(conv).last.quote?.authorId, bruno);
+
+    // Reazione al messaggio di Bruno.
+    await tester.longPress(find.text('Domani alle 18?').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey<String>('reazione_❤️')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey<String>('reazioni')), findsOneWidget);
+    await b.refresh();
+    expect(b.messages(conv).first.peerReaction, '❤️');
+
+    // Elimina per tutti il proprio messaggio.
+    await tester.longPress(find.text('Perfetto'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey<String>('azione_elimina')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey<String>('elimina_per_tutti')));
+    await tester.pumpAndSettle();
+    expect(find.text('Hai eliminato questo messaggio'), findsOneWidget);
+    await b.refresh();
+    expect(b.messages(conv).last.deleted, isTrue);
+
+    // Inoltra: si sceglie la chat e si invia.
+    await tester.longPress(find.text('Domani alle 18?').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey<String>('azione_inoltra')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(ValueKey<String>('inoltra_$conv')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey<String>('inoltra_invia')));
+    await tester.pumpAndSettle();
+    expect(find.text('Messaggio inoltrato'), findsOneWidget);
+    expect(find.text('Inoltrato'), findsOneWidget);
+    await finish(tester, <ChatService>[me, b]);
+  });
+
   test('etichette dell\'ora come WhatsApp', () {
     final DateTime n = DateTime(2026, 11, 16, 19);
     expect(chatTimeLabel(DateTime(2026, 11, 16, 8, 5), n), '08:05');

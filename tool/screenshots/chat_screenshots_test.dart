@@ -31,13 +31,24 @@ Future<void> _loadFonts() async {
     }
     if (name.startsWith('MaterialIcons-Regular')) icons.addFont(data);
   }
+  // Emoji a colori (installate dal workflow delle anteprime, se disponibili).
+  final File emoji = File('/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf');
+  if (emoji.existsSync()) {
+    final FontLoader e = FontLoader('NotoColorEmoji')
+      ..addFont(emoji.readAsBytes().then((Uint8List b) => ByteData.view(b.buffer)));
+    await e.load();
+  }
   await roboto.load();
   await fallback.load();
   await ahem.load();
   await icons.load();
 }
 
-ThemeData _withRoboto(ThemeData t) => t.copyWith(
+ThemeData _withRoboto(ThemeData base) => _withRobotoOnly(
+  base.copyWith(textTheme: base.textTheme.apply(fontFamilyFallback: const <String>['NotoColorEmoji'])),
+);
+
+ThemeData _withRobotoOnly(ThemeData t) => t.copyWith(
   filledButtonTheme: FilledButtonThemeData(
     style: t.filledButtonTheme.style?.copyWith(
       textStyle: const WidgetStatePropertyAll<TextStyle>(
@@ -203,5 +214,52 @@ void main() {
     final ChatService me = (await tester.runAsync(() => fakePhone(hub, io)))!;
     await shoot(tester, 'chat_5_vuota', AppShell(chat: me));
     me.dispose();
+  });
+
+  Future<(ChatService, ChatService, String)> scene2() async {
+    final FakeChatHub hub = FakeChatHub()
+      ..addPerson(io, 'anna.r', 'Anna R.')
+      ..addPerson(bruno, 'bruno_b', 'Bruno B.')
+      ..contacts[io] = <String>{bruno}
+      ..contacts[bruno] = <String>{io};
+    final ChatService me = await fakePhone(hub, io);
+    final ChatService b = await fakePhone(hub, bruno);
+    hub.clock = DateTime(2026, 11, 16, 18, 2);
+    final String conv = await b.openDirect(io);
+    await b.send(conv, 'La bici costa 120 euro, ma si può trattare.');
+    await me.refresh();
+    await me.send(conv, 'Facciamo 100?', replyTo: me.messages(conv).first);
+    await b.refresh();
+    await b.react(b.messages(conv).last, '👍');
+    await b.send(conv, 'Affare fatto! Ti giro l\'indirizzo');
+    await b.send(conv, 'Via Roma 10, citofono Bianchi. Dalle 17 in poi.', forwarded: true);
+    await me.refresh();
+    await me.react(me.messages(conv).last, '❤️');
+    await me.send(conv, 'Ops, chat sbagliata');
+    await me.deleteForEveryone(me.messages(conv).last);
+    await me.send(conv, 'A domani allora!');
+    await b.refresh();
+    await b.markRead(conv);
+    await me.refresh();
+    return (me, b, conv);
+  }
+
+  testWidgets('chat 6 · risposta, reazioni, inoltrato, eliminato', (tester) async {
+    final (ChatService me, ChatService b, String conv) = (await tester.runAsync(scene2))!;
+    await shoot(tester, 'chat_6_risposte_reazioni',
+        ChatThreadScreen(chat: me, conversationId: conv, now: () => now));
+    me.dispose();
+    b.dispose();
+  });
+
+  testWidgets('chat 7 · tieni premuto un messaggio', (tester) async {
+    final (ChatService me, ChatService b, String conv) = (await tester.runAsync(scene2))!;
+    await shoot(tester, 'chat_7_azioni',
+        ChatThreadScreen(chat: me, conversationId: conv, now: () => now), before: () async {
+      await tester.longPress(find.textContaining('Via Roma 10'));
+      await tester.pumpAndSettle();
+    });
+    me.dispose();
+    b.dispose();
   });
 }

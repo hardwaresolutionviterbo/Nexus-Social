@@ -221,6 +221,11 @@ class ChatService extends ChangeNotifier {
     (_messages[m.conversationId] ??= <ChatMessage>[]).add(m);
   }
 
+  Future<void> _appendEvent(ChatEvent e) async {
+    await store.appendEvent(e);
+    _messages[e.conversationId] = await store.messages(e.conversationId);
+  }
+
   Future<List<ChatMessage>> _stored(String conversationId) async =>
       _messages[conversationId] ??= await store.messages(conversationId);
 
@@ -232,8 +237,8 @@ class ChatService extends ChangeNotifier {
       final List<ChatEnvelope> batch = await server.sync(cursor);
       if (batch.isEmpty) break;
       for (final ChatEnvelope e in batch) {
-        final List<ChatMessage> known = await _stored(e.conversationId);
-        if (!known.any((m) => m.serverId == e.id)) {
+        await _stored(e.conversationId);
+        if (!await store.hasServerId(e.conversationId, e.id)) {
           if (e.isWelcome) {
             await _accept(crypto, e);
           } else {
@@ -276,14 +281,29 @@ class ChatService extends ChangeNotifier {
       final List<int>? plain = await crypto.decrypt(s.groupId, e.payload);
       if (plain != null) content = ChatContent.decode(plain);
     }
+    if (content != null && (content.type == 'del' || content.type == 'react')) {
+      await _appendEvent(ChatEvent(
+        conversationId: e.conversationId,
+        kind: content.type == 'del' ? ChatEventKind.delete : ChatEventKind.react,
+        target: content.target!,
+        byMe: false,
+        at: e.createdAt,
+        emoji: content.emoji ?? '',
+        serverId: e.id,
+      ));
+      return;
+    }
+    final bool text = content != null && content.isText;
     await _append(ChatMessage(
       localId: content?.localId ?? 'srv-${e.id}',
       conversationId: e.conversationId,
       serverId: e.id,
       mine: false,
-      kind: content != null && content.type == 'text' ? MessageKind.text : MessageKind.unreadable,
-      body: content != null && content.type == 'text' ? content.body : '',
+      kind: text ? MessageKind.text : MessageKind.unreadable,
+      body: text ? content.body : '',
       at: e.createdAt,
+      quote: text ? content.quote : null,
+      forwarded: text && content.forwarded,
     ));
   }
 
@@ -345,13 +365,29 @@ class ChatService extends ChangeNotifier {
   static String _localId() =>
       List<String>.generate(16, (_) => _rng.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
 
-  /// Invia un testo. Compare subito con l'orologio; se non parte resta in rosso con «Riprova».
-  Future<void> send(String conversationId, String text) async {
+  /// Invia un testo, eventualmente in risposta a [replyTo] o inoltrato. Compare subito con
+  /// l'orologio; se non parte resta in rosso con «Riprova».
+  Future<void> send(
+    String conversationId,
+    String text, {
+    ChatMessage? replyTo,
+    bool forwarded = false,
+  }) async {
     final String body = text.trim();
     if (body.isEmpty) return;
     if (body.length > ChatContent.maxTextLength) {
       throw const ChatFailure('Messaggio troppo lungo (massimo 4.000 caratteri).');
     }
+    final ChatConversation? c = _conversations[conversationId];
+    final ChatQuote? quote = replyTo == null || !replyTo.isText
+        ? null
+        : ChatQuote(
+            localId: replyTo.localId,
+            authorId: replyTo.mine ? myId : (c?.peerId ?? ''),
+            text: replyTo.body.length > ChatQuote.maxText
+                ? replyTo.body.substring(0, ChatQuote.maxText)
+                : replyTo.body,
+          );
     final ChatMessage local = ChatMessage(
       localId: _localId(),
       conversationId: conversationId,
@@ -360,6 +396,8 @@ class ChatService extends ChangeNotifier {
       body: body,
       at: DateTime.now(),
       ticks: MessageTicks.sending,
+      quote: quote,
+      forwarded: forwarded,
     );
     (_pending[conversationId] ??= <ChatMessage>[]).add(local);
     _changed();
@@ -376,27 +414,115 @@ class ChatService extends ChangeNotifier {
     await _deliver(list[i]);
   }
 
+  /// Inoltra un testo in una o più chat (al massimo 5 alla volta, come WhatsApp).
+  Future<void> forward(ChatMessage message, List<String> conversationIds) async {
+    if (!message.isText) return;
+    if (conversationIds.length > 5) {
+      throw const ChatFailure('Puoi inoltrare a 5 chat per volta.');
+    }
+    for (final String id in conversationIds) {
+      await send(id, message.body, forwarded: true);
+    }
+  }
+
+  /// Reazione al messaggio; la stessa reazione toccata di nuovo si toglie.
+  Future<void> react(ChatMessage message, String emoji) async {
+    if (!message.isText || message.serverId == null || !chatReactions.contains(emoji)) return;
+    final String value = message.myReaction == emoji ? '' : emoji;
+    await _event(
+      message,
+      ChatContent.react(localId: _localId(), target: message.localId, emoji: value),
+      ChatEventKind.react,
+      emoji: value,
+    );
+  }
+
+  /// «Elimina per tutti»: solo i propri messaggi, entro 48 ore.
+  Future<void> deleteForEveryone(ChatMessage message) async {
+    if (!message.canDeleteForEveryone(DateTime.now())) {
+      throw const ChatFailure('Questo messaggio non si può più eliminare per tutti.');
+    }
+    await _event(
+      message,
+      ChatContent.delete(localId: _localId(), target: message.localId),
+      ChatEventKind.delete,
+    );
+  }
+
+  /// «Elimina per me»: sparisce solo da questo telefono.
+  Future<void> deleteForMe(ChatMessage message) async {
+    final List<ChatMessage>? pending = _pending[message.conversationId];
+    if (pending != null && pending.any((m) => m.localId == message.localId)) {
+      pending.removeWhere((m) => m.localId == message.localId);
+      _changed();
+      return;
+    }
+    await _run(() => _appendEvent(ChatEvent(
+      conversationId: message.conversationId,
+      kind: ChatEventKind.hide,
+      target: message.localId,
+      byMe: true,
+      at: DateTime.now(),
+    )));
+    _changed();
+  }
+
+  Future<void> _event(ChatMessage message, ChatContent content, ChatEventKind kind, {String emoji = ''}) async {
+    try {
+      await _run(() async {
+        final (int, DateTime) sent = await _transmit(message.conversationId, content);
+        await _appendEvent(ChatEvent(
+          conversationId: message.conversationId,
+          kind: kind,
+          target: message.localId,
+          byMe: true,
+          at: sent.$2,
+          emoji: emoji,
+          serverId: sent.$1,
+        ));
+      });
+    } on ChatFailure {
+      rethrow;
+    } catch (_) {
+      throw const ChatFailure('Non riuscito. Riprova.');
+    } finally {
+      _changed();
+    }
+  }
+
+  /// Cifra e invia [content]; se la chat è cambiata nel frattempo si ricarica e si riprova.
+  /// Da chiamare dentro [_run].
+  Future<(int, DateTime)> _transmit(String conversationId, ChatContent content) async {
+    Future<(int, DateTime)> attempt() async {
+      final ChatConversation c = await _fresh(conversationId);
+      final LocalSession s = await _ensureSession(c);
+      final String payload = await _crypto!.encrypt(s.groupId, content.encode());
+      return server.send(c.id, s.generation, payload);
+    }
+
+    try {
+      return await attempt();
+    } on ChatFailure catch (f) {
+      if (!f.conflict) rethrow;
+      // La chat è cambiata (l'altra persona l'ha riaperta): si ricarica e si riprova.
+      await _syncInbox();
+      await _loadConversations();
+      return attempt();
+    }
+  }
+
   Future<void> _deliver(ChatMessage local) async {
     try {
       await _run(() async {
-        final ChatContent content = ChatContent.text(local.body, localId: local.localId);
-        Future<(int, DateTime)> attempt() async {
-          final ChatConversation c = await _fresh(local.conversationId);
-          final LocalSession s = await _ensureSession(c);
-          final String payload = await _crypto!.encrypt(s.groupId, content.encode());
-          return server.send(c.id, s.generation, payload);
-        }
-
-        (int, DateTime) sent;
-        try {
-          sent = await attempt();
-        } on ChatFailure catch (f) {
-          if (!f.conflict) rethrow;
-          // La chat è cambiata (l'altra persona l'ha riaperta): si ricarica e si riprova.
-          await _syncInbox();
-          await _loadConversations();
-          sent = await attempt();
-        }
+        final (int, DateTime) sent = await _transmit(
+          local.conversationId,
+          ChatContent.text(
+            local.body,
+            localId: local.localId,
+            quote: local.quote,
+            forwarded: local.forwarded,
+          ),
+        );
         _pending[local.conversationId]?.removeWhere((m) => m.localId == local.localId);
         await _append(ChatMessage(
           localId: local.localId,
@@ -406,6 +532,8 @@ class ChatService extends ChangeNotifier {
           kind: MessageKind.text,
           body: local.body,
           at: sent.$2,
+          quote: local.quote,
+          forwarded: local.forwarded,
         ));
         await _loadConversations();
       });
