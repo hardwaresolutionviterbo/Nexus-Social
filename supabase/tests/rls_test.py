@@ -1776,6 +1776,165 @@ def check_deals_feedback_phase5() -> None:
           f"{hidden_sum}, {len(hidden_list)}, {hidden_deals}, {d_sees}, {direct[0]}")
 
 
+def check_comments_categories_phase5() -> None:
+    """Q · Commenti completi (Mappa e Scambia & Vendi) e categorie (Fase 5, Blocco 5). A, B, D."""
+    ta, tb, td = token(UID_A), token(UID_B), token(UID_D)
+    for t, other in ((ta, UID_B), (tb, UID_A), (ta, UID_D), (td, UID_A), (tb, UID_D), (td, UID_B)):
+        rpc("unblock_user", {"p_user_id": other}, t)
+    sql(f"delete from public.admin_users where user_id = '{UID_D}'")
+    mine_a = {x["title"]: x for x in rows(rpc("my_market_listings", {}, ta))}
+    books = mine_a.get("Libri fantasy", {}).get("id")
+    soon = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + 3 * 3600))
+    s_map, coffee = rpc("publish_map_listing", {
+        "p_title": "Chi viene a prendere un caffè?", "p_details": "", "p_lat": 45.07,
+        "p_lon": 7.68, "p_location_mode": "approximate", "p_expires_at": soon, "p_photos": []}, ta)
+    coffee = coffee if isinstance(coffee, str) else None
+    check("Q0", "Annuncio di Scambia & Vendi e post della Mappa di prova",
+          books is not None and coffee is not None, f"{books}, HTTP {s_map}")
+    if books is None or coffee is None:
+        return
+
+    def comments(tok, listing):
+        return {c["id"]: c for c in rows(rpc("listing_comments_list", {"p_listing": listing}, tok))}
+
+    def comment(tok, listing, body, parent=None):
+        s, cid = rpc("add_listing_comment", {"p_listing": listing, "p_body": body, "p_parent": parent}, tok)
+        return cid if s == 200 and isinstance(cid, str) else None
+
+    # Q1 · Modifica del proprio commento con «modificato»
+    cb = comment(tb, books, "Li scambieresti con dei gialli?")
+    ed = rpc("edit_my_comment", {"p_comment": cb, "p_body": "Li scambieresti con tre gialli?"}, tb)
+    by_a = rpc("edit_my_comment", {"p_comment": cb, "p_body": "Modificato da altri"}, ta)
+    by_d = rpc("edit_my_comment", {"p_comment": cb, "p_body": "Modificato da altri"}, td)
+    empty = rpc("edit_my_comment", {"p_comment": cb, "p_body": "   "}, tb)
+    seen = comments(td, books).get(cb, {})
+    check("Q1", "Solo chi l'ha scritto modifica il commento; gli altri vedono «modificato»",
+          cb is not None and ed[0] in (200, 204) and by_a[0] >= 400 and by_d[0] >= 400
+          and empty[0] >= 400 and seen.get("body") == "Li scambieresti con tre gialli?"
+          and seen.get("edited") is True and seen.get("can_hide") is False,
+          f"{cb}, {ed[0]}, {by_a[0]}, {by_d[0]}, {empty[0]}, {seen.get('edited')}")
+
+    # Q2 · L'autore dell'annuncio nasconde: autore invariato, testo solo a chi può
+    h_d = rpc("set_comment_hidden", {"p_comment": cb, "p_hidden": True}, td)
+    h_b = rpc("set_comment_hidden", {"p_comment": cb, "p_hidden": True}, tb)
+    h_a = rpc("set_comment_hidden", {"p_comment": cb, "p_hidden": True}, ta)
+    d_view, b_view, a_view = comments(td, books).get(cb, {}), comments(tb, books).get(cb, {}), \
+        comments(ta, books).get(cb, {})
+    reply = comment(td, books, "Rispondo al nascosto", parent=cb)
+    like = rpc("set_comment_like", {"p_comment": cb, "p_like": True}, td)
+    edit_hidden = rpc("edit_my_comment", {"p_comment": cb, "p_body": "Ritento"}, tb)
+    rpc("set_comment_hidden", {"p_comment": cb, "p_hidden": False}, ta)
+    back = comments(td, books).get(cb, {})
+    check("Q2", "Nascosto dall'autore dell'annuncio: niente testo per gli altri, niente risposte né Mi piace",
+          h_d[0] >= 400 and h_b[0] >= 400 and h_a[0] in (200, 204)
+          and d_view.get("hidden") is True and d_view.get("body") is None
+          and d_view.get("author_username") == "utente_b"
+          and b_view.get("body") == "Li scambieresti con tre gialli?"
+          and a_view.get("body") is not None and a_view.get("can_hide") is True
+          and reply is None and like[0] >= 400 and edit_hidden[0] >= 400
+          and back.get("hidden") is False and back.get("body") is not None,
+          f"{h_d[0]}, {h_b[0]}, {h_a[0]}, {d_view.get('hidden')}, {d_view.get('body')}, {reply}, {like[0]}")
+
+    # Q3 · Anche la moderazione nasconde
+    sql(f"insert into public.admin_users (user_id) values ('{UID_D}') on conflict do nothing")
+    adm = rpc("set_comment_hidden", {"p_comment": cb, "p_hidden": True}, td)
+    adm_view = comments(td, books).get(cb, {})
+    sql(f"delete from public.admin_users where user_id = '{UID_D}'")
+    rpc("set_comment_hidden", {"p_comment": cb, "p_hidden": False}, ta)
+    check("Q3", "Un amministratore nasconde e vede il testo",
+          adm[0] in (200, 204) and adm_view.get("hidden") is True and adm_view.get("body") is not None
+          and adm_view.get("can_hide") is True, f"{adm[0]}, {adm_view.get('hidden')}")
+
+    # Q4 · Segnalazione di un commento
+    r_ok = rpc("report_comment", {"p_comment": cb, "p_reason": "spam", "p_details": "Ripetuto"}, td)
+    r_twice = rpc("report_comment", {"p_comment": cb, "p_reason": "spam"}, td)
+    r_own = rpc("report_comment", {"p_comment": cb, "p_reason": "spam"}, tb)
+    r_bad = rpc("report_comment", {"p_comment": cb, "p_reason": "noia"}, ta)
+    n_rep = sql(f"select count(*) from public.reports where target = 'comment' and target_id = '{cb}'")
+    check("Q4", "Commento segnalato una volta; non il proprio; motivo controllato",
+          r_ok[0] in (200, 204) and r_twice[0] in (200, 204) and r_own[0] >= 400 and r_bad[0] >= 400
+          and n_rep == "1", f"{r_ok[0]}, {r_own[0]}, {r_bad[0]}, {n_rep}")
+
+    # Q5 · Anti-spam (D9): 10 al minuto, 100 al giorno
+    sql("select set_config('nexus.internal', 'on', false); "
+        "insert into public.listing_comments (listing_id, author_id, body) "
+        f"select '{books}', '{UID_D}', 'Spam ' || g from generate_series(1, 10) g")
+    minute = comment(td, books, "Ancora uno")
+    sql("select set_config('nexus.internal', 'on', false); "
+        "update public.listing_comments set created_at = now() - interval '2 minutes' "
+        f"where author_id = '{UID_D}'")
+    after = comment(td, books, "Ora si può")
+    sql("select set_config('nexus.internal', 'on', false); "
+        "insert into public.listing_comments (listing_id, author_id, body, created_at) "
+        f"select '{books}', '{UID_D}', 'Vecchio ' || g, now() - interval '1 hour' "
+        "from generate_series(1, 100) g")
+    day = comment(td, books, "Troppi oggi")
+    sql(f"delete from public.listing_comments where author_id = '{UID_D}' "
+        "and (body like 'Spam %' or body like 'Vecchio %')")
+    check("Q5", "L'undicesimo commento in un minuto e il centunesimo del giorno vengono rifiutati",
+          minute is None and after is not None and day is None, f"{minute}, {after}, {day}")
+
+    # Q6 · Le stesse regole sulla Mappa
+    cm = comment(tb, coffee, "Io ci sono alle 17")
+    ed_m = rpc("edit_my_comment", {"p_comment": cm, "p_body": "Io ci sono alle 18"}, tb)
+    hide_m = rpc("set_comment_hidden", {"p_comment": cm, "p_hidden": True}, ta)
+    m_view = comments(td, coffee).get(cm, {})
+    rep_m = rpc("report_comment", {"p_comment": cm, "p_reason": "altro"}, td)
+    check("Q6", "Sulla Mappa: modifica, nascondi e segnala come in Scambia & Vendi",
+          cm is not None and ed_m[0] in (200, 204) and hide_m[0] in (200, 204)
+          and m_view.get("hidden") is True and m_view.get("body") is None and m_view.get("edited") is True
+          and rep_m[0] in (200, 204), f"{cm}, {ed_m[0]}, {hide_m[0]}, {m_view}, {rep_m[0]}")
+
+    # Q7 · Categorie: solo amministratori; slug dal nome e immutabile; archiviate restano integre
+    no_admin = [rpc("admin_create_category", {"p_name": "Prova"}, ta)[0],
+                rpc("admin_categories", {}, ta)[0],
+                rpc("admin_archive_category", {"p_id": "ac787308-86bb-591f-b63c-305f6932da26"}, ta)[0]]
+    sql(f"insert into public.admin_users (user_id) values ('{UID_D}') on conflict do nothing")
+    elec = "ac787308-86bb-591f-b63c-305f6932da26"
+    _, main = rpc("admin_create_category", {"p_name": "Articoli per la casa d'epoca"}, td)
+    _, sub = rpc("admin_create_category", {"p_name": "Droni e accessori", "p_parent": elec}, td)
+    _, dup = rpc("admin_create_category", {"p_name": "Droni & accessori", "p_parent": elec}, td)
+    main = main if isinstance(main, dict) else {}
+    sub = sub if isinstance(sub, dict) else {}
+    dup = dup if isinstance(dup, dict) else {}
+    deep = rpc("admin_create_category", {"p_name": "Troppo in fondo", "p_parent": sub.get("id")}, td)
+    ren = rpc("admin_update_category", {"p_id": sub.get("id"), "p_name": "Droni",
+                                        "p_description": "Droni e ricambi", "p_sort_order": 5}, td)
+    slug_after = sql(f"select slug from public.marketplace_categories where id = '{sub.get('id')}'")
+    listed = {c["id"]: c for c in (rpc("marketplace_categories_list", {}, ta)[1] or [])}
+    off = rpc("admin_set_category_active", {"p_id": sub.get("id"), "p_active": False}, td)
+    listed_off = {c["id"] for c in (rpc("marketplace_categories_list", {}, ta)[1] or [])}
+    pub_off = rpc("publish_market_listing", {
+        "p_type": "sell", "p_category": sub.get("id"), "p_title": "Drone", "p_description": "",
+        "p_price_cents": 10000, "p_condition": "good", "p_ships": False, "p_pickup": True,
+        "p_attributes": {}, "p_lat": 45.07, "p_lon": 7.68, "p_location_mode": "approximate",
+        "p_photos": [f"{UID_A}/mercatoA0001.jpg"], "p_no_prohibited_items": True}, ta)
+    music = sql("select id from public.marketplace_categories where slug = 'musica-strumenti'")
+    arch = rpc("admin_archive_category", {"p_id": music}, td)
+    gone = {c["slug"] for c in (rpc("marketplace_categories_list", {}, ta)[1] or [])}
+    adm_rows = {c["slug"]: c for c in rows(rpc("admin_categories", {}, td))}
+    still = sql("select count(*) from public.listings where kind = 'market' and status = 'active' "
+                "and market_category_id in (select id from public.marketplace_categories "
+                "where slug like 'musica-strumenti-%')")
+    sql("update public.marketplace_categories set archived_at = null, is_active = true "
+        "where slug like 'musica-strumenti%'")
+    sql(f"delete from public.admin_users where user_id = '{UID_D}'")
+    check("Q7", "Categorie gestite solo dagli amministratori, slug stabile, archivio senza perdere annunci",
+          all(x >= 400 for x in no_admin)
+          and main.get("slug") == "articoli-casa-epoca"
+          and sub.get("slug") == "elettronica-droni-accessori"
+          and dup.get("slug") == "elettronica-droni-accessori-2"
+          and deep[0] >= 400 and ren[0] in (200, 204) and slug_after == "elettronica-droni-accessori"
+          and listed.get(sub.get("id"), {}).get("name") == "Droni"
+          and off[0] in (200, 204) and sub.get("id") not in listed_off and pub_off[0] >= 400
+          and arch[0] in (200, 204) and "musica-strumenti" not in gone
+          and "musica-strumenti-chitarre" not in gone
+          and adm_rows.get("musica-strumenti-chitarre", {}).get("archived_at") is not None
+          and int(still or 0) > 0,
+          f"{no_admin}, {main}, {sub}, {dup}, {deep[0]}, {ren[0]}, {slug_after}, {off[0]}, "
+          f"{pub_off[0]}, {arch[0]}, {still}")
+
+
 def main() -> int:
     try:
         ids = setup()
@@ -1794,6 +1953,7 @@ def main() -> int:
     check_marketplace_search_phase5()
     check_swap_proposals_phase5()
     check_deals_feedback_phase5()
+    check_comments_categories_phase5()
     failed = [r for r in results if not r[2]]
     print(f"{'Caso':6} {'Esito':9} Descrizione")
     for case, desc, ok, detail in results:
