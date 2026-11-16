@@ -406,24 +406,39 @@ class _CommentTile extends StatelessWidget {
                             onReport?.call();
                           }
                         },
+                        offset: const Offset(0, 28),
+                        constraints: const BoxConstraints(minWidth: 210),
                         itemBuilder: (_) => [
                           if (onEdit != null)
                             const PopupMenuItem<String>(
                               key: ValueKey<String>('azione_modifica'),
                               value: 'modifica',
-                              child: Text('Modifica'),
+                              child: _MenuEntry(
+                                icon: Icons.edit_rounded,
+                                label: 'Modifica',
+                                hint: 'Correggi il tuo commento',
+                              ),
                             ),
                           if (onHide != null)
                             PopupMenuItem<String>(
                               key: const ValueKey<String>('azione_nascondi'),
                               value: 'nascondi',
-                              child: Text(c.hidden ? 'Mostra di nuovo' : 'Nascondi'),
+                              child: _MenuEntry(
+                                icon: c.hidden ? Icons.visibility_rounded : Icons.visibility_off_rounded,
+                                label: c.hidden ? 'Mostra di nuovo' : 'Nascondi',
+                                hint: c.hidden ? 'Torna visibile a tutti' : 'Solo tu e l\'autore lo vedrete',
+                              ),
                             ),
                           if (onReport != null)
                             const PopupMenuItem<String>(
                               key: ValueKey<String>('azione_segnala'),
                               value: 'segnala',
-                              child: Text('Segnala'),
+                              child: _MenuEntry(
+                                icon: Icons.flag_rounded,
+                                label: 'Segnala',
+                                hint: 'Avvisa la moderazione',
+                                danger: true,
+                              ),
                             ),
                         ],
                       ),
@@ -497,6 +512,56 @@ class _CommentTile extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Voce del menu «⋯» dei commenti: icona in un riquadro colorato, nome e breve spiegazione.
+class _MenuEntry extends StatelessWidget {
+  const _MenuEntry({required this.icon, required this.label, required this.hint, this.danger = false});
+
+  final IconData icon;
+  final String label;
+  final String hint;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final Color color = danger ? theme.colorScheme.error : theme.colorScheme.primary;
+    return Row(
+      children: [
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(7),
+            child: Icon(icon, size: 20, color: color),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Flexible(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: danger ? color : null,
+                ),
+              ),
+              Text(
+                hint,
+                style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
