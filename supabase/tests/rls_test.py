@@ -195,10 +195,12 @@ def by_id(items, listing_id):
 def run(ids: dict) -> None:
     ta, tb, tc = token(UID_A), token(UID_B), token(UID_C)
 
-    # Compatibilità con il controllo di avvio dell'app (Profilo → «Collegato»).
-    s, body = get("/rest/v1/profiles?select=id&limit=1")
-    check("APP", "Il controllo di avvio dell'app risponde HTTP 200 senza dati",
-          s == 200 and body == [], f"HTTP {s}")
+    # Controllo di avvio dell'app (Profilo → «Collegato»): «ping» risponde anche prima
+    # dell'accesso; tutto il resto no (migrazione 0017).
+    s, body = rpc("ping", {})
+    s2, _ = get("/rest/v1/profiles?select=id&limit=1")
+    check("APP", "Il controllo di avvio dell'app risponde («ping») senza dare dati",
+          s == 200 and body is True and s2 >= 400, f"HTTP {s}, {body}, {s2}")
 
     # A · Separazione tra dati pubblici e privati
     mine = rows(get(f"/rest/v1/profile_private?id=eq.{UID_A}", ta))

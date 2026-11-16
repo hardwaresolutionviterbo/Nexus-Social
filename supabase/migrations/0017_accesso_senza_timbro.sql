@@ -9,6 +9,7 @@
 -- l'utente da emittente, destinatario, soggetto e scadenza. Quindi:
 --  • ogni richiesta all'API passa da un controllo iniziale (pre-request): senza un utente
 --    Firebase valido è rifiutata, tranne `ping` (il controllo di raggiungibilità dell'app);
+--    il controllo del telefono e del PIN (0005) resta quello di sempre, dentro le funzioni;
 --    vale anche per chi usasse il ruolo `authenticated` con un token non di Firebase;
 --  • `anon` riceve esattamente i permessi di `authenticated` (funzioni, tabelle, colonne,
 --    policy delle tabelle e delle foto): le regole restano quelle di sempre, basate su
@@ -42,7 +43,9 @@ begin
   if current_user not in ('anon', 'authenticated') then
     return;
   end if;
-  if public.current_uid() is not null then
+  -- Identità Firebase valida (il controllo del telefono e del PIN resta nelle singole
+  -- funzioni, che usano `current_uid()`).
+  if public.current_uid_raw() is not null then
     return;
   end if;
   if coalesce(current_setting('request.path', true), '') in ('/rpc/ping', '/rest/v1/rpc/ping') then
@@ -56,6 +59,7 @@ $$;
 revoke all on function public.require_firebase_identity() from public;
 grant execute on function public.require_firebase_identity() to anon, authenticated, service_role;
 grant execute on function public.current_uid() to anon, authenticated;
+grant execute on function public.current_uid_raw() to anon, authenticated;
 
 alter role authenticator set pgrst.db_pre_request = 'public.require_firebase_identity';
 notify pgrst, 'reload config';
