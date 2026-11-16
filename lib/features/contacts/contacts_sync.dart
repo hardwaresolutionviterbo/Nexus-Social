@@ -1,13 +1,12 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuth, User;
-import 'package:firebase_core/firebase_core.dart' show Firebase;
 import 'package:crypto/crypto.dart' show sha256;
 import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException, SupabaseClient;
+import 'package:supabase_flutter/supabase_flutter.dart'
+    show FunctionException, FunctionResponse, PostgrestException, SupabaseClient;
 
 import '../../core/crypto/p256_oprf.dart';
 import '../onboarding/registration_rules.dart';
@@ -50,6 +49,14 @@ List<String> normalizeContactNumbers(Iterable<String> raw) {
   }
   return out.toList()..sort();
 }
+
+/// Messaggio per gli errori della funzione `rubrica` (codice HTTP).
+String rubricaErrorMessage(int status) => switch (status) {
+  429 => 'Hai già sincronizzato 3 volte oggi. Riprova domani.',
+  503 => 'La rubrica non è ancora disponibile.',
+  401 => 'Accesso scaduto: riapri l\'app e riprova.',
+  _ => 'Sincronizzazione non riuscita. Riprova più tardi.',
+};
 
 /// Rubrica del telefono, letta solo con il permesso del sistema.
 abstract class ContactsReader {
@@ -153,7 +160,6 @@ class SupabaseContactsRepository implements ContactsRepository {
   final ContactsReader _reader;
   final FirebaseAuth _auth;
 
-  static const String region = 'europe-west1';
   static const FlutterSecureStorage _storage = FlutterSecureStorage();
   static const String _fingerprintKey = 'piazly_contacts_fingerprint';
   bool _autoRunning = false;
@@ -170,40 +176,25 @@ class SupabaseContactsRepository implements ContactsRepository {
     }
   }
 
-  /// Chiama una Cloud Function «callable» con il token dell'utente.
-  Future<Map<String, dynamic>> _callable(String name, Map<String, Object?> data) async {
+  /// Chiama la funzione `rubrica` di Supabase (al posto delle Cloud Functions, niente piano
+  /// Blaze) con il token Firebase dell'utente; vedi supabase/functions/rubrica.
+  Future<Map<String, dynamic>> _rubrica(Map<String, Object?> body) async {
     final User? user = _auth.currentUser;
     if (user == null) throw const ProfileFailure('Accesso richiesto.');
     final String token = await user.getIdToken() ?? '';
-    final String project = Firebase.app().options.projectId;
-    final HttpClient client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
     try {
-      final HttpClientRequest request = await client.postUrl(
-        Uri.https('$region-$project.cloudfunctions.net', '/$name'),
-      );
-      request.headers
-        ..contentType = ContentType.json
-        ..set(HttpHeaders.authorizationHeader, 'Bearer $token');
-      request.write(jsonEncode(<String, Object?>{'data': data}));
-      final HttpClientResponse response = await request.close().timeout(
-        const Duration(seconds: 60),
-      );
-      final Object? body = jsonDecode(await response.transform(utf8.decoder).join());
-      if (body is Map<String, dynamic> && body['result'] is Map<String, dynamic>) {
-        return body['result'] as Map<String, dynamic>;
-      }
-      Object? status;
-      if (body is Map<String, dynamic>) {
-        final Object? error = body['error'];
-        if (error is Map) status = error['status'];
-      }
-      throw ProfileFailure(switch (status) {
-        'RESOURCE_EXHAUSTED' => 'Hai già sincronizzato 3 volte oggi. Riprova domani.',
-        'FAILED_PRECONDITION' => 'La rubrica non è ancora disponibile.',
-        _ => 'Sincronizzazione non riuscita. Riprova più tardi.',
-      });
-    } finally {
-      client.close(force: true);
+      final FunctionResponse res = await _client.functions
+          .invoke(
+            'rubrica',
+            headers: <String, String>{'Authorization': 'Bearer $token'},
+            body: body,
+          )
+          .timeout(const Duration(seconds: 60));
+      final Object? data = res.data;
+      if (data is Map<String, dynamic>) return data;
+      throw const ProfileFailure('Risposta non valida.');
+    } on FunctionException catch (e) {
+      throw ProfileFailure(rubricaErrorMessage(e.status));
     }
   }
 
@@ -211,7 +202,7 @@ class SupabaseContactsRepository implements ContactsRepository {
   Future<void> enable() => _guard(() async {
     await _client.rpc('enable_contacts');
     // Il proprio numero entra nell'indice di chi vuole farsi trovare (P8).
-    final Map<String, dynamic> mine = await _callable('rubricaMioNumero', <String, Object?>{});
+    final Map<String, dynamic> mine = await _rubrica(<String, Object?>{'azione': 'mio_numero'});
     await _client.rpc(
       'register_my_phone',
       params: <String, Object?>{
@@ -238,7 +229,8 @@ class SupabaseContactsRepository implements ContactsRepository {
     }
     final List<BlindedInput> blinded = await compute(_blindAll, numbers);
     onProgress?.call(0.45);
-    final Map<String, dynamic> evaluated = await _callable('rubricaValuta', <String, Object?>{
+    final Map<String, dynamic> evaluated = await _rubrica(<String, Object?>{
+      'azione': 'valuta',
       'elementi': <String>[for (final BlindedInput b in blinded) toHex(b.blinded)],
     });
     final List<String> values = (evaluated['valutati'] as List<dynamic>).cast<String>();

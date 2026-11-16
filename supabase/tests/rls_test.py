@@ -1981,6 +1981,33 @@ def check_claimless_access() -> None:
     check("Z4", "Permessi identici per richieste con e senza timbro", diff == "", diff[:300])
 
 
+def check_rubrica_server() -> None:
+    """Y · Rubrica su Supabase (migrazione 0018): chiavi e limiti solo per la funzione."""
+    ta = token(UID_A)
+    service = token(None, role="service_role")
+    # Y1 · Le chiavi nascono nel database, valide, e le legge solo il ruolo di servizio
+    n = int("ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551", 16)
+    oprf = sql("select value from private.settings where key = 'oprf_key'")
+    by_user = rpc("rubrica_server_config", {}, ta)
+    by_anon = rpc("rubrica_server_config", {})
+    by_service = rpc("rubrica_server_config", {}, service)
+    row = (by_service[1] or [{}])[0] if isinstance(by_service[1], list) else {}
+    check("Y1", "Chiavi della rubrica generate nel database e leggibili solo dalla funzione",
+          len(oprf) == 64 and 0 < int(oprf, 16) < n and by_user[0] >= 400 and by_anon[0] >= 400
+          and by_service[0] == 200 and row.get("oprf_key") == oprf
+          and len(row.get("attest_key") or "") >= 32 and row.get("firebase_project_id") == PROJECT,
+          f"{len(oprf)}, {by_user[0]}, {by_anon[0]}, {by_service[0]}")
+    # Y2 · Limiti giornalieri contati nel database, solo dalla funzione
+    user_try = rpc("rubrica_consume_limit", {"p_uid": UID_A, "p_kind": "sincronizzazioni", "p_max": 3}, ta)
+    got = [rpc("rubrica_consume_limit", {"p_uid": UID_E, "p_kind": "sincronizzazioni", "p_max": 3},
+               service)[1] for _ in range(4)]
+    other_kind = rpc("rubrica_consume_limit", {"p_uid": UID_E, "p_kind": "mio_numero", "p_max": 5}, service)[1]
+    bad = rpc("rubrica_consume_limit", {"p_uid": "uid con spazi", "p_kind": "mio_numero", "p_max": 5}, service)
+    check("Y2", "Tre sincronizzazioni al giorno, contate a parte dal proprio numero",
+          user_try[0] >= 400 and got == [True, True, True, False] and other_kind is True and bad[0] >= 400,
+          f"{user_try[0]}, {got}, {other_kind}, {bad[0]}")
+
+
 def main() -> int:
     try:
         ids = setup()
@@ -2001,6 +2028,7 @@ def main() -> int:
     check_deals_feedback_phase5()
     check_comments_categories_phase5()
     check_claimless_access()
+    check_rubrica_server()
     failed = [r for r in results if not r[2]]
     print(f"{'Caso':6} {'Esito':9} Descrizione")
     for case, desc, ok, detail in results:
