@@ -29,6 +29,15 @@ void main() {
       ..contacts[bruno] = <String>{io};
   });
 
+  /// Smonta le schermate e poi chiude i telefoni finti (nessun timer rimasto).
+  Future<void> finish(WidgetTester tester, List<ChatService> phones) async {
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 1));
+    for (final ChatService p in phones) {
+      p.dispose();
+    }
+  }
+
   void tall(WidgetTester tester) {
     tester.view.physicalSize = const Size(1170, 2600);
     tester.view.devicePixelRatio = 3;
@@ -63,19 +72,18 @@ void main() {
     await tester.tap(find.byKey(const ValueKey<String>('chat_invia')));
     await tester.pumpAndSettle();
     expect(find.text('Ciao Bruno!'), findsOneWidget);
-    expect(find.bySemanticsLabel('Inviato'), findsOneWidget);
+    expect(find.byIcon(Icons.done_rounded), findsOneWidget, reason: 'una spunta: inviato');
 
     await b.refresh();
     expect(b.messages(b.threads.single.conversation.id).single.body, 'Ciao Bruno!');
     await me.refresh();
     await tester.pumpAndSettle();
-    expect(find.bySemanticsLabel('Consegnato'), findsOneWidget);
+    expect(find.byIcon(Icons.done_all_rounded), findsOneWidget, reason: 'due spunte: consegnato');
 
     await tester.pageBack();
     await tester.pumpAndSettle();
     expect(find.text('Ciao Bruno!'), findsOneWidget, reason: 'anteprima nella lista');
-    me.dispose();
-    b.dispose();
+    await finish(tester, <ChatService>[me, b]);
   });
 
   testWidgets('messaggio in arrivo: contatore, apertura e «letto» per chi scrive', (WidgetTester tester) async {
@@ -95,8 +103,7 @@ void main() {
     expect(me.unreadTotal, 0);
     await b.refresh();
     expect(b.messages(conv).single.ticksFor(b.conversation(conv)), MessageTicks.read);
-    me.dispose();
-    b.dispose();
+    await finish(tester, <ChatService>[me, b]);
   });
 
   testWidgets('richiesta da uno sconosciuto: banner, Accetta', (WidgetTester tester) async {
@@ -123,8 +130,7 @@ void main() {
     expect(find.byKey(const ValueKey<String>('richiesta_banner')), findsNothing);
     expect(me.requests, isEmpty);
     expect(me.threads.single.conversation.id, conv);
-    me.dispose();
-    d.dispose();
+    await finish(tester, <ChatService>[me, d]);
   });
 
   testWidgets('richiesta rifiutata: si chiude e sparisce', (WidgetTester tester) async {
@@ -148,8 +154,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('apri'), findsOneWidget);
     expect(me.requests, isEmpty);
-    me.dispose();
-    d.dispose();
+    await finish(tester, <ChatService>[me, d]);
   });
 
   testWidgets('«Contatta» da un annuncio apre la chat con l\'autore', (WidgetTester tester) async {
@@ -177,8 +182,7 @@ void main() {
     await d.refresh();
     // Dario non ha Anna in rubrica: per lui è una richiesta.
     expect(d.requests.single.last?.body, 'Ciao, mi interessa');
-    me.dispose();
-    d.dispose();
+    await finish(tester, <ChatService>[me, d]);
   });
 
   test('etichette dell\'ora come WhatsApp', () {
