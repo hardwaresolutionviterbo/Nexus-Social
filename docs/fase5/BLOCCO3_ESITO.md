@@ -27,3 +27,6 @@ Ramo `fase5/blocco3` (parte da `fase5/blocco2`). Nessuna modifica a `main` né a
   arrivano con il Blocco 4.
 - La chat tra le parti resta con la Fase 4 (D2): dopo l'accettazione ci si accorda nei commenti.
 - Aggiunte 2 schermate all'elenco chiuso del controllo F10.
+
+## Approvazione
+- 16/11/2026: Blocco 3 approvato dal titolare.
