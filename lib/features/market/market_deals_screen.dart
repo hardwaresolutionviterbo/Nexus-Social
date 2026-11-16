@@ -278,13 +278,13 @@ class _DealCard extends StatelessWidget {
               const SizedBox(height: 6),
               Row(
                 children: [
-                  Text('Il tuo voto: ', style: theme.textTheme.bodySmall),
+                  Flexible(child: Text('Il tuo voto: ', style: theme.textTheme.bodySmall)),
                   if (d.myStars != null) StarRow(stars: d.myStars!, size: 16) else Text('—', style: theme.textTheme.bodySmall),
                 ],
               ),
               Row(
                 children: [
-                  Text('Ricevuto: ', style: theme.textTheme.bodySmall),
+                  Flexible(child: Text('Ricevuto: ', style: theme.textTheme.bodySmall)),
                   if (d.theirStars != null)
                     StarRow(stars: d.theirStars!, size: 16)
                   else

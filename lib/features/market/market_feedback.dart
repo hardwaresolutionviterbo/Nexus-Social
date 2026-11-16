@@ -158,7 +158,7 @@ class _FeedbackListScreenState extends State<FeedbackListScreen> {
               children: [
                 StarRow(stars: s.average ?? 0, size: 26),
                 const SizedBox(width: 8),
-                Text(s.label, style: theme.textTheme.titleMedium),
+                Expanded(child: Text(s.label, style: theme.textTheme.titleMedium)),
               ],
             ),
             if (s.completedDeals > 0)
@@ -186,8 +186,14 @@ class _FeedbackListScreenState extends State<FeedbackListScreen> {
                     Row(
                       children: [
                         StarRow(stars: f.stars),
-                        const Spacer(),
-                        Text(_date(f.createdAt), style: theme.textTheme.bodySmall),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _date(f.createdAt),
+                            textAlign: TextAlign.end,
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ),
                       ],
                     ),
                     if (f.comment.isNotEmpty) ...[
