@@ -425,6 +425,8 @@ class _CommentTile extends StatelessWidget {
                               value: 'segnala',
                               child: Text('Segnala'),
                             ),
+                        ],
+                      ),
                             ),
                         ],
                       ),
