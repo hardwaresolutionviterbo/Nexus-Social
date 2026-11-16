@@ -36,11 +36,15 @@ create or replace function public.require_firebase_identity()
 returns void
 language plpgsql
 stable
+security definer
 set search_path = ''
 as $$
+declare
+  -- Il ruolo della richiesta (impostato da PostgREST), non il proprietario della funzione.
+  v_role text := current_setting('role', true);
 begin
   -- Solo le richieste dell'app: il ruolo di servizio e gli strumenti interni passano.
-  if current_user not in ('anon', 'authenticated') then
+  if coalesce(v_role, '') not in ('anon', 'authenticated') then
     return;
   end if;
   -- Identità Firebase valida (il controllo del telefono e del PIN resta nelle singole
@@ -58,8 +62,6 @@ $$;
 
 revoke all on function public.require_firebase_identity() from public;
 grant execute on function public.require_firebase_identity() to anon, authenticated, service_role;
-grant execute on function public.current_uid() to anon, authenticated;
-grant execute on function public.current_uid_raw() to anon, authenticated;
 
 alter role authenticator set pgrst.db_pre_request = 'public.require_firebase_identity';
 notify pgrst, 'reload config';
@@ -76,6 +78,26 @@ declare
   r record;
   v_roles text;
 begin
+  -- Prima si tolgono ad anon i permessi che authenticated non ha (Supabase li dà a
+  -- entrambi per impostazione, le nostre migrazioni li hanno tolti solo ad authenticated).
+  for r in
+    select p.oid::regprocedure as fn
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and has_function_privilege('anon', p.oid, 'EXECUTE')
+      and not has_function_privilege('authenticated', p.oid, 'EXECUTE')
+      and p.proname not in ('ping', 'require_firebase_identity')
+  loop
+    execute format('revoke execute on function %s from anon, public', r.fn);
+  end loop;
+  for r in
+    select c.oid::regclass as tbl
+    from pg_class c join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relkind in ('r', 'v', 'm', 'p', 'f')
+  loop
+    execute format('revoke all on table %s from anon', r.tbl);
+  end loop;
+
   -- Funzioni dello schema pubblico.
   for r in
     select p.oid::regprocedure as fn
@@ -151,6 +173,14 @@ as $$
     and not exists (
       select 1 from information_schema.role_table_grants b
       where b.grantee = 'anon' and b.table_schema = 'public'
+        and b.table_name = a.table_name and b.privilege_type = a.privilege_type)
+  union all
+  select 'tabella (solo anon)', a.table_name || ' ' || a.privilege_type
+  from information_schema.role_table_grants a
+  where a.grantee = 'anon' and a.table_schema = 'public'
+    and not exists (
+      select 1 from information_schema.role_table_grants b
+      where b.grantee = 'authenticated' and b.table_schema = 'public'
         and b.table_name = a.table_name and b.privilege_type = a.privilege_type);
 $$;
 
