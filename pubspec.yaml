@@ -37,6 +37,7 @@ dependencies:
   share_plus: ^13.3.1
   # Fase 4: cifratura delle chat con MLS (RFC 9420), licenza MIT.
   openmls: 4.0.0
+  path_provider: ^2.1.5
 
 dev_dependencies:
   flutter_test:

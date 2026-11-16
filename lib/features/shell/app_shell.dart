@@ -5,6 +5,8 @@ import '../../core/services/backend_bootstrap.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/nexus_ui.dart';
 import '../chat/chat_screen.dart';
+import '../chat/chat_service.dart';
+import '../chat/chat_thread_screen.dart' show ChatRegistry;
 import '../map/listing_repository.dart';
 import '../map/map_screen.dart';
 import '../market/market_models.dart';
@@ -44,6 +46,7 @@ class AppShell extends StatefulWidget {
     this.today,
     this.social,
     this.market,
+    this.chat,
   });
 
   final BackendStatus backend;
@@ -69,6 +72,9 @@ class AppShell extends StatefulWidget {
   /// Annunci di Scambia & Vendi (Fase 5).
   final MarketRepository? market;
 
+  /// Chat cifrata (Fase 4): presente quando il server è collegato.
+  final ChatService? chat;
+
   /// Data di oggi per il calcolo dell'età (nei test si fissa).
   final DateTime Function()? today;
 
@@ -91,9 +97,9 @@ class AppShell extends StatefulWidget {
   State<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> {
+class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   List<Widget> get _screens => <Widget>[
-    const ChatScreen(),
+    ChatScreen(service: widget.chat, profiles: widget.profiles),
     MapScreen(
       active: _index == 1,
       services: widget.map,
@@ -143,6 +149,52 @@ class _AppShellState extends State<AppShell> {
   void initState() {
     super.initState();
     _refreshUnread();
+    _attachChat();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didUpdateWidget(AppShell old) {
+    super.didUpdateWidget(old);
+    if (old.chat != widget.chat) {
+      old.chat?.removeListener(_onChat);
+      _attachChat();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    widget.chat?.removeListener(_onChat);
+    if (ChatRegistry.current == widget.chat) {
+      ChatRegistry.current = null;
+      ChatRegistry.profiles = null;
+    }
+    super.dispose();
+  }
+
+  /// La chat parte con l'app e la usano anche i pulsanti «Contatta» degli annunci.
+  void _attachChat() {
+    final ChatService? chat = widget.chat;
+    ChatRegistry.current = chat;
+    ChatRegistry.profiles = widget.profiles;
+    if (chat == null) return;
+    chat.addListener(_onChat);
+    chat.start();
+  }
+
+  void _onChat() {
+    if (mounted) setState(() {});
+  }
+
+  int get _chatUnread {
+    final ChatService? chat = widget.chat;
+    return chat == null || !chat.ready ? 0 : chat.unreadTotal;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    widget.chat?.setForeground(state == AppLifecycleState.resumed);
   }
 
   /// Contatore della campanella: all'avvio, al cambio di sezione e dopo le notifiche.
@@ -294,31 +346,28 @@ class _AppShellState extends State<AppShell> {
                   setState(() => _index = value);
                   _refreshUnread();
                 },
-                destinations: const [
+                destinations: [
                   NavigationDestination(
-                    icon: _NavIcon(Icons.chat_bubble_outline_rounded),
-                    selectedIcon: _NavIcon(
-                      Icons.chat_bubble_rounded,
-                      selected: true,
-                    ),
+                    icon: _ChatIcon(count: _chatUnread),
+                    selectedIcon: _ChatIcon(count: _chatUnread, selected: true),
                     label: 'Chat',
                   ),
-                  NavigationDestination(
+                  const NavigationDestination(
                     icon: _NavIcon(Icons.map_outlined),
                     selectedIcon: _NavIcon(Icons.map_rounded, selected: true),
                     label: 'Mappa',
                   ),
-                  NavigationDestination(
+                  const NavigationDestination(
                     icon: _ExchangeButton(),
                     selectedIcon: _ExchangeButton(selected: true),
                     label: 'Scambia',
                   ),
-                  NavigationDestination(
+                  const NavigationDestination(
                     icon: _NavIcon(Icons.sell_outlined),
                     selectedIcon: _NavIcon(Icons.sell_rounded, selected: true),
                     label: 'Vendita',
                   ),
-                  NavigationDestination(
+                  const NavigationDestination(
                     icon: _NavIcon(Icons.person_outline_rounded),
                     selectedIcon: _NavIcon(
                       Icons.person_rounded,
@@ -364,6 +413,30 @@ class _NavIcon extends StatelessWidget {
         size: 24,
         color: selected ? scheme.primary : scheme.onSurfaceVariant,
       ),
+    );
+  }
+}
+
+/// Icona della Chat con il numero di messaggi non letti (e richieste in attesa).
+class _ChatIcon extends StatelessWidget {
+  const _ChatIcon({required this.count, this.selected = false});
+
+  final int count;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget icon = _NavIcon(
+      selected ? Icons.chat_bubble_rounded : Icons.chat_bubble_outline_rounded,
+      selected: selected,
+    );
+    if (count <= 0) return icon;
+    return Badge(
+      key: const ValueKey<String>('chat_non_lette'),
+      backgroundColor: AppColors.brandOrange,
+      offset: const Offset(-6, -2),
+      label: Text(count > 99 ? '99+' : '$count'),
+      child: icon,
     );
   }
 }

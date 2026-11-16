@@ -93,13 +93,16 @@ void main() {
   // (Blocco 3), sicurezza dell'account (Blocco 4). Fase 3, Blocco 2: annunci della Mappa
   // (pubblica, scegli il punto, i miei annunci); Blocco 3: scheda dell'annuncio, filtri e
   // segnalazione. Blocco 4: commenti, interazioni sotto l'annuncio, notifiche. Fase 5,
-  // Blocco 1: Scambia & Vendi (sezioni, categoria, pubblica, i miei annunci). Nessuno apre l'anteprima admin.
+  // Blocco 1: Scambia & Vendi (sezioni, categoria, pubblica, i miei annunci). Fase 4, Blocco 1:
+  // chat (lista, richieste, nuova chat, conversazione). Nessuno apre l'anteprima admin.
   test('F10 · navigazione esplicita solo nei file rivisti (Profilo e Privacy)', () {
     final List<String> users = <String>[
       for (final File file in dartSources())
         if (file.readAsStringSync().contains('Navigator.')) rel(file),
     ]..sort();
     expect(users, <String>[
+      'lib/features/chat/chat_screen.dart',
+      'lib/features/chat/chat_thread_screen.dart',
       'lib/features/map/comments_screen.dart',
       'lib/features/map/listing_form_screen.dart',
       'lib/features/map/listing_sheets.dart',

@@ -4,6 +4,7 @@ import 'core/config/app_config.dart';
 import 'core/services/auth_gateway.dart';
 import 'core/services/backend_bootstrap.dart';
 import 'core/theme/app_theme.dart';
+import 'features/chat/chat_service.dart';
 import 'features/onboarding/auth_gate.dart';
 import 'features/contacts/contacts_sync.dart';
 import 'features/map/listing_repository.dart';
@@ -30,6 +31,7 @@ class NexusApp extends StatelessWidget {
     this.listings,
     this.social,
     this.market,
+    this.chat,
   });
 
   /// Stato dei servizi collegati all'avvio (Firebase, Supabase).
@@ -64,6 +66,9 @@ class NexusApp extends StatelessWidget {
   /// Scambia & Vendi (Fase 5).
   final MarketRepository? market;
 
+  /// Chat cifrata (Fase 4): si crea per l'account collegato.
+  final ChatService Function(String uid)? chat;
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -89,6 +94,7 @@ class NexusApp extends StatelessWidget {
               listings: listings,
               social: social,
               market: market,
+              chat: chat,
             ),
     );
   }

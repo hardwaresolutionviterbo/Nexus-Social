@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../chat/chat_thread_screen.dart' show openChatWith;
 import '../privacy/privacy_repository.dart';
 import '../profile/profile_models.dart';
 import '../profile/profile_repository.dart';
@@ -78,22 +79,9 @@ class ListingDetail extends StatelessWidget {
   final DateTime now;
   final ScrollController? scrollController;
 
-  Future<void> _contact(BuildContext context) async {
-    // T7: il pulsante c'è già, la chat arriva con la Fase 4.
-    await showDialog<void>(
-      context: context,
-      builder: (BuildContext ctx) => AlertDialog(
-        title: const Text('Chat in arrivo'),
-        content: Text(
-          'Potrai scrivere a ${listing.ownerPublicName} quando sarà attiva la chat di Piazly, '
-          'nel prossimo aggiornamento.',
-        ),
-        actions: [
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Ok')),
-        ],
-      ),
-    );
-  }
+  /// «Contatta»: chat cifrata con l'autore (Fase 4, Blocco 1).
+  Future<void> _contact(BuildContext context) =>
+      openChatWith(context, userId: listing.ownerId, name: listing.ownerPublicName);
 
   Future<void> _report(BuildContext context) async {
     final bool? sent = await showModalBottomSheet<bool>(

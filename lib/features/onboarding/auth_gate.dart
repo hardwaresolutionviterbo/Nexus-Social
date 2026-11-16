@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/services/auth_gateway.dart';
 import '../../core/services/backend_bootstrap.dart';
 import '../../core/widgets/nexus_ui.dart';
+import '../chat/chat_service.dart';
 import '../contacts/contacts_auto_sync.dart';
 import '../contacts/contacts_sync.dart';
 import '../map/listing_repository.dart';
@@ -47,6 +48,7 @@ class AuthGate extends StatefulWidget {
     this.listings,
     this.social,
     this.market,
+    this.chat,
   });
 
   final AuthGateway gateway;
@@ -70,6 +72,9 @@ class AuthGate extends StatefulWidget {
   final MapListingRepository? listings;
   final SocialRepository? social;
   final MarketRepository? market;
+
+  /// Chat cifrata (Fase 4): una per account, creata quando il profilo è pronto.
+  final ChatService Function(String uid)? chat;
   final BackendStatus backend;
   final DateTime Function()? today;
 
@@ -92,6 +97,27 @@ class _AuthGateState extends State<AuthGate> {
   /// Controllo privacy proposto alla fine della registrazione (P14).
   PrivacyController? _checkup;
   SecurityStatus? _securityStatus;
+
+  /// Chat dell'account collegato; si chiude all'uscita o al cambio di account.
+  ChatService? _chat;
+  String? _chatUid;
+
+  ChatService? _chatFor(String uid) {
+    final ChatService Function(String uid)? make = widget.chat;
+    if (make == null) return null;
+    if (_chatUid != uid) {
+      _chat?.dispose();
+      _chat = make(uid);
+      _chatUid = uid;
+    }
+    return _chat;
+  }
+
+  void _closeChat() {
+    _chat?.dispose();
+    _chat = null;
+    _chatUid = null;
+  }
 
   @override
   void initState() {
@@ -132,6 +158,7 @@ class _AuthGateState extends State<AuthGate> {
   @override
   void dispose() {
     _checkup?.dispose();
+    _closeChat();
     _subscription?.cancel();
     super.dispose();
   }
@@ -213,6 +240,7 @@ class _AuthGateState extends State<AuthGate> {
   }
 
   Future<void> _signOut() async {
+    _closeChat();
     // Uscita sicura: questo telefono non resta attendibile e lo sblocco con impronta si spegne.
     await widget.security?.forgetThisDevice();
     await widget.biometricLock?.setEnabled(false);
@@ -287,6 +315,7 @@ class _AuthGateState extends State<AuthGate> {
               listings: widget.listings,
               social: widget.social,
               market: widget.market,
+              chat: _uid == null ? null : _chatFor(_uid!),
             );
             final ContactsRepository? contacts = widget.contacts;
             final Widget synced = contacts == null

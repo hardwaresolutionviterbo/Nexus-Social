@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuth;
 import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show Supabase;
 
 import 'app.dart';
@@ -10,6 +13,11 @@ import 'core/config/app_config.dart';
 import 'core/services/auth_gateway.dart';
 import 'core/services/backend_bootstrap.dart';
 import 'core/services/firebase_services.dart';
+import 'features/chat/chat_crypto.dart';
+import 'features/chat/chat_models.dart';
+import 'features/chat/chat_server.dart';
+import 'features/chat/chat_service.dart';
+import 'features/chat/chat_store.dart';
 import 'features/contacts/contacts_sync.dart';
 import 'features/map/listing_repository.dart';
 import 'features/map/map_screen.dart';
@@ -72,6 +80,35 @@ Future<void> main() async {
               uid: () => FirebaseAuth.instance.currentUser?.uid ?? '',
             )
           : null,
+      chat: profilesReady ? _chatFor : null,
     ),
+  );
+}
+
+/// Chat cifrata (Fase 4): chiavi e messaggi nella cartella privata dell'app, una per account.
+ChatService _chatFor(String uid) {
+  final String safe = uid.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
+  final Future<Directory> folder = getApplicationSupportDirectory()
+      .then((Directory d) => Directory('${d.path}/chat/$safe'));
+  final SupabaseContactsRepository contacts = SupabaseContactsRepository(Supabase.instance.client);
+  return ChatService(
+    server: SupabaseChatServer(Supabase.instance.client),
+    crypto: () async => MlsChatCrypto.open(
+      uid: uid,
+      dbPath: '${(await folder).path}/chiavi.db',
+      secrets: const FlutterSecureStorage(),
+    ),
+    store: FileChatStore(folder),
+    myId: uid,
+    contactsLoader: () async {
+      try {
+        return <ChatContact>[
+          for (final RecognizedContact c in await contacts.contacts())
+            ChatContact(id: c.id, name: c.publicName, username: c.username, avatarPath: c.avatarThumbPath),
+        ];
+      } catch (_) {
+        return const <ChatContact>[];
+      }
+    },
   );
 }

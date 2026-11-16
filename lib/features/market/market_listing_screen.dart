@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../chat/chat_thread_screen.dart' show openChatWith;
 import '../map/listing_models.dart' show GeoPoint, ListingPlace;
 import '../map/listing_repository.dart' show ListingFailure;
 import '../map/listing_share.dart' show ShareListing, shareWithSystem;
@@ -89,22 +90,9 @@ class _MarketListingScreenState extends State<MarketListingScreen> {
       ..showSnackBar(SnackBar(content: Text(text)));
   }
 
-  Future<void> _contact() async {
-    // La chat tra le parti arriva con la Fase 4 (decisione D2): intanto i commenti.
-    await showDialog<void>(
-      context: context,
-      builder: (BuildContext ctx) => AlertDialog(
-        title: const Text('Chat in arrivo'),
-        content: Text(
-          'Potrai scrivere a ${_l.ownerPublicName} quando sarà attiva la chat di Piazly. '
-          'Intanto puoi chiedere informazioni nei commenti dell\'annuncio.',
-        ),
-        actions: [
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Ok')),
-        ],
-      ),
-    );
-  }
+  /// «Contatta»: chat cifrata con l'autore (Fase 4, Blocco 1).
+  Future<void> _contact() =>
+      openChatWith(context, userId: _l.ownerId, name: _l.ownerPublicName);
 
   Future<void> _propose() async {
     final bool? sent = await Navigator.of(context).push<bool>(
