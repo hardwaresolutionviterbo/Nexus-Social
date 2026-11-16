@@ -6,7 +6,7 @@ name: Android APK
 # es. nexus-social-0.1.0+1202-a1b2c3d-fase1-blocco1.
 on:
   push:
-    branches: [main, 'fase1/**', 'fase2/**', 'fase3/**', 'fase5/**', 'server/**']
+    branches: [main, 'fase1/**', 'fase2/**', 'fase3/**', 'fase4/**', 'fase5/**', 'server/**']
   workflow_dispatch:
 
 permissions:
@@ -198,10 +198,17 @@ jobs:
             exit 0
           fi
           base="${SUPABASE_URL%/}"
-          code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 20 \
-            -H "apikey: ${SUPABASE_ANON_KEY}" \
-            "${base}/rest/v1/profiles?select=id&limit=1")
-          echo "Supabase /rest/v1/profiles → HTTP ${code}"
+          # Dalla migrazione 0017 risponde solo «ping» senza accesso; prima, «profiles».
+          code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 20 -X POST \
+            -H "apikey: ${SUPABASE_ANON_KEY}" -H "Content-Type: application/json" -d '{}' \
+            "${base}/rest/v1/rpc/ping")
+          echo "Supabase /rest/v1/rpc/ping → HTTP ${code}"
+          if [ "${code}" != "200" ]; then
+            code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 20 \
+              -H "apikey: ${SUPABASE_ANON_KEY}" \
+              "${base}/rest/v1/profiles?select=id&limit=1")
+            echo "Supabase /rest/v1/profiles → HTTP ${code}"
+          fi
           if [ "${code}" != "200" ]; then
             echo "::error::Supabase non raggiungibile o schema non applicato (HTTP ${code}). Controlla URL, chiave e migrazione 0001_init.sql."
             exit 1
@@ -212,6 +219,9 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          # Collegamento al server: si accende dalla variabile del repository
+          # SERVER_LINK_ENABLED=true (Settings → Variables), solo dopo le migrazioni.
+          SERVER_LINK_ENABLED: ${{ vars.SERVER_LINK_ENABLED == 'true' && 'true' || 'false' }}
         run: |
           if [ -f android/app/google-services.json ]; then
             FIREBASE_ENABLED=true
@@ -227,7 +237,7 @@ jobs:
             --dart-define=SUPABASE_URL="${SUPABASE_URL}" \
             --dart-define=SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY}" \
             --dart-define=FIREBASE_ENABLED="${FIREBASE_ENABLED}" \
-            --dart-define=SERVER_LINK_ENABLED=false
+            --dart-define=SERVER_LINK_ENABLED="${SERVER_LINK_ENABLED}"
 
       # SHA-1/SHA-256 del certificato debug usato da questo APK. Con la cache
       # il keystore è riutilizzato tra le run; lo SHA-1 va comunque registrato
