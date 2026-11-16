@@ -491,8 +491,6 @@ class _CommentTile extends StatelessWidget {
                         child: const Text('Elimina'),
                       ),
                   ],
-                      ),
-                  ],
                 ),
               ],
             ),
