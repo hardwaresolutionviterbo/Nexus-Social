@@ -52,7 +52,7 @@ export function blindEvaluate(key: bigint, blindedHex: unknown): string {
 }
 
 async function sha256(data: Uint8Array): Promise<Uint8Array> {
-  return new Uint8Array(await crypto.subtle.digest('SHA-256', data));
+  return new Uint8Array(await crypto.subtle.digest('SHA-256', new Uint8Array(data)));
 }
 
 /** Evaluate(k, input) (RFC 9497 §3.3.1): codice in chiaro, solo per il proprio numero. */

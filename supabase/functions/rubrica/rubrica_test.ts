@@ -1,7 +1,7 @@
 // Test della funzione `rubrica` (Deno, senza servizi reali): vettori ufficiali RFC 9497,
 // controllo dei token Firebase con chiavi di prova generate qui, regole e limiti.
 import { assert, assertEquals, assertRejects, assertThrows } from 'jsr:@std/assert@1';
-import { createLocalJWKSet, exportJWK, generateKeyPair, type JWTVerifyGetKey, SignJWT } from 'npm:jose@5.9.6';
+import { createLocalJWKSet, exportJWK, generateKeyPair, type JWTVerifyGetKey, type KeyLike, SignJWT } from 'npm:jose@5.9.6';
 
 import { attest, blindEvaluate, evaluate, fromHex, parseKey } from './oprf.ts';
 import { TokenError, verifyFirebaseToken } from './firebase_token.ts';
@@ -53,7 +53,7 @@ const { publicKey, privateKey } = await generateKeyPair('RS256');
 const jwk = { ...(await exportJWK(publicKey)), kid: 'prova', alg: 'RS256' };
 const KEYS: JWTVerifyGetKey = createLocalJWKSet({ keys: [jwk] });
 
-function firebaseToken(over: Record<string, unknown> = {}, opts: { exp?: string; key?: CryptoKey } = {}) {
+function firebaseToken(over: Record<string, unknown> = {}, opts: { exp?: string; key?: KeyLike } = {}) {
   const claims = {
     phone_number: '+393331234567',
     firebase: { sign_in_provider: 'phone' },
