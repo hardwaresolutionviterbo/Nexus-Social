@@ -52,18 +52,20 @@ def b64(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
 
 
-def token(sub: str | None = UID_A, *, project: str = PROJECT, role: str = "authenticated",
+def token(sub: str | None = UID_A, *, project: str = PROJECT, role: str | None = None,
           iat_offset: int = -10, exp_offset: int = 3600, secret: bytes | None = None,
           extra: dict | None = None) -> str:
     now = int(time.time())
     claims = {
         "iss": f"https://securetoken.google.com/{project}",
         "aud": project,
-        "role": role,
         "iat": now + iat_offset,
         "auth_time": now + iat_offset,
         "exp": now + exp_offset,
     }
+    # Come i veri token Firebase senza Cloud Function: nessun claim `role` (migrazione 0017).
+    if role is not None:
+        claims["role"] = role
     if sub is not None:
         claims["sub"] = sub
         claims["user_id"] = sub
@@ -1935,6 +1937,45 @@ def check_comments_categories_phase5() -> None:
           f"{pub_off[0]}, {arch[0]}, {still}")
 
 
+def check_claimless_access() -> None:
+    """Z · Accesso senza il «timbro» `role: authenticated` (migrazione 0017)."""
+    ta = token(UID_A)
+    with_role = token(UID_A, role="authenticated")
+    supa = token(UID_A, role="authenticated", extra={"iss": "https://example.supabase.co/auth/v1"})
+    expired = token(UID_A, exp_offset=-60)
+    # Z1 · Senza un utente Firebase valido il server non risponde a nulla, tranne «ping»
+    ping = rpc("ping", {})
+    anon_uid = rpc("current_uid", {})
+    anon_profiles = get("/rest/v1/profiles?select=id")
+    anon_cats = rpc("marketplace_categories_list", {})
+    anon_search = rpc("market_search", {"p_section": "sale"})
+    old_uid = rpc("current_uid", {}, expired)
+    supa_uid = rpc("current_uid", {}, supa)
+    check("Z1", "Senza accesso Firebase valido tutto è chiuso (solo «ping» risponde)",
+          ping == (200, True) and anon_uid[0] >= 400 and anon_profiles[0] >= 400
+          and anon_cats[0] >= 400 and anon_search[0] >= 400 and old_uid[0] >= 400
+          and supa_uid[0] >= 400,
+          f"{ping}, {anon_uid[0]}, {anon_profiles[0]}, {anon_cats[0]}, {anon_search[0]}, "
+          f"{old_uid[0]}, {supa_uid[0]}")
+    # Z2 · Il token Firebase senza «role» funziona come quello con il timbro
+    a1, a2 = rpc("current_uid", {}, ta), rpc("current_uid", {}, with_role)
+    me1, me2 = rows(get("/rest/v1/profile_private?select=id", ta)), \
+        rows(get("/rest/v1/profile_private?select=id", with_role))
+    check("Z2", "Senza «role» l'utente è riconosciuto come con il timbro",
+          a1 == (200, UID_A) and a2 == (200, UID_A)
+          and [r["id"] for r in me1] == [UID_A] and me1 == me2, f"{a1}, {a2}, {me1}, {me2}")
+    # Z3 · Foto: senza accesso nessun caricamento; con il token senza «role» sì
+    up = storage("POST", f"listing-photos/{UID_A}/senza-accesso.jpg", None, data=JPEG)
+    other = storage("POST", f"listing-photos/{UID_B}/non-mia.jpg", ta, data=JPEG)
+    mine = storage("POST", f"listing-photos/{UID_A}/senza-timbro.jpg", ta, data=JPEG)
+    check("Z3", "Foto: senza accesso nessun caricamento; ognuno solo nella propria cartella",
+          up >= 400 and other >= 400 and mine == 200, f"{up}, {other}, {mine}")
+    # Z4 · Gli stessi permessi per anon e authenticated, anche nelle migrazioni future
+    diff = sql("select coalesce(string_agg(kind || ' ' || object, '; '), '') "
+               "from private.anon_authenticated_differences()")
+    check("Z4", "Permessi identici per richieste con e senza timbro", diff == "", diff[:300])
+
+
 def main() -> int:
     try:
         ids = setup()
@@ -1954,6 +1995,7 @@ def main() -> int:
     check_swap_proposals_phase5()
     check_deals_feedback_phase5()
     check_comments_categories_phase5()
+    check_claimless_access()
     failed = [r for r in results if not r[2]]
     print(f"{'Caso':6} {'Esito':9} Descrizione")
     for case, desc, ok, detail in results:

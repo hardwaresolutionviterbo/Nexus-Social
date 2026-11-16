@@ -31,7 +31,7 @@ jobs:
         run: |
           set -euo pipefail
           found=$(ls supabase/migrations | tr '\n' ' ')
-          expected="0001_init.sql 0002_identita_firebase_e_dati_privati.sql 0003_profilo_completo.sql 0004_privacy_e_blocchi.sql 0005_sicurezza_account.sql 0006_rubrica.sql 0007_annunci_mappa.sql 0008_annunci_vicini.sql 0009_interazioni.sql 0010_marketplace_categorie.sql 0011_marketplace_catalogo_dati.sql 0012_marketplace_annunci.sql 0013_marketplace_ricerca.sql 0014_marketplace_proposte.sql 0015_marketplace_feedback.sql 0016_commenti_e_categorie.sql "
+          expected="0001_init.sql 0002_identita_firebase_e_dati_privati.sql 0003_profilo_completo.sql 0004_privacy_e_blocchi.sql 0005_sicurezza_account.sql 0006_rubrica.sql 0007_annunci_mappa.sql 0008_annunci_vicini.sql 0009_interazioni.sql 0010_marketplace_categorie.sql 0011_marketplace_catalogo_dati.sql 0012_marketplace_annunci.sql 0013_marketplace_ricerca.sql 0014_marketplace_proposte.sql 0015_marketplace_feedback.sql 0016_commenti_e_categorie.sql 0017_accesso_senza_timbro.sql "
           echo "Migrazioni: ${found}"
           if [ "${found}" != "${expected}" ]; then
             echo "::error::supabase/migrations contiene migrazioni non approvate dal titolare."
@@ -134,6 +134,8 @@ jobs:
             caso: Q2
           - difetto: categorie_senza_admin
             caso: Q7
+          - difetto: senza_controllo_iniziale
+            caso: Z1
 
     steps:
       - name: Checkout

@@ -17,10 +17,10 @@ abstract final class AppConfig {
   /// Firebase si attiva quando i file di configurazione sono stati aggiunti.
   static bool get hasFirebase => firebaseEnabled;
 
-  /// Collegamento degli utenti Firebase a Supabase (Fase 2, S1): richiede la Cloud
-  /// Function `assegnaRuolo` pubblicata e Third-Party Auth attivo su Supabase.
-  /// In pausa finché il titolare non attiva Blaze: spento, l'utente entra comunque e
-  /// il collegamento resta «in attesa».
+  /// Collegamento degli utenti Firebase a Supabase: richiede Third-Party Auth (Firebase)
+  /// attivo su Supabase e le migrazioni fino alla 0017 applicate. Niente Cloud Function né
+  /// piano Blaze (scelta C del titolare). Spento, l'utente entra comunque e il
+  /// collegamento resta «in attesa».
   static const bool serverLinkEnabled = bool.fromEnvironment('SERVER_LINK_ENABLED');
 }
 

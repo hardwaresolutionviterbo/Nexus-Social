@@ -65,12 +65,10 @@ abstract final class BackendBootstrap {
               ? () async => FirebaseAuth.instance.currentUser?.getIdToken()
               : null,
         );
-        // initialize() prepara solo il client locale: una lettura minima dimostra
-        // che URL, chiave e schema rispondono davvero.
+        // initialize() prepara solo il client locale: «ping» (migrazione 0017) dimostra che
+        // URL, chiave e schema rispondono, anche prima dell'accesso.
         await Supabase.instance.client
-            .from('profiles')
-            .select('id')
-            .limit(1)
+            .rpc<Object?>('ping')
             .timeout(const Duration(seconds: 5));
         supabase = ServiceState.connected;
       } catch (error) {

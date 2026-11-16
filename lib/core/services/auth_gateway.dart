@@ -1,9 +1,6 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
 
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show Supabase;
 
 import '../config/app_config.dart';
@@ -57,8 +54,6 @@ class FirebaseAuthGateway implements AuthGateway {
 
   final FirebaseAuth _auth;
 
-  /// Regione della Cloud Function `assegnaRuolo`.
-  static const String functionsRegion = 'europe-west1';
 
   @override
   Stream<String?> uidChanges() => _auth.authStateChanges().map((User? u) => u?.uid);
@@ -120,16 +115,11 @@ class FirebaseAuthGateway implements AuthGateway {
   Future<void> ensureLinked() async {
     final User? user = _auth.currentUser;
     if (user == null) throw const AuthFailure('Accesso non trovato: riprova.');
-    // S1 in pausa: senza server l'utente entra; il collegamento a Supabase si fa dopo.
+    // Senza server collegato l'utente entra; il collegamento a Supabase si fa dopo.
     if (!AppConfig.serverLinkEnabled) return;
 
-    final IdTokenResult current = await user.getIdTokenResult();
-    if (current.claims?['role'] != 'authenticated') {
-      await _callAssignRole(await user.getIdToken() ?? '');
-      // Il nuovo ruolo compare solo in un token rinnovato.
-      await user.getIdToken(true);
-    }
-
+    // Nessun «timbro» da chiedere (migrazione 0017): Supabase verifica la firma del token
+    // Firebase e il server riconosce l'utente da sé. Qui si controlla solo che sia così.
     if (AppConfig.hasSupabase) {
       final Object? uid;
       try {
@@ -151,40 +141,6 @@ class FirebaseAuthGateway implements AuthGateway {
 
   @override
   Future<void> signOut() => PushDeviceRegistry.signOut();
-
-  Future<void> _callAssignRole(String idToken) async {
-    final String project = Firebase.app().options.projectId;
-    final Uri url = Uri.https(
-      '$functionsRegion-$project.cloudfunctions.net',
-      '/assegnaRuolo',
-    );
-    final HttpClient client = HttpClient()
-      ..connectionTimeout = const Duration(seconds: 15);
-    try {
-      final HttpClientRequest request = await client.postUrl(url);
-      request.headers
-        ..contentType = ContentType.json
-        ..set(HttpHeaders.authorizationHeader, 'Bearer $idToken');
-      request.write(jsonEncode(<String, Object>{'data': <String, Object>{}}));
-      final HttpClientResponse response = await request.close().timeout(
-        const Duration(seconds: 20),
-      );
-      await response.drain<void>();
-      if (response.statusCode != 200) {
-        throw const AuthFailure(
-          'Non è stato possibile completare l\'accesso. Riprova tra poco.',
-        );
-      }
-    } on AuthFailure {
-      rethrow;
-    } catch (_) {
-      throw const AuthFailure(
-        'Non riesco a raggiungere il server. Controlla la connessione e riprova.',
-      );
-    } finally {
-      client.close(force: true);
-    }
-  }
 
   static const AuthFailure _generic = AuthFailure(
     'Qualcosa non ha funzionato. Riprova.',
