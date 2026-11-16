@@ -33,3 +33,6 @@ arriva come `anon`, ma con la firma Firebase già verificata da Supabase.
 - La **rubrica** (trovare i contatti che usano Piazly) usa le Cloud Functions per il calcolo
   protetto dei numeri (OPRF). Per renderla gratuita va spostata su una funzione di Supabase
   (Edge Function), con una chiave nostra generata dal titolare nel pannello di Supabase.
+
+## Approvazione
+- 16/11/2026: soluzione approvata dal titolare; autorizzata l'unione in main.
