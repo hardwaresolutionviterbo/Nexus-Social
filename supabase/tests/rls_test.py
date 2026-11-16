@@ -2008,6 +2008,172 @@ def check_rubrica_server() -> None:
           f"{user_try[0]}, {got}, {other_kind}, {bad[0]}")
 
 
+def check_chat_phase4() -> None:
+    """R · Chat a due cifrata (Fase 4, Blocco 1). Utenti A, B, D; il server vede solo base64."""
+    ta, tb, td = token(UID_A), token(UID_B), token(UID_D)
+    for t, other in ((ta, UID_B), (tb, UID_A), (ta, UID_D), (td, UID_A), (tb, UID_D), (td, UID_B)):
+        rpc("unblock_user", {"p_user_id": other}, t)
+    # B ha A in rubrica (A gli scrive direttamente); A non ha D (D scrive come richiesta).
+    sql("insert into private.contact_links (owner_id, contact_id, expires_at) "
+        f"values ('{UID_B}', '{UID_A}', now() + interval '30 days') "
+        "on conflict (owner_id, contact_id) do update set expires_at = excluded.expires_at; "
+        f"delete from private.contact_links where owner_id = '{UID_A}' and contact_id = '{UID_D}';")
+
+    def key(n: int) -> str:
+        return base64.b64encode(bytes([n]) * 32).decode()
+
+    def blob(n: int, size: int = 200) -> str:
+        return base64.b64encode(bytes([n % 256]) * size).decode()
+
+    def count(tok) -> int:
+        s, body = rpc("chat_key_package_count", {}, tok)
+        return body if s == 200 and isinstance(body, int) else -1
+
+    def convs(tok) -> dict:
+        return {c["id"]: c for c in rows(rpc("chat_conversations", {}, tok))}
+
+    def sync(tok, after=0) -> list:
+        return rows(rpc("chat_sync", {"p_after": after, "p_limit": 200}, tok))
+
+    # R1 · Identità e pacchetti chiave; tabelle mai leggibili direttamente
+    reg_a = rpc("chat_register_identity", {"p_signature_key": key(1), "p_packages": [blob(11)] * 3}, ta)
+    reg_b = rpc("chat_register_identity", {"p_signature_key": key(2), "p_packages": [blob(21), blob(22), blob(23)]}, tb)
+    reg_d = rpc("chat_register_identity", {"p_signature_key": key(4), "p_packages": [blob(41)]}, td)
+    bad_key = rpc("chat_register_identity", {"p_signature_key": "non valida", "p_packages": []}, ta)
+    bad_kp = rpc("chat_add_key_packages", {"p_packages": ["<script>"]}, ta)
+    anon = rpc("chat_conversations", {})
+    tables = [get(f"/rest/v1/{t}?select=*", ta) for t in
+              ("chat_identities", "chat_key_packages", "chat_conversations", "chat_members", "chat_messages")]
+    check("R1", "Chiave della chat e pacchetti registrati; tabelle della chat mai leggibili dall'app",
+          all(r[0] in (200, 204) for r in (reg_a, reg_b, reg_d)) and count(ta) == 3 and count(tb) == 3
+          and bad_key[0] >= 400 and bad_kp[0] >= 400 and anon[0] >= 400
+          and all(denied(t) for t in tables),
+          f"{reg_a[0]}, {reg_b[0]}, {reg_d[0]}, {count(ta)}, {bad_key[0]}, {bad_kp[0]}, {anon[0]}, "
+          f"{[t[0] for t in tables]}")
+
+    # R2 · Aprire una chat: una sola per coppia, mai con sé stessi o con chi non esiste
+    s1, conv = rpc("chat_open_direct", {"p_user": UID_B}, ta)
+    s2, again = rpc("chat_open_direct", {"p_user": UID_A}, tb)
+    self_open = rpc("chat_open_direct", {"p_user": UID_A}, ta)
+    ghost = rpc("chat_open_direct", {"p_user": UID_E}, ta)
+    a_view = convs(ta).get(conv, {})
+    check("R2", "Chat A↔B unica, attiva per entrambi (B ha A in rubrica), senza numero di telefono",
+          s1 == 200 and s2 == 200 and conv == again and self_open[0] >= 400 and ghost[0] >= 400
+          and a_view.get("status") == "active" and convs(tb).get(conv, {}).get("status") == "active"
+          and a_view.get("peer_username") == "utente_b" and a_view.get("generation") == 0
+          and not any("phone" in k for k in a_view),
+          f"{s1}, {s2}, {self_open[0]}, {ghost[0]}, {a_view.get('status')}")
+
+    # R3 · Pacchetto chiave dell'altra persona: consumato, e mai per chi non è nella chat
+    s, claimed = rpc("chat_claim_key_package", {"p_conversation": conv}, ta)
+    got = claimed[0] if s == 200 and isinstance(claimed, list) and claimed else {}
+    outsider = rpc("chat_claim_key_package", {"p_conversation": conv}, td)
+    check("R3", "A riceve un pacchetto di B (poi cancellato); D, estraneo, no",
+          s == 200 and got.get("package") == blob(21) and got.get("signature_key") == key(2)
+          and count(tb) == 2 and outsider[0] >= 400,
+          f"{s}, {count(tb)}, {outsider[0]}")
+
+    # R4 · Apertura cifrata con controllo della generazione (niente doppie aperture)
+    st_a = rpc("chat_start", {"p_conversation": conv, "p_generation": 0,
+                              "p_group_id": blob(5, 16), "p_welcome": blob(6, 300)}, ta)
+    st_b = rpc("chat_start", {"p_conversation": conv, "p_generation": 0,
+                              "p_group_id": blob(7, 16), "p_welcome": blob(8, 300)}, tb)
+    st_d = rpc("chat_start", {"p_conversation": conv, "p_generation": 1,
+                              "p_group_id": blob(9, 16), "p_welcome": blob(9, 300)}, td)
+    view = convs(tb).get(conv, {})
+    check("R4", "Prima apertura: generazione 1; la seconda sulla stessa generazione è rifiutata",
+          st_a == (200, 1) and st_b[0] >= 400 and st_d[0] >= 400 and view.get("generation") == 1
+          and view.get("mls_group_id") == blob(5, 16) and view.get("peer_joined_key") == key(1)
+          and view.get("my_joined_key") == key(2),
+          f"{st_a}, {st_b[0]}, {st_d[0]}, {view.get('generation')}")
+
+    # R5 · Messaggi cifrati: li riceve solo l'altra persona della chat
+    sent = rpc("chat_send", {"p_conversation": conv, "p_generation": 1, "p_payload": blob(30, 120)}, ta)
+    msg_id = sent[1][0]["id"] if sent[0] == 200 and isinstance(sent[1], list) and sent[1] else None
+    old_gen = rpc("chat_send", {"p_conversation": conv, "p_generation": 0, "p_payload": blob(31)}, ta)
+    not_b64 = rpc("chat_send", {"p_conversation": conv, "p_generation": 1, "p_payload": "ciao in chiaro!"}, ta)
+    by_d = rpc("chat_send", {"p_conversation": conv, "p_generation": 1, "p_payload": blob(32)}, td)
+    b_got = [(m["kind"], m["sender_id"]) for m in sync(tb) if m["conversation_id"] == conv]
+    a_got = [m for m in sync(ta) if m["conversation_id"] == conv]
+    d_got = [m for m in sync(td) if m["conversation_id"] == conv]
+    direct = get("/rest/v1/chat_messages?select=id,payload", td)
+    check("R5", "B riceve invito e messaggio di A; A non riceve i propri; D nulla; solo base64",
+          msg_id is not None and old_gen[0] >= 400 and not_b64[0] >= 400 and by_d[0] >= 400
+          and denied(direct)
+          and b_got == [("welcome", UID_A), ("app", UID_A)] and a_got == [] and d_got == [],
+          f"{sent[0]}, {old_gen[0]}, {not_b64[0]}, {by_d[0]}, {b_got}, {len(a_got)}, {len(d_got)}")
+
+    # R6 · Spunte: consegnato e letto; i messaggi ricevuti spariscono dal server
+    before = convs(ta).get(conv, {})
+    unread_b = convs(tb).get(conv, {}).get("unread")
+    rpc("chat_mark", {"p_conversation": conv, "p_delivered": msg_id, "p_read": 0}, tb)
+    mid = convs(ta).get(conv, {})
+    rpc("chat_mark", {"p_conversation": conv, "p_delivered": msg_id, "p_read": msg_id + 1000}, tb)
+    after = convs(ta).get(conv, {})
+    left = sql(f"select count(*) from public.chat_messages where conversation_id = '{conv}';")
+    check("R6", "Spunte inviato → consegnato → letto; dopo la consegna il server non conserva nulla",
+          before.get("peer_delivered_upto") == 0 and unread_b == 1
+          and mid.get("peer_delivered_upto") == msg_id and mid.get("peer_read_upto") == 0
+          and after.get("peer_read_upto") == msg_id and left == "0"
+          and convs(tb).get(conv, {}).get("unread") == 0,
+          f"{before.get('peer_delivered_upto')}, {unread_b}, {mid.get('peer_delivered_upto')}, "
+          f"{after.get('peer_read_upto')}, {left}")
+
+    # R7 · Richieste dagli sconosciuti: niente spunte finché non accetti, al massimo 10 messaggi
+    s, req = rpc("chat_open_direct", {"p_user": UID_A}, td)
+    rpc("chat_claim_key_package", {"p_conversation": req}, td)
+    rpc("chat_start", {"p_conversation": req, "p_generation": 0,
+                       "p_group_id": blob(50, 16), "p_welcome": blob(51, 300)}, td)
+    statuses = [rpc("chat_send", {"p_conversation": req, "p_generation": 1,
+                                  "p_payload": blob(60 + i)}, td)[0] for i in range(11)]
+    a_req = convs(ta).get(req, {})
+    last = max((m["id"] for m in sync(ta) if m["conversation_id"] == req), default=0)
+    rpc("chat_mark", {"p_conversation": req, "p_delivered": last, "p_read": last}, ta)
+    d_view = convs(td).get(req, {})
+    check("R7", "Richiesta di D: per A è «richiesta»; D non vede consegnato/letto; stop all'11° messaggio",
+          s == 200 and a_req.get("status") == "request" and statuses[:10] == [200] * 10
+          and statuses[10] >= 400 and d_view.get("peer_delivered_upto") == 0
+          and d_view.get("peer_read_upto") == 0,
+          f"{s}, {a_req.get('status')}, {statuses}, {d_view.get('peer_read_upto')}")
+
+    # R8 · Rifiutare una richiesta: sparisce per A, D non lo sa e i suoi messaggi non arrivano
+    rej = rpc("chat_respond_request", {"p_conversation": req, "p_accept": False}, ta)
+    again_rej = rpc("chat_respond_request", {"p_conversation": req, "p_accept": True}, ta)
+    later = rpc("chat_send", {"p_conversation": req, "p_generation": 1, "p_payload": blob(99)}, td)
+    check("R8", "Richiesta rifiutata: non è più tra le chat di A e nulla le arriva; D continua a vederla",
+          rej[0] in (200, 204) and again_rej[0] >= 400 and req not in convs(ta)
+          and not [m for m in sync(ta) if m["conversation_id"] == req]
+          and req in convs(td),
+          f"{rej[0]}, {again_rej[0]}, {later[0]}")
+
+    # R9 · Blocco: la chat sparisce e non si scrive più, in entrambi i versi
+    rpc("block_user", {"p_user_id": UID_B}, ta)
+    b_send = rpc("chat_send", {"p_conversation": conv, "p_generation": 1, "p_payload": blob(70)}, tb)
+    reopen = rpc("chat_open_direct", {"p_user": UID_A}, tb)
+    hidden = conv not in convs(tb) and conv not in convs(ta)
+    rpc("unblock_user", {"p_user_id": UID_B}, ta)
+    check("R9", "Con un blocco la chat non si vede, non si riapre e non si scrive",
+          b_send[0] >= 400 and reopen[0] >= 400 and hidden and conv in convs(ta),
+          f"{b_send[0]}, {reopen[0]}, {hidden}")
+
+    # R10 · Telefono nuovo: chiave cambiata visibile all'altra persona, la chat si riapre
+    rpc("chat_register_identity", {"p_signature_key": key(3), "p_packages": [blob(24), blob(25)]}, tb)
+    changed = convs(ta).get(conv, {})
+    rpc("chat_send", {"p_conversation": conv, "p_generation": 1, "p_payload": blob(71)}, ta)
+    s, claimed = rpc("chat_claim_key_package", {"p_conversation": conv}, ta)
+    got = claimed[0] if s == 200 and isinstance(claimed, list) and claimed else {}
+    st = rpc("chat_start", {"p_conversation": conv, "p_generation": 1,
+                            "p_group_id": blob(12, 16), "p_welcome": blob(13, 300)}, ta)
+    reopened = convs(ta).get(conv, {})
+    old = sql(f"select count(*) from public.chat_messages where conversation_id = '{conv}' "
+              "and generation < 2;")
+    check("R10", "Telefono nuovo di B: vecchi pacchetti cancellati, A vede la chiave cambiata e riapre",
+          changed.get("peer_signature_key") == key(3) and changed.get("peer_joined_key") == key(2)
+          and got.get("package") == blob(24) and got.get("signature_key") == key(3)
+          and st == (200, 2) and reopened.get("peer_joined_key") == key(3) and old == "0",
+          f"{changed.get('peer_signature_key') == key(3)}, {s}, {st}, {old}")
+
+
 def main() -> int:
     try:
         ids = setup()
@@ -2029,6 +2195,7 @@ def main() -> int:
     check_comments_categories_phase5()
     check_claimless_access()
     check_rubrica_server()
+    check_chat_phase4()
     failed = [r for r in results if not r[2]]
     print(f"{'Caso':6} {'Esito':9} Descrizione")
     for case, desc, ok, detail in results:
