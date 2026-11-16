@@ -426,7 +426,7 @@ class _CommentTile extends StatelessWidget {
                               child: _MenuEntry(
                                 icon: c.hidden ? Icons.visibility_rounded : Icons.visibility_off_rounded,
                                 label: c.hidden ? 'Mostra di nuovo' : 'Nascondi',
-                                hint: c.hidden ? 'Torna visibile a tutti' : 'Solo tu e l\'autore lo vedrete',
+                                hint: c.hidden ? 'Torna visibile a tutti' : 'Lo vedrete solo tu e chi l\'ha scritto',
                               ),
                             ),
                           if (onReport != null)
