@@ -155,3 +155,8 @@ as $$
 $$;
 
 revoke all on function private.anon_authenticated_differences() from public, anon, authenticated;
+
+-- Regola per le migrazioni successive: chi concede qualcosa ad `authenticated` termina con
+--   select private.align_anon_with_authenticated();
+-- Se lo dimentica, `anon` resta con meno permessi (l'app non funziona, nessun dato si apre)
+-- e il caso Z4 dei test lo segnala.

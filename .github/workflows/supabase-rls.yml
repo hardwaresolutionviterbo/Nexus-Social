@@ -156,6 +156,8 @@ jobs:
           cp "${GITHUB_WORKSPACE}"/supabase/migrations/*.sql supabase/migrations/
           cp "${GITHUB_WORKSPACE}/supabase/tests/controprove/${{ matrix.difetto }}.sql" \
             supabase/migrations/9999_difetto_di_prova.sql
+          # Regola delle migrazioni dopo la 0017: alla fine si riallineano i permessi di anon.
+          echo "select private.align_anon_with_authenticated();" >> supabase/migrations/9999_difetto_di_prova.sql
           supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor,postgres-meta,realtime,mailpit
           supabase status -o env > "${RUNNER_TEMP}/sb.env"
           for k in API_URL ANON_KEY JWT_SECRET DB_URL SERVICE_ROLE_KEY; do
