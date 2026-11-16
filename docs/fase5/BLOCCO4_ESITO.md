@@ -26,3 +26,6 @@ Ramo `fase5/blocco4` (parte da `fase5/blocco3`). Nessuna modifica a `main` né a
 - La persona da indicare si sceglie tra chi ha commentato o proposto (la chat non c'è ancora).
 - Le aziende non mostrano la media: le recensioni delle attività sono della Fase 6 del PDF.
 - Aggiunte 2 schermate all'elenco chiuso del controllo F10.
+
+## Approvazione
+- 16/11/2026: Blocco 4 approvato dal titolare.
