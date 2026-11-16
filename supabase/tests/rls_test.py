@@ -2044,8 +2044,12 @@ def check_chat_phase4() -> None:
     anon = rpc("chat_conversations", {})
     tables = [get(f"/rest/v1/{t}?select=*", ta) for t in
               ("chat_identities", "chat_key_packages", "chat_conversations", "chat_members", "chat_messages")]
+    same = [rpc("chat_register_identity", {"p_signature_key": key(1), "p_packages": []}, ta)[0]
+            for _ in range(6)]
+    mine = rpc("chat_my_identity", {}, ta)
     check("R1", "Chiave della chat e pacchetti registrati; tabelle della chat mai leggibili dall'app",
           all(r[0] in (200, 204) for r in (reg_a, reg_b, reg_d)) and count(ta) == 3 and count(tb) == 3
+          and all(x in (200, 204) for x in same) and mine == (200, key(1))
           and bad_key[0] >= 400 and bad_kp[0] >= 400 and anon[0] >= 400
           and all(denied(t) for t in tables),
           f"{reg_a[0]}, {reg_b[0]}, {reg_d[0]}, {count(ta)}, {bad_key[0]}, {bad_kp[0]}, {anon[0]}, "
@@ -2108,7 +2112,7 @@ def check_chat_phase4() -> None:
     unread_b = convs(tb).get(conv, {}).get("unread")
     rpc("chat_mark", {"p_conversation": conv, "p_delivered": msg_id, "p_read": 0}, tb)
     mid = convs(ta).get(conv, {})
-    rpc("chat_mark", {"p_conversation": conv, "p_delivered": msg_id, "p_read": msg_id + 1000}, tb)
+    rpc("chat_mark", {"p_conversation": conv, "p_delivered": msg_id, "p_read": (msg_id or 0) + 1000}, tb)
     after = convs(ta).get(conv, {})
     left = sql(f"select count(*) from public.chat_messages where conversation_id = '{conv}';")
     check("R6", "Spunte inviato → consegnato → letto; dopo la consegna il server non conserva nulla",

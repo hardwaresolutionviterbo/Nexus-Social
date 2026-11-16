@@ -216,11 +216,11 @@ begin
   if p_signature_key is null or p_signature_key !~ '^[A-Za-z0-9+/]{40,88}={0,2}$' then
     raise exception 'Chiave non valida' using errcode = '22023';
   end if;
-  if not private.chat_take(v_uid, 'identita:' || current_date::text, 5) then
-    raise exception 'Troppi cambi di telefono oggi' using errcode = '22023';
-  end if;
   select signature_key into v_old from public.chat_identities where user_id = v_uid for update;
   if v_old is distinct from p_signature_key then
+    if not private.chat_take(v_uid, 'identita:' || current_date::text, 5) then
+      raise exception 'Troppi cambi di telefono oggi' using errcode = '22023';
+    end if;
     delete from public.chat_key_packages where user_id = v_uid;
     insert into public.chat_identities (user_id, signature_key) values (v_uid, p_signature_key)
     on conflict (user_id) do update set signature_key = excluded.signature_key, created_at = now();
@@ -256,6 +256,17 @@ begin
   end if;
   return v_have + v_n;
 end;
+$$;
+
+-- La chiave registrata per la chat di chi chiama (null se non ancora attivata).
+create or replace function public.chat_my_identity()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select signature_key from public.chat_identities where user_id = private.chat_uid();
 $$;
 
 create or replace function public.chat_key_package_count()
@@ -614,6 +625,7 @@ $$;
 revoke all on function public.chat_register_identity(text, text[]) from public, anon;
 revoke all on function public.chat_add_key_packages(text[]) from public, anon;
 revoke all on function public.chat_key_package_count() from public, anon;
+revoke all on function public.chat_my_identity() from public, anon;
 revoke all on function public.chat_open_direct(text) from public, anon;
 revoke all on function public.chat_claim_key_package(uuid) from public, anon;
 revoke all on function public.chat_start(uuid, integer, text, text) from public, anon;
@@ -625,6 +637,7 @@ revoke all on function public.chat_respond_request(uuid, boolean) from public, a
 grant execute on function public.chat_register_identity(text, text[]) to authenticated;
 grant execute on function public.chat_add_key_packages(text[]) to authenticated;
 grant execute on function public.chat_key_package_count() to authenticated;
+grant execute on function public.chat_my_identity() to authenticated;
 grant execute on function public.chat_open_direct(text) to authenticated;
 grant execute on function public.chat_claim_key_package(uuid) to authenticated;
 grant execute on function public.chat_start(uuid, integer, text, text) to authenticated;
