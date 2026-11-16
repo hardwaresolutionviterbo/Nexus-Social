@@ -196,8 +196,8 @@ class ChatContent {
     'b': body,
     if (quote != null) 'q': <String, String>{'id': quote!.localId, 'a': quote!.authorId, 'x': quote!.text},
     if (forwarded) 'f': true,
-    if (target != null) 'tg': target!,
-    if (emoji != null) 'e': emoji!,
+    'tg': ?target,
+    'e': ?emoji,
   }));
 
   /// null se il contenuto non è riconosciuto (versioni future: «aggiorna l'app»).
