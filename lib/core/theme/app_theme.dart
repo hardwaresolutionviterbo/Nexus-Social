@@ -130,6 +130,19 @@ abstract final class AppTheme {
           ),
         ),
       ),
+      // Menu «⋯» e ordinamenti: bianchi, arrotondati, ombra leggera (Fase 5, Blocco 5).
+      popupMenuTheme: PopupMenuThemeData(
+        color: isDark ? AppColors.darkSurface : Colors.white,
+        surfaceTintColor: Colors.transparent,
+        elevation: 4,
+        shadowColor: Colors.black.withValues(alpha: 0.25),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(
+            color: isDark ? Colors.white.withValues(alpha: 0.08) : AppColors.lightOutline,
+          ),
+        ),
+      ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,

@@ -87,6 +87,8 @@ void main() {
     tester.view.physicalSize = const Size(1080, 2340);
     tester.view.devicePixelRatio = 2.75;
     addTearDown(tester.view.reset);
+    // Nei test le ombre diventano bordi neri: qui si disegnano come sul telefono.
+    debugDisableShadows = false;
     await tester.pumpWidget(MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: _withRoboto(AppTheme.light),
@@ -102,7 +104,11 @@ void main() {
       }
     });
     await tester.pumpAndSettle();
-    await expectLater(find.byType(MaterialApp), matchesGoldenFile('out/$name.png'));
+    try {
+      await expectLater(find.byType(MaterialApp), matchesGoldenFile('out/$name.png'));
+    } finally {
+      debugDisableShadows = true;
+    }
   }
 
   Widget section(MarketSection s, FakeMarketRepository repo, FakeMap map) => Scaffold(
