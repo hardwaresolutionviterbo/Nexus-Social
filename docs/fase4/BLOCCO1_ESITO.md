@@ -1,6 +1,6 @@
 # Fase 4 · Blocco 1 — Chat a due di solo testo
 
-Ramo: `fase4/blocco1`. Migrazione: `supabase/migrations/0019_chat_base.sql` (NON applicata al database reale: serve l'autorizzazione del titolare).
+Ramo: `fase4/blocco1`. Migrazione: `supabase/migrations/0019_chat_base.sql` (applicata al database reale il 16/11/2026 con l'autorizzazione del titolare; file verificato con SHA-256 contro il commit bedaf22).
 
 ## Cosa c'è
 - Chat a due cifrata end-to-end con MLS (decisione C1): le chiavi private restano sul telefono, nell'archivio sicuro; il database delle chiavi è cifrato.
