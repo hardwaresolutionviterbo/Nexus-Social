@@ -8,8 +8,8 @@ import 'package:nexus_social/features/chat/chat_server.dart';
 import 'package:nexus_social/features/chat/chat_service.dart';
 import 'package:nexus_social/features/chat/chat_store.dart';
 
-class _Conv {
-  _Conv(this.id, this.a, this.b, this.createdAt);
+class FakeConv {
+  FakeConv(this.id, this.a, this.b, this.createdAt);
   final String id;
   final String a;
   final String b;
@@ -25,8 +25,8 @@ class _Conv {
   String other(String uid) => uid == a ? b : a;
 }
 
-class _Msg {
-  _Msg(this.id, this.conv, this.generation, this.sender, this.welcomeFor, this.payload, this.at);
+class FakeMsg {
+  FakeMsg(this.id, this.conv, this.generation, this.sender, this.welcomeFor, this.payload, this.at);
   final int id;
   final String conv;
   final int generation;
@@ -48,8 +48,8 @@ class FakeChatHub {
   final Map<String, FakePerson> people = <String, FakePerson>{};
   final Map<String, String> identities = <String, String>{};
   final Map<String, List<String>> packages = <String, List<String>>{};
-  final List<_Conv> convs = <_Conv>[];
-  final List<_Msg> messages = <_Msg>[];
+  final List<FakeConv> convs = <FakeConv>[];
+  final List<FakeMsg> messages = <FakeMsg>[];
 
   /// owner → persone che ha in rubrica.
   final Map<String, Set<String>> contacts = <String, Set<String>>{};
@@ -78,8 +78,8 @@ class FakeChatServer implements ChatServer {
   final FakeChatHub hub;
   final String uid;
 
-  _Conv _member(String id) {
-    final _Conv? c = hub.convs.where((c) => c.id == id && (c.a == uid || c.b == uid)).firstOrNull;
+  FakeConv _member(String id) {
+    final FakeConv? c = hub.convs.where((c) => c.id == id && (c.a == uid || c.b == uid)).firstOrNull;
     if (c == null) throw const ChatFailure('Questa chat non è disponibile.');
     return c;
   }
@@ -110,7 +110,7 @@ class FakeChatServer implements ChatServer {
     if (userId == uid || !hub.people.containsKey(userId) || hub.blocked(uid, userId)) {
       throw const ChatFailure('Persona non trovata.');
     }
-    final _Conv? found = hub.convs
+    final FakeConv? found = hub.convs
         .where((c) => (c.a == uid && c.b == userId) || (c.a == userId && c.b == uid))
         .firstOrNull;
     if (found != null) {
@@ -120,7 +120,7 @@ class FakeChatServer implements ChatServer {
     if (!hub.identities.containsKey(userId)) {
       throw const ChatFailure('Questa persona non ha ancora attivato la chat.');
     }
-    final _Conv c = _Conv('conv-${++hub._conv}', uid, userId, hub.clock);
+    final FakeConv c = FakeConv('conv-${++hub._conv}', uid, userId, hub.clock);
     c.status[uid] = 'active';
     c.status[userId] = (hub.contacts[userId] ?? const <String>{}).contains(uid) ? 'active' : 'request';
     for (final String p in <String>[uid, userId]) {
@@ -133,7 +133,7 @@ class FakeChatServer implements ChatServer {
 
   @override
   Future<ClaimedKeyPackage> claimKeyPackage(String conversationId) async {
-    final _Conv c = _member(conversationId);
+    final FakeConv c = _member(conversationId);
     final String other = c.other(uid);
     final List<String> list = hub.packages[other] ?? <String>[];
     if (list.isEmpty) throw const ChatFailure('L\'altra persona deve aprire l\'app.');
@@ -142,14 +142,14 @@ class FakeChatServer implements ChatServer {
 
   @override
   Future<int> start(String conversationId, int generation, String groupId, String welcome) async {
-    final _Conv c = _member(conversationId);
+    final FakeConv c = _member(conversationId);
     if (c.generation != generation) {
       throw const ChatFailure('La chat è appena cambiata: riprova.', conflict: true);
     }
     c.generation++;
     c.groupId = groupId;
     hub.messages.removeWhere((m) => m.conv == c.id);
-    hub.messages.add(_Msg(++hub._seq, c.id, c.generation, uid, c.other(uid), welcome, hub.clock));
+    hub.messages.add(FakeMsg(++hub._seq, c.id, c.generation, uid, c.other(uid), welcome, hub.clock));
     for (final String p in <String>[c.a, c.b]) {
       c.joined[p] = hub.identities[p];
     }
@@ -158,14 +158,14 @@ class FakeChatServer implements ChatServer {
 
   @override
   Future<(int, DateTime)> send(String conversationId, int generation, String payload) async {
-    final _Conv c = _member(conversationId);
+    final FakeConv c = _member(conversationId);
     if (hub.blocked(uid, c.other(uid))) throw const ChatFailure('Non puoi scrivere.');
     if (c.generation == 0 || c.generation != generation) {
       throw const ChatFailure('La chat è appena cambiata: riprova.', conflict: true);
     }
     c.status[uid] = 'active';
     hub.clock = hub.clock.add(const Duration(minutes: 1));
-    final _Msg m = _Msg(++hub._seq, c.id, generation, uid, null, payload, hub.clock);
+    final FakeMsg m = FakeMsg(++hub._seq, c.id, generation, uid, null, payload, hub.clock);
     hub.messages.add(m);
     c.lastId = m.id;
     c.lastAt = m.at;
@@ -174,7 +174,7 @@ class FakeChatServer implements ChatServer {
 
   @override
   Future<List<ChatEnvelope>> sync(int after) async => <ChatEnvelope>[
-    for (final _Msg m in hub.messages)
+    for (final FakeMsg m in hub.messages)
       if (m.id > after && m.sender != uid)
         if (hub.convs.any((c) => c.id == m.conv && (c.a == uid || c.b == uid) && c.status[uid] != 'declined'))
           if (m.welcomeFor == null || m.welcomeFor == uid)
@@ -192,7 +192,7 @@ class FakeChatServer implements ChatServer {
 
   @override
   Future<List<ChatConversation>> conversations() async => <ChatConversation>[
-    for (final _Conv c in hub.convs)
+    for (final FakeConv c in hub.convs)
       if ((c.a == uid || c.b == uid) && c.status[uid] != 'declined' && !hub.blocked(c.a, c.b))
         ChatConversation(
           id: c.id,
@@ -216,7 +216,7 @@ class FakeChatServer implements ChatServer {
 
   @override
   Future<void> mark(String conversationId, {required int delivered, required int read}) async {
-    final _Conv c = _member(conversationId);
+    final FakeConv c = _member(conversationId);
     final int last = hub.messages
         .where((m) => m.conv == c.id && (m.welcomeFor == null || m.welcomeFor == uid))
         .fold<int>(c.lastId ?? 0, (n, m) => m.id > n ? m.id : n);
@@ -233,7 +233,7 @@ class FakeChatServer implements ChatServer {
 
   @override
   Future<void> respondRequest(String conversationId, bool accept) async {
-    final _Conv c = _member(conversationId);
+    final FakeConv c = _member(conversationId);
     if (c.status[uid] != 'request') throw const ChatFailure('Non è una richiesta in attesa.');
     c.status[uid] = accept ? 'active' : 'declined';
     if (!accept) hub.messages.removeWhere((m) => m.conv == c.id && m.sender != uid);
