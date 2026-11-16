@@ -13,6 +13,7 @@ import 'market_models.dart';
 import 'market_publish_screen.dart';
 import 'market_repository.dart';
 import 'my_market_screen.dart';
+import 'swap_proposals_screen.dart';
 
 /// Sezioni «Scambia» e «Vendita» (D10): un solo sistema di annunci, due vetrine.
 /// Pubblicare e gestire i propri annunci (Blocco 1); cercare con parola, 13 filtri e
@@ -272,7 +273,17 @@ class _MarketSectionScreenState extends State<MarketSectionScreen> {
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.md),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              key: const ValueKey<String>('mercato_proposte'),
+              onPressed: () {
+                if (_serverReady()) SwapProposalsScreen.open(context, widget.repository!);
+              },
+              icon: const Icon(Icons.swap_horiz_rounded),
+              label: const Text('Proposte di scambio'),
+            ),
+          ),
           TextField(
             key: const ValueKey<String>('mercato_cerca'),
             controller: _text,

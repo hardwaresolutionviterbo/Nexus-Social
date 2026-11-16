@@ -208,11 +208,21 @@ enum NotificationKind {
   listingComment('listing_comment'),
   commentReply('comment_reply'),
   followedComment('followed_comment'),
-  commentLike('comment_like');
+  commentLike('comment_like'),
+
+  // Proposte di scambio (Fase 5, Blocco 3).
+  swapProposal('swap_proposal'),
+  swapCounter('swap_counter'),
+  swapAccepted('swap_accepted');
 
   const NotificationKind(this.serverValue);
 
   final String serverValue;
+
+  bool get isSwap =>
+      this == NotificationKind.swapProposal ||
+      this == NotificationKind.swapCounter ||
+      this == NotificationKind.swapAccepted;
 
   static NotificationKind fromServer(String? v) => NotificationKind.values.firstWhere(
     (NotificationKind k) => k.serverValue == v,
@@ -233,6 +243,7 @@ class AppNotification {
     this.actorCount = 1,
     required this.createdAt,
     this.read = false,
+    this.proposalId,
   });
 
   factory AppNotification.fromJson(Map<String, dynamic> json) => AppNotification(
@@ -251,10 +262,14 @@ class AppNotification {
     actorCount: (json['actor_count'] as num?)?.toInt() ?? 1,
     createdAt: DateTime.parse(json['created_at'] as String).toLocal(),
     read: json['read'] as bool? ?? false,
+    proposalId: json['proposal_id'] as String?,
   );
 
   final String id;
   final NotificationKind kind;
+
+  /// La proposta di scambio a cui si riferisce (solo per le notifiche di scambio).
+  final String? proposalId;
   final String listingId;
   final String listingTitle;
   final String? commentId;
@@ -277,6 +292,7 @@ class AppNotification {
     actorCount: actorCount,
     createdAt: createdAt,
     read: true,
+    proposalId: proposalId,
   );
 
   /// Testo della notifica, senza dati oltre al nome abbreviato.
@@ -290,6 +306,9 @@ class AppNotification {
       NotificationKind.commentReply => '$who ha risposto al tuo commento su «$listingTitle»',
       NotificationKind.followedComment => '$who ha commentato «$listingTitle», che segui',
       NotificationKind.commentLike => '$who ${actorCount > 1 ? 'hanno' : 'ha'} messo Mi piace al tuo commento su «$listingTitle»',
+      NotificationKind.swapProposal => '$who ti ha proposto uno scambio per «$listingTitle»',
+      NotificationKind.swapCounter => '$who ha fatto una controproposta per «$listingTitle»',
+      NotificationKind.swapAccepted => '$who ha accettato la proposta di scambio per «$listingTitle»',
     };
   }
 }

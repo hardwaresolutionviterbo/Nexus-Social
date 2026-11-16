@@ -11,6 +11,7 @@ import '../map/social_repository.dart';
 import 'market_models.dart';
 import 'market_publish_screen.dart' show AntiScamNotice, MarketPhoto;
 import 'market_repository.dart';
+import 'swap_offer_screen.dart';
 
 /// Testo condiviso di un annuncio di Scambia & Vendi: mai la posizione.
 String marketShareText(MarketListing l) {
@@ -102,6 +103,22 @@ class _MarketListingScreenState extends State<MarketListingScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _propose() async {
+    final bool? sent = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => SwapOfferScreen(
+          repository: widget.repository,
+          targetTitle: _l.title,
+          cashAllowed: _l.cashAdjustment,
+          targetListingId: _l.id,
+        ),
+      ),
+    );
+    if ((sent ?? false) && mounted) {
+      _toast('Proposta inviata: la trovi in «Proposte di scambio».');
+    }
   }
 
   Future<void> _report() async {
@@ -315,6 +332,18 @@ class _MarketListingScreenState extends State<MarketListingScreen> {
                             ),
                           ],
                         ),
+                      if (published && !l.isMine && l.swappable) ...[
+                        const SizedBox(height: AppSpacing.sm),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.tonalIcon(
+                            key: const ValueKey<String>('scheda_proponi'),
+                            onPressed: _propose,
+                            icon: const Icon(Icons.swap_horiz_rounded),
+                            label: const Text('Proponi uno scambio'),
+                          ),
+                        ),
+                      ],
                       if (published) ...[
                         const SizedBox(height: AppSpacing.md),
                         ListingSocialPanel(

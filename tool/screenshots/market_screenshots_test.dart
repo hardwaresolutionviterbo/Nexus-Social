@@ -1,4 +1,4 @@
-// Anteprime per il titolare (Fase 5, Blocchi 1-2): Scambia & Vendi con dati finti.
+// Anteprime per il titolare (Fase 5, Blocchi 1-3): Scambia & Vendi con dati finti.
 // Non fa parte dei test di regressione: lo esegue solo il workflow «Anteprime schermate».
 import 'dart:io';
 
@@ -13,6 +13,8 @@ import 'package:nexus_social/features/market/market_listing_screen.dart';
 import 'package:nexus_social/features/market/market_models.dart';
 import 'package:nexus_social/features/market/market_section_screen.dart';
 import 'package:nexus_social/features/market/my_market_screen.dart';
+import 'package:nexus_social/features/market/swap_offer_screen.dart';
+import 'package:nexus_social/features/market/swap_proposals_screen.dart';
 
 import '../../test/support/fake_map.dart';
 import '../../test/support/fake_market.dart';
@@ -287,5 +289,41 @@ void main() {
         catalog: MarketCatalog(builtInMarketCatalog),
       ),
     );
+  });
+
+  // ---------------------------------------------------------------- Blocco 3
+  testWidgets('mercato 10 · proposta di scambio', (tester) async {
+    final FakeMarketRepository repo = shop();
+    repo.candidates = const <SwapItem>[
+      SwapItem(id: 'b1', title: 'Bici da città', priceCents: 9000, photo: 'f/e1.jpg'),
+      SwapItem(id: 'b2', title: 'Monopattino elettrico', priceCents: 15000, photo: 'f/d1.jpg'),
+      SwapItem(id: 'b3', title: 'Chitarra classica', priceCents: 6000, photo: 'f/b1.jpg'),
+    ];
+    await shoot(
+      tester,
+      'mercato_10_proposta',
+      SwapOfferScreen(repository: repo, targetTitle: 'Console PS4 con giochi', cashAllowed: true,
+          targetListingId: 'x'),
+      before: () async {
+        await tester.tap(find.byKey(const ValueKey<String>('offerta_b1')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey<String>('offerta_conguaglio')));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byKey(const ValueKey<String>('offerta_importo')), '20');
+        await tester.enterText(find.byKey(const ValueKey<String>('offerta_messaggio')),
+            'Ciao! Ti propongo la bici più 20 €, è quasi nuova.');
+        FocusManager.instance.primaryFocus?.unfocus();
+      },
+    );
+  });
+
+  testWidgets('mercato 11 · proposte ricevute', (tester) async {
+    final FakeMarketRepository repo = shop();
+    repo.swaps.addAll(<SwapProposal>[
+      sampleSwap(),
+      sampleSwap(id: 'p2', cashCents: null, message: 'Scambieresti con il monopattino?',
+          targetTitle: 'Tenda da campeggio 4 posti'),
+    ]);
+    await shoot(tester, 'mercato_11_proposte', SwapProposalsScreen(repository: repo));
   });
 }

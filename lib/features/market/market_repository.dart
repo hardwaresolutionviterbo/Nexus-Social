@@ -31,6 +31,22 @@ abstract class MarketRepository {
   Future<MarketListing?> listing(String id, {GeoPoint? origin});
 
   Future<void> report(String id, ReportReason reason, {String? details});
+
+  // Proposte di scambio (Blocco 3, migrazione 0014).
+
+  /// Annunci che si possono offrire: i propri, o in una controproposta quelli di chi chiede.
+  Future<List<SwapItem>> swapCandidates({String? proposalId});
+
+  Future<String> proposeSwap(String listingId, SwapOffer offer);
+
+  Future<String> counterSwap(String proposalId, SwapOffer offer);
+
+  /// true = accetta, false = rifiuta.
+  Future<SwapStatus> respondSwap(String proposalId, {required bool accept});
+
+  Future<void> cancelSwap(String proposalId);
+
+  Future<List<SwapProposal>> mySwaps();
 }
 
 class SupabaseMarketRepository implements MarketRepository {
@@ -181,6 +197,61 @@ class SupabaseMarketRepository implements MarketRepository {
         'p_details': details?.trim().isEmpty ?? true ? null : details!.trim(),
       },
     );
+  });
+
+  @override
+  Future<List<SwapItem>> swapCandidates({String? proposalId}) => _guard(() async {
+    final Object? data = await _client.rpc(
+      'swap_offer_candidates',
+      params: <String, Object?>{'p_proposal': proposalId},
+    );
+    return <SwapItem>[
+      if (data is List)
+        for (final Object? r in data)
+          if (r is Map<String, dynamic>) SwapItem.fromJson(r),
+    ];
+  });
+
+  @override
+  Future<String> proposeSwap(String listingId, SwapOffer offer) => _guard(() async {
+    final Object? id = await _client.rpc(
+      'propose_swap',
+      params: <String, Object?>{'p_listing': listingId, ...offer.toParams()},
+    );
+    return '$id';
+  });
+
+  @override
+  Future<String> counterSwap(String proposalId, SwapOffer offer) => _guard(() async {
+    final Object? id = await _client.rpc(
+      'counter_swap',
+      params: <String, Object?>{'p_proposal': proposalId, ...offer.toParams()},
+    );
+    return '$id';
+  });
+
+  @override
+  Future<SwapStatus> respondSwap(String proposalId, {required bool accept}) => _guard(() async {
+    final Object? s = await _client.rpc(
+      'respond_swap',
+      params: <String, Object?>{'p_proposal': proposalId, 'p_accept': accept},
+    );
+    return SwapStatus.fromServer('$s');
+  });
+
+  @override
+  Future<void> cancelSwap(String proposalId) => _guard(() async {
+    await _client.rpc('cancel_swap', params: <String, Object?>{'p_proposal': proposalId});
+  });
+
+  @override
+  Future<List<SwapProposal>> mySwaps() => _guard(() async {
+    final Object? data = await _client.rpc('my_swap_proposals');
+    return <SwapProposal>[
+      if (data is List)
+        for (final Object? r in data)
+          if (r is Map<String, dynamic>) SwapProposal.fromJson(r),
+    ];
   });
 
   @override

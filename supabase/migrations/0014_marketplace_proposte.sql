@@ -436,6 +436,7 @@ returns table (
   target_type text,
   target_photo text,
   target_available boolean,
+  target_cash_adjustment boolean,
   other_id text,
   other_username text,
   other_public_name text,
@@ -458,6 +459,7 @@ as $$
     p.owner_id = public.current_uid(),
     t.id, t.title, t.market_type, t.photos[1],
     t.status = 'active' and t.expires_at > now() and t.review_status = 'published',
+    t.cash_adjustment,
     o.id, o.username::text, o.public_name, o.account_type = 'business',
     coalesce((
       select jsonb_agg(jsonb_build_object(

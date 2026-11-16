@@ -689,3 +689,197 @@ String marketDistanceLabel(int meters) {
   final int km = (meters / 1000).round();
   return 'a $km km';
 }
+
+// ---------------------------------------------------------------- proposte di scambio (Blocco 3)
+
+/// Stati di una proposta (specifica, sezione 6).
+enum SwapStatus {
+  pending('pending', 'In attesa'),
+  accepted('accepted', 'Accettata'),
+  rejected('rejected', 'Rifiutata'),
+  countered('countered', 'Controproposta'),
+  cancelled('cancelled', 'Annullata'),
+  completed('completed', 'Completata');
+
+  const SwapStatus(this.serverValue, this.label);
+
+  final String serverValue;
+  final String label;
+
+  static SwapStatus fromServer(String? v) =>
+      SwapStatus.values.firstWhere((SwapStatus s) => s.serverValue == v, orElse: () => SwapStatus.pending);
+}
+
+/// Chi aggiunge il conguaglio: chi chiede l'annuncio o chi l'ha pubblicato.
+enum CashDirection {
+  requesterPays('requester_pays'),
+  ownerPays('owner_pays');
+
+  const CashDirection(this.serverValue);
+
+  final String serverValue;
+
+  static CashDirection? fromServer(String? v) =>
+      CashDirection.values.where((CashDirection d) => d.serverValue == v).firstOrNull;
+}
+
+/// Limiti delle proposte (migrazione 0014).
+abstract final class SwapRules {
+  static const int maxItems = 5;
+  static const int messageMax = 500;
+
+  /// Conguaglio da 1 a 999.999 €.
+  static const int minCashCents = 100;
+  static const int maxCashCents = 99999900;
+}
+
+/// Un annuncio che si può offrire, o che è stato offerto in una proposta.
+@immutable
+class SwapItem {
+  const SwapItem({
+    required this.id,
+    required this.title,
+    this.type = MarketType.sell,
+    this.priceCents,
+    this.photo,
+    this.available = true,
+  });
+
+  factory SwapItem.fromJson(Map<String, dynamic> json) => SwapItem(
+    id: json['id'] as String,
+    title: json['title'] as String? ?? '',
+    type: MarketType.fromServer(json['market_type'] as String?),
+    priceCents: (json['price_cents'] as num?)?.toInt(),
+    photo: json['photo'] as String? ??
+        ((json['photos'] as List?)?.isNotEmpty ?? false ? '${(json['photos'] as List).first}' : null),
+    available: json['available'] as bool? ?? true,
+  );
+
+  final String id;
+  final String title;
+  final MarketType type;
+  final int? priceCents;
+  final String? photo;
+
+  /// Ancora pubblicato e attivo.
+  final bool available;
+}
+
+/// Cosa si offre: da 1 a 5 annunci, un eventuale conguaglio, un messaggio.
+@immutable
+class SwapOffer {
+  const SwapOffer({required this.itemIds, this.cashCents, this.direction, this.message = ''});
+
+  final List<String> itemIds;
+  final int? cashCents;
+  final CashDirection? direction;
+  final String message;
+
+  Map<String, Object?> toParams() => <String, Object?>{
+    'p_items': itemIds,
+    'p_cash_cents': cashCents,
+    'p_cash_direction': cashCents == null ? null : direction?.serverValue,
+    'p_message': message.trim(),
+  };
+}
+
+/// Una proposta come la vede una delle due parti.
+@immutable
+class SwapProposal {
+  const SwapProposal({
+    required this.id,
+    required this.status,
+    this.parentId,
+    required this.fromMe,
+    required this.iAmOwner,
+    required this.targetId,
+    required this.targetTitle,
+    this.targetType = MarketType.swap,
+    this.targetPhoto,
+    this.targetAvailable = true,
+    this.targetCashAdjustment = false,
+    required this.otherId,
+    required this.otherUsername,
+    required this.otherPublicName,
+    this.otherIsBusiness = false,
+    this.items = const <SwapItem>[],
+    this.cashCents,
+    this.direction,
+    this.message = '',
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory SwapProposal.fromJson(Map<String, dynamic> json) => SwapProposal(
+    id: json['id'] as String,
+    status: SwapStatus.fromServer(json['status'] as String?),
+    parentId: json['parent_id'] as String?,
+    fromMe: json['from_me'] as bool? ?? false,
+    iAmOwner: json['i_am_owner'] as bool? ?? false,
+    targetId: json['target_id'] as String,
+    targetTitle: json['target_title'] as String? ?? '',
+    targetType: MarketType.fromServer(json['target_type'] as String?),
+    targetPhoto: json['target_photo'] as String?,
+    targetAvailable: json['target_available'] as bool? ?? true,
+    targetCashAdjustment: json['target_cash_adjustment'] as bool? ?? false,
+    otherId: json['other_id'] as String,
+    otherUsername: json['other_username'] as String? ?? '',
+    otherPublicName: json['other_public_name'] as String? ?? '',
+    otherIsBusiness: json['other_is_business'] as bool? ?? false,
+    items: <SwapItem>[
+      for (final Object? i in json['items'] as List? ?? const <Object?>[])
+        if (i is Map<String, dynamic>) SwapItem.fromJson(i),
+    ],
+    cashCents: (json['cash_cents'] as num?)?.toInt(),
+    direction: CashDirection.fromServer(json['cash_direction'] as String?),
+    message: json['message'] as String? ?? '',
+    createdAt: DateTime.parse(json['created_at'] as String).toLocal(),
+    updatedAt: DateTime.parse(json['updated_at'] as String).toLocal(),
+  );
+
+  final String id;
+  final SwapStatus status;
+
+  /// La proposta a cui questa risponde (controproposta).
+  final String? parentId;
+
+  /// L'ho fatta io (altrimenti tocca a me rispondere).
+  final bool fromMe;
+
+  /// L'annuncio richiesto è mio.
+  final bool iAmOwner;
+  final String targetId;
+  final String targetTitle;
+  final MarketType targetType;
+  final String? targetPhoto;
+  final bool targetAvailable;
+
+  /// L'annuncio richiesto accetta un conguaglio.
+  final bool targetCashAdjustment;
+  final String otherId;
+  final String otherUsername;
+  final String otherPublicName;
+  final bool otherIsBusiness;
+  final List<SwapItem> items;
+  final int? cashCents;
+  final CashDirection? direction;
+  final String message;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  bool get pending => status == SwapStatus.pending;
+
+  /// Tocca a me: accettare, rifiutare o fare una controproposta.
+  bool get toAnswer => pending && !fromMe;
+
+  /// Il conguaglio dal punto di vista di chi legge.
+  String? get cashLabel {
+    final int? c = cashCents;
+    final CashDirection? d = direction;
+    if (c == null || d == null) return null;
+    final bool iPay = (d == CashDirection.requesterPays) != iAmOwner;
+    return iPay
+        ? 'Conguaglio: aggiungi tu ${MarketRules.formatPrice(c)}'
+        : 'Conguaglio: ${otherPublicName.isEmpty ? 'l\'altra persona' : otherPublicName} aggiunge ${MarketRules.formatPrice(c)}';
+  }
+}

@@ -114,6 +114,8 @@ void main() {
       'lib/features/market/market_publish_screen.dart',
       'lib/features/market/market_section_screen.dart',
       'lib/features/market/my_market_screen.dart',
+      'lib/features/market/swap_offer_screen.dart',
+      'lib/features/market/swap_proposals_screen.dart',
       'lib/features/privacy/privacy_screen.dart',
       'lib/features/privacy/privacy_sections.dart',
       'lib/features/profile/profile_screen.dart',

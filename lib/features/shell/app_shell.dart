@@ -10,6 +10,7 @@ import '../map/map_screen.dart';
 import '../market/market_models.dart';
 import '../market/market_repository.dart';
 import '../market/market_section_screen.dart';
+import '../market/swap_proposals_screen.dart';
 import '../map/notifications_screen.dart';
 import '../map/social_repository.dart';
 import '../contacts/contacts_sync.dart';
@@ -147,7 +148,12 @@ class _AppShellState extends State<AppShell> {
   }
 
   Future<void> _openNotifications() async {
-    await NotificationsScreen.open(context, widget.social!);
+    final MarketRepository? market = widget.market;
+    await NotificationsScreen.open(
+      context,
+      widget.social!,
+      openSwaps: market == null ? null : (BuildContext c) => SwapProposalsScreen.open(c, market),
+    );
     await _refreshUnread();
   }
 

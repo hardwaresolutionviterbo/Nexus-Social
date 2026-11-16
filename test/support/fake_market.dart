@@ -25,6 +25,15 @@ class FakeMarketRepository implements MarketRepository {
   final List<(MarketSection, MarketQuery, int)> searches = <(MarketSection, MarketQuery, int)>[];
   final List<(String, ReportReason)> reports = <(String, ReportReason)>[];
   final Set<String> gone = <String>{};
+
+  // Proposte di scambio.
+  List<SwapItem> candidates = <SwapItem>[];
+  final List<SwapProposal> swaps = <SwapProposal>[];
+  final List<(String, SwapOffer)> proposed = <(String, SwapOffer)>[];
+  final List<(String, SwapOffer)> countered = <(String, SwapOffer)>[];
+  final List<(String, bool)> responses = <(String, bool)>[];
+  final List<String> cancelledSwaps = <String>[];
+  final List<String?> candidateRequests = <String?>[];
   final List<MarketDraft> published = <MarketDraft>[];
   final List<(String, MarketDraft)> updates = <(String, MarketDraft)>[];
   final List<String> renewed = <String>[];
@@ -120,7 +129,84 @@ class FakeMarketRepository implements MarketRepository {
   Future<void> report(String id, ReportReason reason, {String? details}) async {
     reports.add((id, reason));
   }
+
+  @override
+  Future<List<SwapItem>> swapCandidates({String? proposalId}) async {
+    candidateRequests.add(proposalId);
+    return candidates;
+  }
+
+  @override
+  Future<String> proposeSwap(String listingId, SwapOffer offer) async {
+    final String? f = failWith;
+    if (f != null) {
+      failWith = null;
+      throw ListingFailure(f);
+    }
+    proposed.add((listingId, offer));
+    return 'p${proposed.length}';
+  }
+
+  @override
+  Future<String> counterSwap(String proposalId, SwapOffer offer) async {
+    countered.add((proposalId, offer));
+    _set(proposalId, SwapStatus.countered);
+    return 'c${countered.length}';
+  }
+
+  @override
+  Future<SwapStatus> respondSwap(String proposalId, {required bool accept}) async {
+    responses.add((proposalId, accept));
+    final SwapStatus s = accept ? SwapStatus.accepted : SwapStatus.rejected;
+    _set(proposalId, s);
+    return s;
+  }
+
+  @override
+  Future<void> cancelSwap(String proposalId) async {
+    cancelledSwaps.add(proposalId);
+    _set(proposalId, SwapStatus.cancelled);
+  }
+
+  @override
+  Future<List<SwapProposal>> mySwaps() async => List<SwapProposal>.of(swaps);
+
+  void _set(String id, SwapStatus status) {
+    final int i = swaps.indexWhere((SwapProposal p) => p.id == id);
+    if (i >= 0) swaps[i] = sampleSwap(id: id, status: status, fromMe: swaps[i].fromMe, iAmOwner: swaps[i].iAmOwner);
+  }
 }
+
+SwapProposal sampleSwap({
+  String id = 'p1',
+  SwapStatus status = SwapStatus.pending,
+  bool fromMe = false,
+  bool iAmOwner = true,
+  int? cashCents = 2000,
+  CashDirection direction = CashDirection.requesterPays,
+  String message = 'Ti do la bici e 20 €',
+  String targetTitle = 'Console PS4 con giochi',
+}) => SwapProposal(
+  id: id,
+  status: status,
+  fromMe: fromMe,
+  iAmOwner: iAmOwner,
+  targetId: 't1',
+  targetTitle: targetTitle,
+  targetCashAdjustment: true,
+  otherId: 'u2',
+  otherUsername: 'luca_r',
+  otherPublicName: 'Luca R.',
+  items: const <SwapItem>[
+    SwapItem(id: 'i1', title: 'Bici da città', priceCents: 9000, photo: 'u/b.jpg'),
+    SwapItem(id: 'i2', title: 'Monopattino elettrico', priceCents: 15000, available: false),
+  ],
+  cashCents: cashCents,
+  direction: cashCents == null ? null : direction,
+  message: message,
+  createdAt: DateTime(2026, 11, 15, 18),
+  updatedAt: DateTime(2026, 11, 15, 18),
+);
 
 MarketListing sampleListing({
   String id = 'x1',

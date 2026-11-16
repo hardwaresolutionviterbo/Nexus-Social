@@ -11,15 +11,28 @@ import 'social_repository.dart';
 /// post seguiti. All'apertura le notifiche risultano lette; toccandone una si apre il post
 /// sul commento. Le push con l'app chiusa arrivano con il server attivo (Fase 4).
 class NotificationsScreen extends StatefulWidget {
-  const NotificationsScreen({super.key, required this.repository, this.now = DateTime.now});
+  const NotificationsScreen({
+    super.key,
+    required this.repository,
+    this.now = DateTime.now,
+    this.openSwaps,
+  });
 
   final SocialRepository repository;
   final DateTime Function() now;
 
-  static Future<void> open(BuildContext context, SocialRepository repository) =>
-      Navigator.of(context).push<void>(
-        MaterialPageRoute<void>(builder: (_) => NotificationsScreen(repository: repository)),
-      );
+  /// Apre le proposte di scambio (Fase 5, Blocco 3); null se Scambia & Vendi non c'è.
+  final Future<void> Function(BuildContext context)? openSwaps;
+
+  static Future<void> open(
+    BuildContext context,
+    SocialRepository repository, {
+    Future<void> Function(BuildContext context)? openSwaps,
+  }) => Navigator.of(context).push<void>(
+    MaterialPageRoute<void>(
+      builder: (_) => NotificationsScreen(repository: repository, openSwaps: openSwaps),
+    ),
+  );
 
   @override
   State<NotificationsScreen> createState() => _NotificationsScreenState();
@@ -50,6 +63,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Future<void> _open(AppNotification n) async {
+    if (n.kind.isSwap) {
+      final Future<void> Function(BuildContext)? swaps = widget.openSwaps;
+      if (swaps != null) await swaps(context);
+      return;
+    }
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => CommentsScreen(
@@ -148,5 +166,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     NotificationKind.listingLike || NotificationKind.commentLike => Icons.thumb_up_alt_rounded,
     NotificationKind.commentReply => Icons.reply_rounded,
     NotificationKind.listingComment || NotificationKind.followedComment => Icons.mode_comment_rounded,
+    NotificationKind.swapProposal || NotificationKind.swapCounter => Icons.swap_horiz_rounded,
+    NotificationKind.swapAccepted => Icons.handshake_rounded,
   };
 }
