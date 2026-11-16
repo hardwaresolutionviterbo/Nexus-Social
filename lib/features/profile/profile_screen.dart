@@ -30,9 +30,13 @@ class ProfileScreen extends StatelessWidget {
     this.security,
     this.biometricLock,
     this.contacts,
+    this.feedback,
   });
 
   final BackendStatus backend;
+
+  /// Media dei feedback (Fase 5, Blocco 4): solo per i privati con il server collegato.
+  final Widget? feedback;
 
   /// Profilo completo (Blocco 2): presente quando il server è collegato.
   final MyProfile? profile;
@@ -243,6 +247,20 @@ class ProfileScreen extends StatelessWidget {
             ),
           ),
         ),
+        if (feedback != null) ...[
+          const SizedBox(height: AppSpacing.md),
+          SectionCard(
+            key: const ValueKey<String>('miei_feedback'),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('I tuoi feedback', style: theme.textTheme.titleSmall),
+                feedback!,
+              ],
+            ),
+          ),
+        ],
         if (me != null) ...[
           const SizedBox(height: AppSpacing.md),
           SectionCard(

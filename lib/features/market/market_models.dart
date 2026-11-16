@@ -883,3 +883,179 @@ class SwapProposal {
         : 'Conguaglio: ${otherPublicName.isEmpty ? 'l\'altra persona' : otherPublicName} aggiunge ${MarketRules.formatPrice(c)}';
   }
 }
+
+// ---------------------------------------------------------------- conclusione e feedback (Blocco 4)
+
+/// Una persona che si può indicare come controparte (ha commentato o proposto).
+@immutable
+class DealCandidate {
+  const DealCandidate({required this.id, required this.username, required this.publicName});
+
+  factory DealCandidate.fromJson(Map<String, dynamic> json) => DealCandidate(
+    id: json['id'] as String,
+    username: json['username'] as String? ?? '',
+    publicName: json['public_name'] as String? ?? '',
+  );
+
+  final String id;
+  final String username;
+  final String publicName;
+}
+
+/// Una conclusione come la vede una delle due parti.
+@immutable
+class MarketDeal {
+  const MarketDeal({
+    required this.id,
+    required this.listingId,
+    required this.listingTitle,
+    this.listingPhoto,
+    this.listingType = MarketType.sell,
+    this.proposalId,
+    required this.iAmOwner,
+    required this.otherId,
+    required this.otherUsername,
+    required this.otherPublicName,
+    this.iConfirmed = false,
+    this.otherConfirmed = false,
+    this.declined = false,
+    this.cancelled = false,
+    this.completed = false,
+    this.myStars,
+    this.theirStars,
+    required this.createdAt,
+    this.completedAt,
+  });
+
+  factory MarketDeal.fromJson(Map<String, dynamic> json) => MarketDeal(
+    id: json['id'] as String,
+    listingId: json['listing_id'] as String,
+    listingTitle: json['listing_title'] as String? ?? '',
+    listingPhoto: json['listing_photo'] as String?,
+    listingType: MarketType.fromServer(json['listing_type'] as String?),
+    proposalId: json['proposal_id'] as String?,
+    iAmOwner: json['i_am_owner'] as bool? ?? false,
+    otherId: json['other_id'] as String,
+    otherUsername: json['other_username'] as String? ?? '',
+    otherPublicName: json['other_public_name'] as String? ?? '',
+    iConfirmed: json['i_confirmed'] as bool? ?? false,
+    otherConfirmed: json['other_confirmed'] as bool? ?? false,
+    declined: json['declined'] as bool? ?? false,
+    cancelled: json['cancelled'] as bool? ?? false,
+    completed: json['completed'] as bool? ?? false,
+    myStars: (json['my_feedback_stars'] as num?)?.toInt(),
+    theirStars: (json['their_feedback_stars'] as num?)?.toInt(),
+    createdAt: DateTime.parse(json['created_at'] as String).toLocal(),
+    completedAt: json['completed_at'] == null
+        ? null
+        : DateTime.parse(json['completed_at'] as String).toLocal(),
+  );
+
+  final String id;
+  final String listingId;
+  final String listingTitle;
+  final String? listingPhoto;
+  final MarketType listingType;
+
+  /// Presente per gli scambi (proposta accettata).
+  final String? proposalId;
+  final bool iAmOwner;
+  final String otherId;
+  final String otherUsername;
+  final String otherPublicName;
+  final bool iConfirmed;
+  final bool otherConfirmed;
+  final bool declined;
+  final bool cancelled;
+  final bool completed;
+
+  /// Le stelle che ho dato e quelle ricevute (null finché non c'è il feedback).
+  final int? myStars;
+  final int? theirStars;
+  final DateTime createdAt;
+  final DateTime? completedAt;
+
+  bool get isSwap => proposalId != null;
+  bool get open => !declined && !cancelled && !completed;
+
+  /// Tocca a me confermare.
+  bool get toConfirm => open && !iConfirmed;
+
+  /// Ho confermato e aspetto l'altra persona.
+  bool get waiting => open && iConfirmed && !otherConfirmed;
+
+  /// L'autore può annullare la richiesta (Vendo, Regalo, Cerco).
+  bool get canCancel => waiting && iAmOwner && !isSwap;
+  bool get canLeaveFeedback => completed && myStars == null;
+}
+
+/// Media e numero dei feedback di una persona.
+@immutable
+class FeedbackSummary {
+  const FeedbackSummary({this.average, this.count = 0, this.completedDeals = 0});
+
+  factory FeedbackSummary.fromJson(Map<String, dynamic> json) => FeedbackSummary(
+    average: (json['average'] as num?)?.toDouble(),
+    count: (json['count'] as num?)?.toInt() ?? 0,
+    completedDeals: (json['completed_deals'] as num?)?.toInt() ?? 0,
+  );
+
+  final double? average;
+  final int count;
+  final int completedDeals;
+
+  /// «4,8 · 12 feedback», «Nessun feedback».
+  String get label {
+    final double? a = average;
+    if (count == 0 || a == null) return 'Nessun feedback';
+    return '${a.toStringAsFixed(1).replaceAll('.', ',')} · $count feedback';
+  }
+}
+
+/// Un feedback ricevuto.
+@immutable
+class FeedbackEntry {
+  const FeedbackEntry({
+    required this.id,
+    required this.stars,
+    this.comment = '',
+    required this.createdAt,
+    required this.authorUsername,
+    required this.authorPublicName,
+    required this.listingTitle,
+    this.role = '',
+  });
+
+  factory FeedbackEntry.fromJson(Map<String, dynamic> json) => FeedbackEntry(
+    id: json['id'] as String,
+    stars: (json['stars'] as num).toInt(),
+    comment: json['comment'] as String? ?? '',
+    createdAt: DateTime.parse(json['created_at'] as String).toLocal(),
+    authorUsername: json['author_username'] as String? ?? '',
+    authorPublicName: json['author_public_name'] as String? ?? '',
+    listingTitle: json['listing_title'] as String? ?? '',
+    role: json['role'] as String? ?? '',
+  );
+
+  final String id;
+  final int stars;
+  final String comment;
+  final DateTime createdAt;
+  final String authorUsername;
+  final String authorPublicName;
+  final String listingTitle;
+
+  /// swap, from_owner (dall'autore dell'annuncio), from_other.
+  final String role;
+
+  String get roleLabel => switch (role) {
+    'swap' => 'Scambio',
+    'from_owner' => 'Da chi ha pubblicato',
+    _ => 'Da chi ha risposto all\'annuncio',
+  };
+}
+
+/// Limiti del feedback (migrazione 0015).
+abstract final class FeedbackRules {
+  static const int commentMax = 500;
+}

@@ -1,4 +1,4 @@
-// Anteprime per il titolare (Fase 5, Blocchi 1-3): Scambia & Vendi con dati finti.
+// Anteprime per il titolare (Fase 5, Blocchi 1-4): Scambia & Vendi con dati finti.
 // Non fa parte dei test di regressione: lo esegue solo il workflow «Anteprime schermate».
 import 'dart:io';
 
@@ -12,6 +12,8 @@ import 'package:nexus_social/features/market/market_catalog_data.dart';
 import 'package:nexus_social/features/market/market_listing_screen.dart';
 import 'package:nexus_social/features/market/market_models.dart';
 import 'package:nexus_social/features/market/market_section_screen.dart';
+import 'package:nexus_social/features/market/market_deals_screen.dart';
+import 'package:nexus_social/features/market/market_feedback.dart';
 import 'package:nexus_social/features/market/my_market_screen.dart';
 import 'package:nexus_social/features/market/swap_offer_screen.dart';
 import 'package:nexus_social/features/market/swap_proposals_screen.dart';
@@ -325,5 +327,51 @@ void main() {
           targetTitle: 'Tenda da campeggio 4 posti'),
     ]);
     await shoot(tester, 'mercato_11_proposte', SwapProposalsScreen(repository: repo));
+  });
+
+  // ---------------------------------------------------------------- Blocco 4
+  testWidgets('mercato 12 · conclusioni e feedback', (tester) async {
+    final FakeMarketRepository repo = shop();
+    repo.deals.addAll(<MarketDeal>[
+      sampleDeal(),
+      sampleDeal(id: 'd2', iAmOwner: true, iConfirmed: true, otherConfirmed: false, title: 'Tenda da campeggio'),
+      sampleDeal(id: 'd3', proposalId: 'p1', completed: true, title: 'Console PS4 con giochi', theirStars: 5),
+      sampleDeal(id: 'd4', completed: true, myStars: 5, theirStars: 4, title: 'Chitarra acustica'),
+    ]);
+    await shoot(tester, 'mercato_12_conclusioni', MarketDealsScreen(repository: repo));
+  });
+
+  testWidgets('mercato 13 · lascia un feedback', (tester) async {
+    await shoot(
+      tester,
+      'mercato_13_feedback',
+      LeaveFeedbackScreen(repository: shop(), deal: sampleDeal(completed: true, title: 'Console PS4 con giochi')),
+      before: () async {
+        await tester.tap(find.byKey(const ValueKey<String>('stella_5')));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byKey(const ValueKey<String>('feedback_commento')),
+            'Puntuale, gentile e tutto come descritto. Consigliato!');
+        FocusManager.instance.primaryFocus?.unfocus();
+      },
+    );
+  });
+
+  testWidgets('mercato 14 · feedback ricevuti', (tester) async {
+    final FakeMarketRepository repo = shop();
+    repo.feedbackEntries = <FeedbackEntry>[
+      sampleFeedback(),
+      sampleFeedback(id: 'f2', stars: 4, comment: 'Oggetto come in foto, un po\' di ritardo.'),
+      sampleFeedback(id: 'f3', stars: 5, comment: ''),
+    ];
+    await shoot(
+      tester,
+      'mercato_14_feedback_ricevuti',
+      FeedbackListScreen(
+        repository: repo,
+        userId: 'utente1',
+        name: 'Luca R.',
+        summary: const FeedbackSummary(average: 4.7, count: 3, completedDeals: 4),
+      ),
+    );
   });
 }

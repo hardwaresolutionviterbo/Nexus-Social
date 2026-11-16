@@ -87,6 +87,55 @@ class _MyMarketScreenState extends State<MyMarketScreen> {
     if (ok ?? false) await _run(() => widget.repository.close(l.id), 'Annuncio chiuso.');
   }
 
+  /// «Concluso con…»: l'autore indica la persona, che poi conferma (D6).
+  Future<void> _conclude(MyMarketListing l) async {
+    List<DealCandidate> people;
+    try {
+      people = await widget.repository.dealCandidates(l.id);
+    } on ListingFailure catch (f) {
+      if (mounted) setState(() => _error = f.message);
+      return;
+    }
+    if (!mounted) return;
+    final DealCandidate? who = await showModalBottomSheet<DealCandidate>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (BuildContext ctx) => ListView(
+        key: const ValueKey<String>('scegli_controparte'),
+        shrinkWrap: true,
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+        children: [
+          Text('Con chi l\'hai concluso?', style: Theme.of(ctx).textTheme.titleLarge),
+          const SizedBox(height: 4),
+          Text(
+            people.isEmpty
+                ? 'Nessuno ha ancora commentato o fatto una proposta su questo annuncio. Chiedi alla '
+                      'persona di scriverti nei commenti, poi torna qui.'
+                : 'Chi ha commentato o fatto una proposta. Riceverà la richiesta di conferma.',
+            style: Theme.of(ctx).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          for (final DealCandidate c in people)
+            ListTile(
+              key: ValueKey<String>('controparte_${c.id}'),
+              contentPadding: EdgeInsets.zero,
+              leading: CircleAvatar(child: Text(c.publicName.isEmpty ? '?' : c.publicName[0].toUpperCase())),
+              title: Text(c.publicName),
+              subtitle: Text('@${c.username}'),
+              onTap: () => Navigator.of(ctx).pop(c),
+            ),
+        ],
+      ),
+    );
+    if (who == null || !mounted) return;
+    await _run(
+      () => widget.repository.markConcluded(l.id, who.id),
+      'Abbiamo chiesto a ${who.publicName} di confermare.',
+    );
+  }
+
   Future<void> _edit(MyMarketListing l) async {
     final MarketPublishResult? r = await Navigator.of(context).push<MarketPublishResult>(
       MaterialPageRoute<MarketPublishResult>(
@@ -208,6 +257,15 @@ class _MyMarketScreenState extends State<MyMarketScreen> {
                             icon: const Icon(Icons.edit_outlined, size: 18),
                             label: const Text('Modifica'),
                           ),
+                          if (l.state == MarketListingState.active &&
+                              l.review == ReviewStatus.published &&
+                              l.type != MarketType.swap)
+                            TextButton.icon(
+                              key: ValueKey<String>('concludi_${l.id}'),
+                              onPressed: () => _conclude(l),
+                              icon: const Icon(Icons.handshake_outlined, size: 18),
+                              label: const Text('Concluso con…'),
+                            ),
                           TextButton.icon(
                             onPressed: () => _close(l),
                             icon: const Icon(Icons.check_circle_outline, size: 18),

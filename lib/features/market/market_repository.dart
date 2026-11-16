@@ -47,6 +47,28 @@ abstract class MarketRepository {
   Future<void> cancelSwap(String proposalId);
 
   Future<List<SwapProposal>> mySwaps();
+
+  // Conclusione e feedback (Blocco 4, migrazione 0015).
+
+  Future<List<DealCandidate>> dealCandidates(String listingId);
+
+  Future<String> markConcluded(String listingId, String otherId);
+
+  /// «waiting» finché manca l'altra parte, «completed» a conclusione avvenuta.
+  Future<String> confirmSwapConcluded(String proposalId);
+
+  /// true = confermo, false = non è avvenuto.
+  Future<String> answerDeal(String dealId, {required bool confirm});
+
+  Future<void> cancelDeal(String dealId);
+
+  Future<void> leaveFeedback(String dealId, int stars, String comment);
+
+  Future<FeedbackSummary> feedbackSummary(String userId);
+
+  Future<List<FeedbackEntry>> feedbackList(String userId, {int offset = 0});
+
+  Future<List<MarketDeal>> myDeals();
 }
 
 class SupabaseMarketRepository implements MarketRepository {
@@ -252,6 +274,86 @@ class SupabaseMarketRepository implements MarketRepository {
         for (final Object? r in data)
           if (r is Map<String, dynamic>) SwapProposal.fromJson(r),
     ];
+  });
+
+  static List<Map<String, dynamic>> _rows(Object? data) => <Map<String, dynamic>>[
+    if (data is List)
+      for (final Object? r in data)
+        if (r is Map<String, dynamic>) r,
+  ];
+
+  @override
+  Future<List<DealCandidate>> dealCandidates(String listingId) => _guard(() async {
+    final Object? data = await _client.rpc(
+      'deal_candidates',
+      params: <String, Object?>{'p_listing': listingId},
+    );
+    return _rows(data).map(DealCandidate.fromJson).toList();
+  });
+
+  @override
+  Future<String> markConcluded(String listingId, String otherId) => _guard(() async {
+    final Object? id = await _client.rpc(
+      'mark_listing_concluded',
+      params: <String, Object?>{'p_listing': listingId, 'p_other': otherId},
+    );
+    return '$id';
+  });
+
+  @override
+  Future<String> confirmSwapConcluded(String proposalId) => _guard(() async {
+    final Object? s = await _client.rpc(
+      'confirm_swap_concluded',
+      params: <String, Object?>{'p_proposal': proposalId},
+    );
+    return '$s';
+  });
+
+  @override
+  Future<String> answerDeal(String dealId, {required bool confirm}) => _guard(() async {
+    final Object? s = await _client.rpc(
+      'answer_deal',
+      params: <String, Object?>{'p_deal': dealId, 'p_confirm': confirm},
+    );
+    return '$s';
+  });
+
+  @override
+  Future<void> cancelDeal(String dealId) => _guard(() async {
+    await _client.rpc('cancel_deal', params: <String, Object?>{'p_deal': dealId});
+  });
+
+  @override
+  Future<void> leaveFeedback(String dealId, int stars, String comment) => _guard(() async {
+    await _client.rpc(
+      'leave_feedback',
+      params: <String, Object?>{'p_deal': dealId, 'p_stars': stars, 'p_comment': comment.trim()},
+    );
+  });
+
+  @override
+  Future<FeedbackSummary> feedbackSummary(String userId) => _guard(() async {
+    final Object? data = await _client.rpc(
+      'feedback_summary',
+      params: <String, Object?>{'p_user': userId},
+    );
+    final List<Map<String, dynamic>> r = _rows(data);
+    return r.isEmpty ? const FeedbackSummary() : FeedbackSummary.fromJson(r.first);
+  });
+
+  @override
+  Future<List<FeedbackEntry>> feedbackList(String userId, {int offset = 0}) => _guard(() async {
+    final Object? data = await _client.rpc(
+      'feedback_list',
+      params: <String, Object?>{'p_user': userId, 'p_offset': offset},
+    );
+    return _rows(data).map(FeedbackEntry.fromJson).toList();
+  });
+
+  @override
+  Future<List<MarketDeal>> myDeals() => _guard(() async {
+    final Object? data = await _client.rpc('my_deals');
+    return _rows(data).map(MarketDeal.fromJson).toList();
   });
 
   @override

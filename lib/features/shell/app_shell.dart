@@ -10,6 +10,8 @@ import '../map/map_screen.dart';
 import '../market/market_models.dart';
 import '../market/market_repository.dart';
 import '../market/market_section_screen.dart';
+import '../market/market_deals_screen.dart';
+import '../market/market_feedback.dart';
 import '../market/swap_proposals_screen.dart';
 import '../map/notifications_screen.dart';
 import '../map/social_repository.dart';
@@ -123,6 +125,14 @@ class _AppShellState extends State<AppShell> {
       security: widget.security,
       biometricLock: widget.biometricLock,
       contacts: widget.contacts,
+      // Media dei feedback sul profilo dei privati (Fase 5, Blocco 4).
+      feedback: widget.market == null || widget.profile == null || widget.profile!.isBusiness
+          ? null
+          : FeedbackSummaryTile(
+              repository: widget.market!,
+              userId: widget.profile!.id,
+              name: widget.profile!.publicName,
+            ),
     ),
   ];
 
@@ -153,6 +163,7 @@ class _AppShellState extends State<AppShell> {
       context,
       widget.social!,
       openSwaps: market == null ? null : (BuildContext c) => SwapProposalsScreen.open(c, market),
+      openDeals: market == null ? null : (BuildContext c) => MarketDealsScreen.open(c, market),
     );
     await _refreshUnread();
   }

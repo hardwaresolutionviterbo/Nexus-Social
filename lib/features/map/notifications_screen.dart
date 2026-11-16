@@ -16,6 +16,7 @@ class NotificationsScreen extends StatefulWidget {
     required this.repository,
     this.now = DateTime.now,
     this.openSwaps,
+    this.openDeals,
   });
 
   final SocialRepository repository;
@@ -24,13 +25,18 @@ class NotificationsScreen extends StatefulWidget {
   /// Apre le proposte di scambio (Fase 5, Blocco 3); null se Scambia & Vendi non c'è.
   final Future<void> Function(BuildContext context)? openSwaps;
 
+  /// Apre conclusioni e feedback (Fase 5, Blocco 4).
+  final Future<void> Function(BuildContext context)? openDeals;
+
   static Future<void> open(
     BuildContext context,
     SocialRepository repository, {
     Future<void> Function(BuildContext context)? openSwaps,
+    Future<void> Function(BuildContext context)? openDeals,
   }) => Navigator.of(context).push<void>(
     MaterialPageRoute<void>(
-      builder: (_) => NotificationsScreen(repository: repository, openSwaps: openSwaps),
+      builder: (_) =>
+          NotificationsScreen(repository: repository, openSwaps: openSwaps, openDeals: openDeals),
     ),
   );
 
@@ -63,9 +69,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Future<void> _open(AppNotification n) async {
-    if (n.kind.isSwap) {
-      final Future<void> Function(BuildContext)? swaps = widget.openSwaps;
-      if (swaps != null) await swaps(context);
+    if (n.kind.isSwap || n.kind.isDeal) {
+      final Future<void> Function(BuildContext)? open = n.kind.isSwap ? widget.openSwaps : widget.openDeals;
+      if (open != null) await open(context);
       return;
     }
     await Navigator.of(context).push<void>(
@@ -167,6 +173,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     NotificationKind.commentReply => Icons.reply_rounded,
     NotificationKind.listingComment || NotificationKind.followedComment => Icons.mode_comment_rounded,
     NotificationKind.swapProposal || NotificationKind.swapCounter => Icons.swap_horiz_rounded,
-    NotificationKind.swapAccepted => Icons.handshake_rounded,
+    NotificationKind.swapAccepted || NotificationKind.dealConfirm || NotificationKind.dealCompleted =>
+      Icons.handshake_rounded,
+    NotificationKind.feedbackReceived => Icons.star_rounded,
   };
 }

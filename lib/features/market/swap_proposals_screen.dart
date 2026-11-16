@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../map/listing_repository.dart' show ListingFailure;
+import 'market_deals_screen.dart';
 import 'market_models.dart';
 import 'market_publish_screen.dart' show MarketPhoto;
 import 'market_repository.dart';
@@ -115,6 +116,29 @@ class _SwapProposalsScreenState extends State<SwapProposalsScreen> {
     await _guarded(() => widget.repository.cancelSwap(p.id), 'Proposta annullata.');
   }
 
+  Future<void> _conclude(SwapProposal p) async {
+    if (!await _confirm(
+      'Lo scambio è avvenuto?',
+      'Quando lo confermate entrambi, gli annunci si chiudono e potrete lasciarvi un feedback.',
+      'Confermo',
+    )) {
+      return;
+    }
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final String r = await widget.repository.confirmSwapConcluded(p.id);
+      _toast(r == 'completed'
+          ? 'Scambio concluso! Lascia un feedback da «Conclusioni e feedback».'
+          : 'Confermato: aspettiamo ${p.otherPublicName}.');
+    } on ListingFailure catch (f) {
+      _toast(f.message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+      await _load();
+    }
+  }
+
   Future<void> _counter(SwapProposal p) async {
     final bool? sent = await Navigator.of(context).push<bool>(
       MaterialPageRoute<bool>(
@@ -193,6 +217,8 @@ class _SwapProposalsScreenState extends State<SwapProposalsScreen> {
               onReject: () => _reject(p),
               onCounter: () => _counter(p),
               onCancel: () => _cancel(p),
+              onConclude: () => _conclude(p),
+              onDeals: () => MarketDealsScreen.open(context, widget.repository),
             ),
         ],
       ),
@@ -210,6 +236,8 @@ class _ProposalCard extends StatelessWidget {
     required this.onReject,
     required this.onCounter,
     required this.onCancel,
+    required this.onConclude,
+    required this.onDeals,
   });
 
   final SwapProposal proposal;
@@ -219,6 +247,8 @@ class _ProposalCard extends StatelessWidget {
   final VoidCallback onReject;
   final VoidCallback onCounter;
   final VoidCallback onCancel;
+  final VoidCallback onConclude;
+  final VoidCallback onDeals;
 
   static Color _statusColor(SwapStatus s, ColorScheme scheme) => switch (s) {
     SwapStatus.pending => AppColors.brandOrangeDeep,
@@ -328,9 +358,26 @@ class _ProposalCard extends StatelessWidget {
             if (p.status == SwapStatus.accepted) ...[
               const SizedBox(height: AppSpacing.sm),
               Text(
-                'Accordatevi su luogo e consegna nei commenti dell\'annuncio: la chat arriverà presto.',
+                'Accordatevi su luogo e consegna nei commenti dell\'annuncio: la chat arriverà presto. '
+                'Dopo lo scambio confermatelo entrambi.',
                 key: ValueKey<String>('accordo_${p.id}'),
                 style: theme.textTheme.bodySmall,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              FilledButton.icon(
+                key: ValueKey<String>('concluso_${p.id}'),
+                onPressed: busy ? null : onConclude,
+                icon: const Icon(Icons.handshake_rounded),
+                label: const Text('Confermo: scambio avvenuto'),
+              ),
+            ],
+            if (p.status == SwapStatus.completed) ...[
+              const SizedBox(height: AppSpacing.sm),
+              TextButton.icon(
+                key: ValueKey<String>('vai_feedback_${p.id}'),
+                onPressed: onDeals,
+                icon: const Icon(Icons.star_rounded),
+                label: const Text('Feedback'),
               ),
             ],
             if (p.toAnswer) ...[

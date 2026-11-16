@@ -7,6 +7,7 @@ import '../map/social_repository.dart';
 import '../profile/profile_form_screen.dart' show PickImage, pickFromGallery;
 import 'category_picker.dart';
 import 'market_catalog_data.dart';
+import 'market_deals_screen.dart';
 import 'market_filters_screen.dart';
 import 'market_listing_screen.dart';
 import 'market_models.dart';
@@ -273,16 +274,26 @@ class _MarketSectionScreenState extends State<MarketSectionScreen> {
               ),
             ],
           ),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              key: const ValueKey<String>('mercato_proposte'),
-              onPressed: () {
-                if (_serverReady()) SwapProposalsScreen.open(context, widget.repository!);
-              },
-              icon: const Icon(Icons.swap_horiz_rounded),
-              label: const Text('Proposte di scambio'),
-            ),
+          Wrap(
+            spacing: 4,
+            children: [
+              TextButton.icon(
+                key: const ValueKey<String>('mercato_proposte'),
+                onPressed: () {
+                  if (_serverReady()) SwapProposalsScreen.open(context, widget.repository!);
+                },
+                icon: const Icon(Icons.swap_horiz_rounded),
+                label: const Text('Proposte'),
+              ),
+              TextButton.icon(
+                key: const ValueKey<String>('mercato_conclusioni'),
+                onPressed: () {
+                  if (_serverReady()) MarketDealsScreen.open(context, widget.repository!);
+                },
+                icon: const Icon(Icons.star_outline_rounded),
+                label: const Text('Conclusioni e feedback'),
+              ),
+            ],
           ),
           TextField(
             key: const ValueKey<String>('mercato_cerca'),

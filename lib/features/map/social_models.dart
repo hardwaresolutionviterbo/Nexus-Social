@@ -213,7 +213,12 @@ enum NotificationKind {
   // Proposte di scambio (Fase 5, Blocco 3).
   swapProposal('swap_proposal'),
   swapCounter('swap_counter'),
-  swapAccepted('swap_accepted');
+  swapAccepted('swap_accepted'),
+
+  // Conclusione e feedback (Fase 5, Blocco 4).
+  dealConfirm('deal_confirm'),
+  dealCompleted('deal_completed'),
+  feedbackReceived('feedback_received');
 
   const NotificationKind(this.serverValue);
 
@@ -223,6 +228,11 @@ enum NotificationKind {
       this == NotificationKind.swapProposal ||
       this == NotificationKind.swapCounter ||
       this == NotificationKind.swapAccepted;
+
+  bool get isDeal =>
+      this == NotificationKind.dealConfirm ||
+      this == NotificationKind.dealCompleted ||
+      this == NotificationKind.feedbackReceived;
 
   static NotificationKind fromServer(String? v) => NotificationKind.values.firstWhere(
     (NotificationKind k) => k.serverValue == v,
@@ -244,6 +254,7 @@ class AppNotification {
     required this.createdAt,
     this.read = false,
     this.proposalId,
+    this.dealId,
   });
 
   factory AppNotification.fromJson(Map<String, dynamic> json) => AppNotification(
@@ -263,6 +274,7 @@ class AppNotification {
     createdAt: DateTime.parse(json['created_at'] as String).toLocal(),
     read: json['read'] as bool? ?? false,
     proposalId: json['proposal_id'] as String?,
+    dealId: json['deal_id'] as String?,
   );
 
   final String id;
@@ -270,6 +282,9 @@ class AppNotification {
 
   /// La proposta di scambio a cui si riferisce (solo per le notifiche di scambio).
   final String? proposalId;
+
+  /// La conclusione a cui si riferisce (solo per conclusioni e feedback).
+  final String? dealId;
   final String listingId;
   final String listingTitle;
   final String? commentId;
@@ -293,6 +308,7 @@ class AppNotification {
     createdAt: createdAt,
     read: true,
     proposalId: proposalId,
+    dealId: dealId,
   );
 
   /// Testo della notifica, senza dati oltre al nome abbreviato.
@@ -309,6 +325,9 @@ class AppNotification {
       NotificationKind.swapProposal => '$who ti ha proposto uno scambio per «$listingTitle»',
       NotificationKind.swapCounter => '$who ha fatto una controproposta per «$listingTitle»',
       NotificationKind.swapAccepted => '$who ha accettato la proposta di scambio per «$listingTitle»',
+      NotificationKind.dealConfirm => '$who chiede di confermare che «$listingTitle» è concluso',
+      NotificationKind.dealCompleted => '«$listingTitle» è concluso: lascia un feedback a $who',
+      NotificationKind.feedbackReceived => '$who ti ha lasciato un feedback per «$listingTitle»',
     };
   }
 }

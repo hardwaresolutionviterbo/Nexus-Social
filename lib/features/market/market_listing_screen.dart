@@ -8,6 +8,7 @@ import '../map/listing_sheets.dart' show ReportListingForm;
 import '../map/listing_social_panel.dart';
 import '../map/social_models.dart' show ListingSocial;
 import '../map/social_repository.dart';
+import 'market_feedback.dart';
 import 'market_models.dart';
 import 'market_publish_screen.dart' show AntiScamNotice, MarketPhoto;
 import 'market_repository.dart';
@@ -293,6 +294,14 @@ class _MarketListingScreenState extends State<MarketListingScreen> {
                               children: [
                                 Text(l.ownerPublicName, style: theme.textTheme.titleSmall),
                                 Text('@${l.ownerUsername}', style: theme.textTheme.bodySmall),
+                                // Media dei feedback sul profilo dei privati (PDF, Fase 5).
+                                if (!l.ownerIsBusiness)
+                                  FeedbackSummaryTile(
+                                    repository: widget.repository,
+                                    userId: l.ownerId,
+                                    name: l.ownerPublicName,
+                                    dense: true,
+                                  ),
                               ],
                             ),
                           ),

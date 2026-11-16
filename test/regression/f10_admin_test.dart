@@ -109,6 +109,8 @@ void main() {
       'lib/features/map/notifications_screen.dart',
       'lib/features/map/point_picker_screen.dart',
       'lib/features/market/category_picker.dart',
+      'lib/features/market/market_deals_screen.dart',
+      'lib/features/market/market_feedback.dart',
       'lib/features/market/market_filters_screen.dart',
       'lib/features/market/market_listing_screen.dart',
       'lib/features/market/market_publish_screen.dart',

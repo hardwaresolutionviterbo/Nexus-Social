@@ -34,6 +34,18 @@ class FakeMarketRepository implements MarketRepository {
   final List<(String, bool)> responses = <(String, bool)>[];
   final List<String> cancelledSwaps = <String>[];
   final List<String?> candidateRequests = <String?>[];
+
+  // Conclusione e feedback.
+  List<DealCandidate> dealPeople = <DealCandidate>[];
+  final List<MarketDeal> deals = <MarketDeal>[];
+  final List<(String, String)> concluded = <(String, String)>[];
+  final List<String> swapConfirmations = <String>[];
+  final List<(String, bool)> dealAnswers = <(String, bool)>[];
+  final List<String> cancelledDeals = <String>[];
+  final List<(String, int, String)> feedbackSent = <(String, int, String)>[];
+  FeedbackSummary summary = const FeedbackSummary();
+  List<FeedbackEntry> feedbackEntries = <FeedbackEntry>[];
+  String swapConfirmResult = 'waiting';
   final List<MarketDraft> published = <MarketDraft>[];
   final List<(String, MarketDraft)> updates = <(String, MarketDraft)>[];
   final List<String> renewed = <String>[];
@@ -171,6 +183,55 @@ class FakeMarketRepository implements MarketRepository {
   @override
   Future<List<SwapProposal>> mySwaps() async => List<SwapProposal>.of(swaps);
 
+  @override
+  Future<List<DealCandidate>> dealCandidates(String listingId) async => dealPeople;
+
+  @override
+  Future<String> markConcluded(String listingId, String otherId) async {
+    concluded.add((listingId, otherId));
+    return 'd${concluded.length}';
+  }
+
+  @override
+  Future<String> confirmSwapConcluded(String proposalId) async {
+    swapConfirmations.add(proposalId);
+    return swapConfirmResult;
+  }
+
+  @override
+  Future<String> answerDeal(String dealId, {required bool confirm}) async {
+    dealAnswers.add((dealId, confirm));
+    _setDeal(dealId, confirm ? sampleDeal(id: dealId, completed: true) : sampleDeal(id: dealId, declined: true));
+    return confirm ? 'completed' : 'declined';
+  }
+
+  @override
+  Future<void> cancelDeal(String dealId) async {
+    cancelledDeals.add(dealId);
+    _setDeal(dealId, sampleDeal(id: dealId, iAmOwner: true, iConfirmed: true, cancelled: true));
+  }
+
+  @override
+  Future<void> leaveFeedback(String dealId, int stars, String comment) async {
+    feedbackSent.add((dealId, stars, comment));
+    _setDeal(dealId, sampleDeal(id: dealId, completed: true, myStars: stars));
+  }
+
+  @override
+  Future<FeedbackSummary> feedbackSummary(String userId) async => summary;
+
+  @override
+  Future<List<FeedbackEntry>> feedbackList(String userId, {int offset = 0}) async =>
+      feedbackEntries.skip(offset).take(MarketQuery.pageSize).toList();
+
+  @override
+  Future<List<MarketDeal>> myDeals() async => List<MarketDeal>.of(deals);
+
+  void _setDeal(String id, MarketDeal d) {
+    final int i = deals.indexWhere((MarketDeal x) => x.id == id);
+    if (i >= 0) deals[i] = d;
+  }
+
   void _set(String id, SwapStatus status) {
     final int i = swaps.indexWhere((SwapProposal p) => p.id == id);
     if (i >= 0) swaps[i] = sampleSwap(id: id, status: status, fromMe: swaps[i].fromMe, iAmOwner: swaps[i].iAmOwner);
@@ -285,3 +346,48 @@ MyMarketListing sampleMarket({
   expiresAt: expiresAt ?? DateTime(2026, 12, 10),
   createdAt: DateTime(2026, 11, 10),
 );
+
+
+MarketDeal sampleDeal({
+  String id = 'd1',
+  String? proposalId,
+  bool iAmOwner = false,
+  bool iConfirmed = false,
+  bool otherConfirmed = true,
+  bool declined = false,
+  bool cancelled = false,
+  bool completed = false,
+  int? myStars,
+  int? theirStars,
+  String title = 'Lampada da tavolo',
+}) => MarketDeal(
+  id: id,
+  listingId: 'l-$id',
+  listingTitle: title,
+  proposalId: proposalId,
+  iAmOwner: iAmOwner,
+  otherId: 'u2',
+  otherUsername: 'luca_r',
+  otherPublicName: 'Luca R.',
+  iConfirmed: iConfirmed || completed,
+  otherConfirmed: otherConfirmed || completed,
+  declined: declined,
+  cancelled: cancelled,
+  completed: completed,
+  myStars: myStars,
+  theirStars: theirStars,
+  createdAt: DateTime(2026, 11, 15, 10),
+  completedAt: completed ? DateTime(2026, 11, 15, 12) : null,
+);
+
+FeedbackEntry sampleFeedback({String id = 'f1', int stars = 5, String comment = 'Puntuale e gentile'}) =>
+    FeedbackEntry(
+      id: id,
+      stars: stars,
+      comment: comment,
+      createdAt: DateTime(2026, 11, 14),
+      authorUsername: 'giulia_b',
+      authorPublicName: 'Giulia B.',
+      listingTitle: 'Bici da città',
+      role: 'from_other',
+    );
