@@ -24,3 +24,6 @@ Ramo `server/rubrica-supabase`. Nessuna modifica a `main`, a Firebase o al datab
    `supabase functions deploy rubrica --no-verify-jwt` (si potrà fare anche da GitHub Actions
    con un token di accesso Supabase impostato dal titolare tra i secret del repository).
 3. Le vecchie Cloud Functions della rubrica restano nel repository ma non servono più.
+
+## Approvazione
+- 16/11/2026: approvato dal titolare; autorizzata l'unione in main.
