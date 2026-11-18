@@ -43,7 +43,8 @@ l'accesso con SMS e per l'invio delle notifiche. Tutto il resto è su Supabase. 
 | 6 | Backup della chat cifrato con password | Sul ramo `fase4/blocco6`, server attivo, da provare | [`BLOCCO6_ESITO.md`](docs/fase4/BLOCCO6_ESITO.md) |
 | 7 | «Segnala» con i messaggi scelti, «Condividi l'incontro», notifiche dei commenti che aprono l'annuncio | Sul ramo `fase4/blocco7`, server attivo, da provare | [`BLOCCO7_ESITO.md`](docs/fase4/BLOCCO7_ESITO.md) |
 | 8 | Chiamate vocali e videochiamate (chat a due) | Sul ramo `fase4/blocco8`, server attivo, da provare | [`BLOCCO8_ESITO.md`](docs/fase4/BLOCCO8_ESITO.md) |
-| 9 | Chiamate di gruppo, schermata di chiamata di sistema | Da fare | |
+| 9 | Messaggi e chiamate in tempo reale | Sul ramo `fase4/blocco9`, migrazione 0026 da applicare | [`BLOCCO9_ESITO.md`](docs/fase4/BLOCCO9_ESITO.md) |
+| 10 | Chiamate di gruppo, schermata di chiamata di sistema | Da fare | |
 
 Le scelte tecniche della chat sono in [`docs/fase4/DECISIONI.md`](docs/fase4/DECISIONI.md).
 
