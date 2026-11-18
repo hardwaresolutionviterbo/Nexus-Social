@@ -109,7 +109,8 @@ class FakeChatHub {
   final Map<String, String> invites = <String, String>{};
 
   String newId() => '00000000-0000-4000-8000-${(++_conv).toString().padLeft(12, '0')}';
-  DateTime clock = DateTime(2026, 11, 16, 18, 30);
+  // Un'ora fa: «elimina per tutti» (48 ore) confronta l'ora vera con quella del server.
+  DateTime clock = DateTime.now().subtract(const Duration(hours: 1));
 
   void addPerson(String id, String username, String name) =>
       people[id] = FakePerson(id, username, name);

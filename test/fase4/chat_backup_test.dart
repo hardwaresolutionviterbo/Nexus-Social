@@ -120,7 +120,7 @@ void main() {
     await a.react(a.messages(conv).firstWhere((ChatMessage m) => !m.mine && m.isText), '👍');
     await b1.refresh();
     final List<ChatMessage> before = b1.messages(conv);
-    expect(before.where((ChatMessage m) => m.isText), hasLength(2));
+    expect(before.where((ChatMessage m) => m.isText && m.media == null), hasLength(2));
 
     final ChatBackup backup1 = b1.backup!;
     await backup1.load(auto: false);
@@ -137,7 +137,7 @@ void main() {
     final ChatBackup backup2 = b2.backup!;
     await backup2.load(auto: false);
     expect(backup2.offersRestore, isTrue);
-    expect(b2.messages(conv).where((ChatMessage m) => m.isText), isEmpty);
+    expect(b2.messages(conv).where((ChatMessage m) => m.isText && m.media == null), isEmpty);
 
     await expectLater(backup2.restore('Bici2025!'), throwsA(isA<ChatFailure>()));
     expect(backup2.error, 'Password sbagliata.');
@@ -146,9 +146,9 @@ void main() {
     expect(backup2.enabled, isTrue);
     expect(backup2.offersRestore, isFalse);
     final List<ChatMessage> after = b2.messages(conv);
-    expect(after.where((ChatMessage m) => m.isText).map((ChatMessage m) => m.body),
+    expect(after.where((ChatMessage m) => m.isText && m.media == null).map((ChatMessage m) => m.body),
         <String>['Ciao Bruno, la bici è ancora disponibile?', 'Sì, domani alle 18?']);
-    expect(after.firstWhere((ChatMessage m) => m.mine && m.isText).allReactions, <String>['👍']);
+    expect(after.firstWhere((ChatMessage m) => m.mine && m.isText && m.media == null).allReactions, <String>['👍']);
 
     // L'allegato è nella cronologia ma il file non è nel backup.
     final ChatMessage photo = after.firstWhere((ChatMessage m) => m.media != null);
@@ -163,7 +163,7 @@ void main() {
     await a.refresh();
     await a.send(conv, 'Perfetto!');
     await b2.refresh();
-    expect(b2.messages(conv).where((ChatMessage m) => m.isText).last.body, 'Perfetto!');
+    expect(b2.messages(conv).where((ChatMessage m) => m.isText && m.media == null).last.body, 'Perfetto!');
     await b2.send(conv, 'Ho ritrovato tutto');
     await a.refresh();
     expect(a.messages(conv).last.body, 'Ho ritrovato tutto');
