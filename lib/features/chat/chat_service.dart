@@ -883,7 +883,12 @@ class ChatService extends ChangeNotifier {
     await _run(() => _transmit(
       conversationId,
       ChatContent.call(signal.encode(), localId: _localId()),
-      call: (ring: signal.action == CallAction.offer || signal.action == CallAction.invite, video: signal.video),
+      // Squilla solo l'inizio della chiamata: l'offerta nelle chat a due, l'invito nei gruppi.
+      call: (
+        ring: signal.action == CallAction.invite ||
+            (signal.action == CallAction.offer && !(_conversations[conversationId]?.isGroup ?? false)),
+        video: signal.video,
+      ),
     ));
   }
 
