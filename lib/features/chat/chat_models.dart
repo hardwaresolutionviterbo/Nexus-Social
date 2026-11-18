@@ -515,6 +515,7 @@ class ChatMessage {
     this.localFile = '',
     this.senderId = '',
     this.reactions = const <String, String>{},
+    this.fromBackup = false,
   });
 
   final String localId;
@@ -548,6 +549,9 @@ class ChatMessage {
   /// Reazioni degli altri membri del gruppo (chi → emoji). Nelle chat a due c'è solo
   /// [peerReaction].
   final Map<String, String> reactions;
+
+  /// Recuperato da un backup (Blocco 6): gli allegati non sono nel backup.
+  final bool fromBackup;
 
   /// Tutte le reazioni da mostrare: le mie e quelle degli altri.
   List<String> get allReactions => <String>[
@@ -591,6 +595,7 @@ class ChatMessage {
     localFile: (deleted ?? this.deleted) ? '' : (localFile ?? this.localFile),
     senderId: senderId,
     reactions: reactions ?? this.reactions,
+    fromBackup: fromBackup,
   );
 
   Map<String, Object?> toJson() => <String, Object?>{
@@ -605,6 +610,7 @@ class ChatMessage {
     'a': at.toUtc().toIso8601String(),
     if (quote != null) 'q': <String, String>{'id': quote!.localId, 'a': quote!.authorId, 'x': quote!.text},
     if (forwarded) 'f': true,
+    if (fromBackup) 'bk': true,
   };
 
   static ChatMessage? fromJson(String conversationId, Map<String, dynamic> j) {
@@ -627,6 +633,7 @@ class ChatMessage {
       media: ChatMedia.fromJson(j['md']),
       localFile: (j['lf'] as String?) ?? '',
       senderId: (j['sd'] as String?) ?? '',
+      fromBackup: j['bk'] == true,
     );
   }
 

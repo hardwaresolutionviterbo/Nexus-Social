@@ -4,6 +4,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/widgets/nexus_ui.dart';
 import '../profile/avatar_view.dart';
 import '../profile/profile_repository.dart';
+import 'chat_backup_screen.dart';
 import 'chat_group_screens.dart';
 import 'chat_media.dart';
 import 'chat_models.dart';
@@ -105,6 +106,8 @@ class _ChatList extends StatelessWidget {
             padding: AppSpacing.pagePadding.copyWith(left: 0, right: 0),
             children: [
               const _E2eBanner(),
+              if (chat.backup != null)
+                ChatBackupCard(backup: chat.backup!, hasChats: threads.isNotEmpty, now: () => now),
               if (requests.isNotEmpty)
                 ListTile(
                   key: const ValueKey<String>('chat_richieste'),

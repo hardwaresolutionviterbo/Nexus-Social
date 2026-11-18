@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:nexus_social/features/chat/chat_backup.dart';
 import 'package:nexus_social/features/chat/chat_crypto.dart';
 import 'package:nexus_social/features/chat/chat_media.dart';
 import 'package:nexus_social/features/chat/chat_models.dart';
@@ -710,8 +711,18 @@ class FakeChatCrypto implements ChatCrypto {
 }
 
 /// Telefono finto pronto all'uso (cifratura finta, messaggi in memoria, nessun timer utile).
-Future<ChatService> fakePhone(FakeChatHub hub, String uid, {String key = 'chiave', Directory? files}) async {
+Future<ChatService> fakePhone(
+  FakeChatHub hub,
+  String uid, {
+  String key = 'chiave',
+  Directory? files,
+  BackupServer? backup,
+  BackupKeyStore? backupKeys,
+}) async {
   final ChatService s = ChatService(
+    backupServer: backup,
+    backupKeys: backup == null ? null : (backupKeys ?? MemoryBackupKeyStore()),
+    backupKdf: fastKdfForTests(),
     media: hub.media,
     files: files == null ? null : ChatMediaFiles(Future<Directory>.value(files)),
     server: hub.serverFor(uid),
@@ -727,4 +738,43 @@ Future<ChatService> fakePhone(FakeChatHub hub, String uid, {String key = 'chiave
   );
   await s.start();
   return s;
+}
+
+/// Server finto del backup (Blocco 6): un file per account, come il bucket `chat-backups`.
+class FakeBackupServer implements BackupServer {
+  FakeBackupServer({DateTime Function()? now}) : now = now ?? DateTime.now;
+
+  final DateTime Function() now;
+  Uint8List? file;
+  DateTime? at;
+  int uploads = 0;
+  bool offline = false;
+
+  @override
+  Future<BackupInfo?> info() async {
+    if (offline) throw Exception('rete');
+    final Uint8List? f = file;
+    return f == null ? null : BackupInfo(at: at!, size: f.length);
+  }
+
+  @override
+  Future<void> upload(Uint8List bytes) async {
+    if (offline) throw const ChatFailure('Backup non caricato. Riprova.');
+    file = Uint8List.fromList(bytes);
+    at = now();
+    uploads++;
+  }
+
+  @override
+  Future<Uint8List> download() async {
+    final Uint8List? f = file;
+    if (f == null || offline) throw const ChatFailure('Backup non scaricato. Controlla la connessione.');
+    return f;
+  }
+
+  @override
+  Future<void> remove() async {
+    file = null;
+    at = null;
+  }
 }

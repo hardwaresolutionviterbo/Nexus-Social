@@ -6,6 +6,8 @@ import '../../core/services/backend_bootstrap.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/nexus_ui.dart';
 import '../contacts/contacts_sync.dart';
+import '../chat/chat_backup_screen.dart';
+import '../chat/chat_thread_screen.dart' show ChatRegistry;
 import '../notifications/notification_settings.dart';
 import '../privacy/privacy_repository.dart';
 import '../privacy/privacy_screen.dart';
@@ -298,6 +300,17 @@ class ProfileScreen extends StatelessWidget {
                     subtitle: const Text('Numero, profilo, persone bloccate e autorizzazioni'),
                     trailing: const Icon(Icons.chevron_right_rounded),
                     onTap: () => _openPrivacy(context),
+                  ),
+                ],
+                if (ChatRegistry.current?.backup != null) ...[
+                  const Divider(height: 1),
+                  ListTile(
+                    key: const ValueKey<String>('apri_backup_chat'),
+                    leading: const Icon(Icons.cloud_upload_outlined),
+                    title: const Text('Backup delle chat'),
+                    subtitle: const Text('Ritrovi i messaggi se cambi telefono'),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => ChatBackupScreen.open(context, ChatRegistry.current!.backup!),
                   ),
                 ],
                 if (pushSettings != null) ...[

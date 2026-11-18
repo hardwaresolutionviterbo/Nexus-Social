@@ -35,6 +35,36 @@ abstract class ChatStore {
   Future<bool> hasServerId(String conversationId, int serverId);
 
   Future<void> deleteConversation(String conversationId);
+
+  /// Tutta la cronologia così com'è salvata (messaggi ed eventi), per il backup (Blocco 6).
+  Future<Map<String, List<Map<String, Object?>>>> exportAll();
+
+  /// Aggiunge la cronologia di un backup senza doppioni; restituisce i messaggi aggiunti.
+  Future<int> importAll(Map<String, List<Map<String, Object?>>> chats);
+}
+
+/// Righe del backup pronte per essere aggiunte: gli allegati non ci sono (né i file né il
+/// segno «scaricato»), quindi i messaggi con allegato diventano «dal backup».
+List<Map<String, Object?>> backupRowsToAdd(
+  List<Map<String, Object?>> incoming,
+  Set<String> haveMessages,
+  Set<String> haveEvents,
+) {
+  final List<Map<String, Object?>> out = <Map<String, Object?>>[];
+  for (final Map<String, Object?> row in incoming) {
+    if (row.containsKey('ev')) {
+      if (row['ev'] == ChatEventKind.saved.name) continue;
+      final String key = jsonEncode(row);
+      if (haveEvents.add(key)) out.add(row);
+    } else {
+      final Object? id = row['l'];
+      if (id is! String || !haveMessages.add(id)) continue;
+      final Map<String, Object?> m = Map<String, Object?>.of(row)..remove('lf');
+      if (m.containsKey('md')) m['bk'] = true;
+      out.add(m);
+    }
+  }
+  return out;
 }
 
 /// Versione in memoria (test e anteprime).
@@ -86,6 +116,40 @@ class MemoryChatStore implements ChatStore {
     _messages.remove(conversationId);
     _events.remove(conversationId);
     _sessions.remove(conversationId);
+  }
+
+  @override
+  Future<Map<String, List<Map<String, Object?>>>> exportAll() async => <String, List<Map<String, Object?>>>{
+    for (final String id in <String>{..._messages.keys, ..._events.keys})
+      id: <Map<String, Object?>>[
+        for (final ChatMessage m in _messages[id] ?? const <ChatMessage>[]) m.toJson(),
+        for (final ChatEvent e in _events[id] ?? const <ChatEvent>[]) e.toJson(),
+      ],
+  };
+
+  @override
+  Future<int> importAll(Map<String, List<Map<String, Object?>>> chats) async {
+    int added = 0;
+    for (final MapEntry<String, List<Map<String, Object?>>> c in chats.entries) {
+      final Set<String> have = <String>{for (final ChatMessage m in _messages[c.key] ?? const <ChatMessage>[]) m.localId};
+      final Set<String> haveEv = <String>{
+        for (final ChatEvent e in _events[c.key] ?? const <ChatEvent>[]) jsonEncode(e.toJson()),
+      };
+      for (final Map<String, Object?> row in backupRowsToAdd(c.value, have, haveEv)) {
+        final Map<String, dynamic> j = Map<String, dynamic>.from(row);
+        if (row.containsKey('ev')) {
+          final ChatEvent? e = ChatEvent.fromJson(c.key, j);
+          if (e != null) (_events[c.key] ??= <ChatEvent>[]).add(e);
+        } else {
+          final ChatMessage? m = ChatMessage.fromJson(c.key, j);
+          if (m != null) {
+            (_messages[c.key] ??= <ChatMessage>[]).add(m);
+            added++;
+          }
+        }
+      }
+    }
+    return added;
   }
 }
 
@@ -233,5 +297,56 @@ class FileChatStore implements ChatStore {
     final File f = await _thread(conversationId);
     if (f.existsSync()) f.deleteSync();
     await setSession(conversationId, null);
+  }
+
+  static final RegExp _threadName = RegExp(r'^chat_([A-Za-z0-9-]+)\.jsonl$');
+
+  @override
+  Future<Map<String, List<Map<String, Object?>>>> exportAll() async {
+    final Directory d = await _d;
+    final Map<String, List<Map<String, Object?>>> out = <String, List<Map<String, Object?>>>{};
+    if (!d.existsSync()) return out;
+    for (final FileSystemEntity f in d.listSync()) {
+      final RegExpMatch? match = _threadName.firstMatch(f.uri.pathSegments.last);
+      if (f is! File || match == null) continue;
+      final String id = match.group(1)!;
+      await _read(id);
+      out[id] = <Map<String, Object?>>[
+        for (final ChatMessage m in _cache[id]!) m.toJson(),
+        for (final ChatEvent e in _eventCache[id]!) e.toJson(),
+      ];
+    }
+    return out;
+  }
+
+  @override
+  Future<int> importAll(Map<String, List<Map<String, Object?>>> chats) async {
+    int added = 0;
+    for (final MapEntry<String, List<Map<String, Object?>>> c in chats.entries) {
+      if (!RegExp(r'^[A-Za-z0-9-]{1,64}$').hasMatch(c.key)) continue;
+      await _read(c.key);
+      final Set<String> have = <String>{for (final ChatMessage m in _cache[c.key]!) m.localId};
+      final Set<String> haveEv = <String>{for (final ChatEvent e in _eventCache[c.key]!) jsonEncode(e.toJson())};
+      final StringBuffer lines = StringBuffer();
+      for (final Map<String, Object?> row in backupRowsToAdd(c.value, have, haveEv)) {
+        final Map<String, dynamic> j = Map<String, dynamic>.from(row);
+        if (row.containsKey('ev')) {
+          final ChatEvent? e = ChatEvent.fromJson(c.key, j);
+          if (e == null) continue;
+          _eventCache[c.key]!.add(e);
+          lines.writeln(jsonEncode(e.toJson()));
+        } else {
+          final ChatMessage? m = ChatMessage.fromJson(c.key, j);
+          if (m == null) continue;
+          _cache[c.key]!.add(m);
+          lines.writeln(jsonEncode(m.toJson()));
+          added++;
+        }
+      }
+      if (lines.isEmpty) continue;
+      (await _d).createSync(recursive: true);
+      await (await _thread(c.key)).writeAsString(lines.toString(), mode: FileMode.append, flush: true);
+    }
+    return added;
   }
 }

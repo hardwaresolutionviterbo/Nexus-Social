@@ -5,6 +5,8 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 
+import 'chat_backup.dart';
+import 'chat_backup_service.dart';
 import 'chat_crypto.dart';
 import 'chat_media.dart';
 import 'chat_models.dart';
@@ -26,7 +28,17 @@ class ChatService extends ChangeNotifier {
     this.files,
     this.fastPoll = const Duration(seconds: 3),
     this.slowPoll = const Duration(seconds: 10),
-  }) : _openCrypto = crypto;
+    BackupServer? backupServer,
+    BackupKeyStore? backupKeys,
+    BackupKdf backupKdf = const BackupKdf(),
+  }) : _openCrypto = crypto {
+    backup = backupServer != null && backupKeys != null
+        ? ChatBackup(chat: this, server: backupServer, keys: backupKeys, kdf: backupKdf)
+        : null;
+  }
+
+  /// Backup cifrato con password (Blocco 6); null senza server.
+  late final ChatBackup? backup;
 
   final ChatServer server;
   final ChatStore store;
@@ -98,6 +110,8 @@ class ChatService extends ChangeNotifier {
       _ready = true;
       await refresh();
       _schedule();
+      final ChatBackup? b = backup;
+      if (b != null) unawaited(b.load());
     } on ChatFailure catch (f) {
       _startError = f.message;
     } catch (_) {
@@ -149,6 +163,7 @@ class ChatService extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _timer?.cancel();
+    backup?.dispose();
     super.dispose();
   }
 
@@ -681,6 +696,7 @@ class ChatService extends ChangeNotifier {
     }
     final File? have = await localFileOf(m);
     if (have != null) return have;
+    if (m.fromBackup) throw const ChatFailure('Gli allegati non sono nel backup: questo non si può più aprire.');
     final Future<File>? running = _downloading[m.localId];
     if (running != null) return running;
     final Future<File> job = _fetch(m, md, store, server);
@@ -1214,6 +1230,21 @@ class ChatService extends ChangeNotifier {
     await server.setMute(conversationId, until);
     await _run(_loadConversations);
     _changed();
+  }
+
+  /// Tutta la cronologia del telefono, per il backup.
+  Future<Map<String, List<Map<String, Object?>>>> exportHistory() => _run(store.exportAll);
+
+  /// Rimette la cronologia di un backup (senza doppioni) e ricarica le chat.
+  Future<int> importHistory(Map<String, List<Map<String, Object?>>> chats) async {
+    final int added = await _run(() async {
+      final int n = await store.importAll(chats);
+      _messages.clear();
+      if (_ready) await _loadConversations();
+      return n;
+    });
+    _changed();
+    return added;
   }
 
   /// Un messaggio è appena arrivato con l'app aperta (notifica): si controlla subito.

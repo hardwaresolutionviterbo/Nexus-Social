@@ -2400,6 +2400,54 @@ def check_chat_groups_phase4() -> None:
           f"{up_admin}, {up_member}, {see_member}, {see_out}, {media_in}, {media_out}, {view.get('title')}")
 
 
+def check_backup_phase4() -> None:
+    """V · Backup della chat cifrato (Fase 4, Blocco 6): un file per account, solo del proprietario."""
+    ta, tb = token(UID_A), token(UID_B)
+    blob = bytes(range(256)) * 16  # byte illeggibili, come un backup cifrato
+    bin_type = "application/octet-stream"
+    own = f"chat-backups/{UID_A}/backup.bin"
+
+    def info(tok) -> list:
+        status, body = rpc("chat_backup_info", {}, tok)
+        return body if status == 200 and isinstance(body, list) else [status]
+
+    s_own = storage("POST", own, ta, blob, content_type=bin_type)
+    s_other = storage("POST", f"chat-backups/{UID_B}/backup.bin", ta, blob, content_type=bin_type)
+    s_name = storage("POST", f"chat-backups/{UID_A}/altro.bin", ta, blob, content_type=bin_type)
+    s_plain = storage("POST", f"chat-backups/{UID_B}/backup.bin", tb, b"{}", content_type="application/json")
+    s_big = storage("POST", f"chat-backups/{UID_B}/backup.bin", tb, b"x" * (20971520 + 1), content_type=bin_type)
+    check("V1", "Backup caricato solo nel proprio file, cifrato, ≤ 20 MB",
+          s_own == 200 and s_other >= 400 and s_name >= 400 and s_plain >= 400 and s_big >= 400,
+          f"{s_own}, {s_other}, {s_name}, {s_plain}, {s_big}")
+
+    g_a = storage("GET", f"authenticated/{own}", ta)
+    g_b = storage("GET", f"authenticated/{own}", tb)
+    g_anon = storage("GET", f"authenticated/{own}", None)
+    g_public = storage("GET", f"public/{own}", None)
+    listed = storage("POST", "list/chat-backups", tb, json.dumps({"prefix": f"{UID_A}/"}).encode(),
+                     content_type="application/json")
+    check("V2", "Il backup lo scarica solo il proprietario; altri utenti, anonimi e link pubblici no",
+          g_a == 200 and g_b >= 400 and g_anon >= 400 and g_public >= 400,
+          f"{g_a}, {g_b}, {g_anon}, {g_public}, elenco={listed}")
+
+    ia, ib = info(ta), info(tb)
+    anon_info = rpc("chat_backup_info", {}, None)[0]
+    check("V3", "Data e dimensione del backup solo per il proprietario",
+          len(ia) == 1 and isinstance(ia[0], dict) and int(ia[0].get("size") or 0) == len(blob)
+          and ib == [] and anon_info >= 400,
+          f"{ia}, {ib}, {anon_info}")
+
+    up_b = storage("PUT", own, tb, b"rovinato", content_type=bin_type)
+    del_b = storage("DELETE", own, tb)
+    replaced = storage("PUT", own, ta, blob[:1000], content_type=bin_type)
+    size_after = info(ta)
+    removed = storage("DELETE", own, ta)
+    check("V4", "Solo il proprietario sostituisce o cancella il backup",
+          up_b >= 400 and replaced == 200 and size_after and isinstance(size_after[0], dict)
+          and int(size_after[0].get("size") or 0) == 1000 and removed == 200 and info(ta) == [],
+          f"{up_b}, {del_b}, {replaced}, {size_after}, {removed}")
+
+
 def check_push_phase4() -> None:
     """U · Notifiche (Fase 4, Blocco 5): coda server, silenzia, non disturbare, mai i Mi piace."""
     ta, tb = token(UID_A), token(UID_B)
@@ -2538,6 +2586,7 @@ def main() -> int:
     check_chat_media_phase4()
     check_chat_groups_phase4()
     check_push_phase4()
+    check_backup_phase4()
     failed = [r for r in results if not r[2]]
     print(f"{'Caso':6} {'Esito':9} Descrizione")
     for case, desc, ok, detail in results:
