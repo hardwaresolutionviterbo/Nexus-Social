@@ -1,6 +1,6 @@
 name: Supabase Functions
 
-# Test della funzione `rubrica` (Deno): vettori ufficiali RFC 9497, controllo dei token Firebase
+# Test delle funzioni `rubrica` e `notifiche` (Deno): vettori ufficiali RFC 9497, controllo dei token Firebase
 # con chiavi di prova generate nel test, regole e limiti. Nessun secret, nessun deploy.
 on:
   push:
@@ -32,3 +32,23 @@ jobs:
           set -euo pipefail
           deno check index.ts handler.ts oprf.ts firebase_token.ts rubrica_test.ts
           deno test -A rubrica_test.ts
+
+  notifiche:
+    name: Funzione notifiche · test Deno
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Controllo dei tipi e test
+        working-directory: supabase/functions/notifiche
+        run: |
+          set -euo pipefail
+          deno check index.ts handler.ts fcm.ts notifiche_test.ts
+          deno test -A notifiche_test.ts
