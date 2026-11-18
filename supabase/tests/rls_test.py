@@ -2578,6 +2578,58 @@ def check_calls_phase4() -> None:
     rpc("push_unregister", {"p_fid": fid}, ta)
 
 
+def check_realtime_phase4() -> None:
+    """Z · Tempo reale (Fase 4, Blocco 9): tocchi vuoti sul canale privato, solo per il proprietario."""
+    ta, tb = token(UID_A), token(UID_B)
+    for t, other in ((ta, UID_B), (tb, UID_A)):
+        rpc("unblock_user", {"p_user_id": other}, t)
+    _, conv = rpc("chat_open_direct", {"p_user": UID_A}, tb)
+    sql(f"update public.chat_members set status = 'active' where conversation_id = '{conv}';")
+    gen = int(sql(f"select generation from public.chat_conversations where id = '{conv}';") or 0)
+    if gen == 0:
+        sql(f"update public.chat_conversations set generation = 1 where id = '{conv}';")
+        gen = 1
+
+    def pokes(user) -> int:
+        return int(sql(f"select count(*) from realtime.messages where topic = 'u:{user}' "
+                       "and inserted_at > now() - interval '10 minutes';") or 0)
+
+    a0, b0 = pokes(UID_A), pokes(UID_B)
+    sent = rpc("chat_send", {"p_conversation": conv, "p_generation": gen,
+                             "p_payload": base64.b64encode(bytes([5]) * 60).decode()}, tb)
+    a1, b1 = pokes(UID_A), pokes(UID_B)
+    payloads = sql(f"select distinct payload::text from realtime.messages where topic = 'u:{UID_A}';")
+    check("Z1", "Messaggio → tocco vuoto sul canale di chi riceve (non di chi scrive)",
+          sent[0] == 200 and a1 == a0 + 1 and b1 == b0 and payloads == "{}",
+          f"{sent[0]}, {a0}->{a1}, {b0}->{b1}, {payloads!r}")
+
+    rpc("chat_mark", {"p_conversation": conv, "p_delivered": sent[1][0]["id"] if isinstance(sent[1], list) and sent[1] else 0,
+                      "p_read": 0}, ta)
+    b2 = pokes(UID_B)
+    check("Z2", "Spunte: anche chi ha scritto riceve un tocco", b2 >= b1 + 1, f"{b1}->{b2}")
+
+    def visible(sub: str, topic: str) -> str:
+        now = int(time.time())
+        claims = json.dumps({"iss": f"https://securetoken.google.com/{PROJECT}", "aud": PROJECT, "sub": sub,
+                             "iat": now - 10, "exp": now + 3600}).replace("'", "''")
+        return sql("begin; set local role anon; "
+                   f"select set_config('request.jwt.claims', '{claims}', true); "
+                   f"select set_config('realtime.topic', '{topic}', true); "
+                   f"select count(*) from realtime.messages where topic = '{topic}'; rollback;")
+
+    def last_number(out: str) -> str:
+        nums = [line.strip() for line in out.splitlines() if line.strip().isdigit()]
+        return nums[-1] if nums else "?"
+
+    own = last_number(visible(UID_A, f"u:{UID_A}"))
+    other = last_number(visible(UID_B, f"u:{UID_A}"))
+    no_token = last_number(sql("begin; set local role anon; "
+                   f"select set_config('realtime.topic', 'u:{UID_A}', true); "
+                   f"select count(*) from realtime.messages where topic = 'u:{UID_A}'; rollback;"))
+    check("Z3", "Il canale u:<uid> lo legge solo il proprietario; altri utenti e anonimi no",
+          int(own) >= 1 and other == "0" and no_token == "0", f"{own}, {other}, {no_token}")
+
+
 def check_push_phase4() -> None:
     """U · Notifiche (Fase 4, Blocco 5): coda server, silenzia, non disturbare, mai i Mi piace."""
     ta, tb = token(UID_A), token(UID_B)
@@ -2719,6 +2771,7 @@ def main() -> int:
     check_backup_phase4()
     check_chat_reports_phase4()
     check_calls_phase4()
+    check_realtime_phase4()
     failed = [r for r in results if not r[2]]
     print(f"{'Caso':6} {'Esito':9} Descrizione")
     for case, desc, ok, detail in results:

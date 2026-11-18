@@ -1,4 +1,7 @@
-import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException, SupabaseClient;
+import 'dart:async';
+
+import 'package:supabase_flutter/supabase_flutter.dart'
+    show PostgrestException, RealtimeChannel, RealtimeChannelConfig, RealtimeSubscribeStatus, SupabaseClient;
 
 import 'chat_models.dart';
 
@@ -22,6 +25,12 @@ abstract class ChatServer {
   Future<int> start(String conversationId, int generation, String groupId, String welcome);
 
   Future<(int, DateTime)> send(String conversationId, int generation, String payload);
+
+  /// Tocchi in tempo reale sul canale privato (Blocco 9): «c'è qualcosa di nuovo».
+  Stream<void> wakeUps(String uid);
+
+  /// Il canale in tempo reale è collegato.
+  bool get live;
 
   /// Messaggio di una chiamata (Blocco 8): come [send], ma [ring] fa squillare il telefono
   /// dell'altra persona e gli altri passaggi non mandano notifiche.
@@ -177,6 +186,37 @@ class SupabaseChatServer implements ChatServer {
       (rows.first['id'] as num).toInt(),
       DateTime.tryParse('${rows.first['created_at']}')?.toLocal() ?? DateTime.now(),
     );
+  }
+
+  bool _live = false;
+
+  @override
+  bool get live => _live;
+
+  @override
+  Stream<void> wakeUps(String uid) {
+    RealtimeChannel? channel;
+    late final StreamController<void> out;
+    out = StreamController<void>.broadcast(
+      onListen: () {
+        channel = _client.channel('u:$uid', opts: const RealtimeChannelConfig(private: true))
+          ..onBroadcast(event: 'nuovo', callback: (_) {
+            if (!out.isClosed) out.add(null);
+          })
+          ..subscribe((RealtimeSubscribeStatus status, [Object? error]) {
+            _live = status == RealtimeSubscribeStatus.subscribed;
+            // Appena collegato si controlla subito: qualcosa può essere arrivato nel frattempo.
+            if (_live && !out.isClosed) out.add(null);
+          });
+      },
+      onCancel: () async {
+        final RealtimeChannel? c = channel;
+        channel = null;
+        _live = false;
+        if (c != null) await _client.removeChannel(c);
+      },
+    );
+    return out.stream;
   }
 
   @override

@@ -134,6 +134,7 @@ class ChatService extends ChangeNotifier {
     try {
       await _run(_init);
       _ready = true;
+      _listenLive();
       await refresh();
       _schedule();
       final ChatBackup? b = backup;
@@ -182,16 +183,18 @@ class ChatService extends ChangeNotifier {
     _timer?.cancel();
     _timer = null;
     if (!_ready || !_foreground || _disposed) return;
-    _timer = Timer.periodic(
-      _inCall ? const Duration(seconds: 1) : (_open == null ? slowPoll : fastPoll),
-      (_) => unawaited(refresh()),
-    );
+    // Con il tempo reale i controlli periodici servono solo di riserva.
+    final Duration every = _inCall
+        ? (live ? const Duration(seconds: 3) : const Duration(seconds: 1))
+        : (_open == null ? (live ? slowPoll * 3 : slowPoll) : (live ? fastPoll * 3 : fastPoll));
+    _timer = Timer.periodic(every, (_) => unawaited(refresh()));
   }
 
   @override
   void dispose() {
     _disposed = true;
     _timer?.cancel();
+    unawaited(_wake?.cancel());
     backup?.dispose();
     calls?.dispose();
     unawaited(_callSignals.close());
@@ -253,8 +256,14 @@ class ChatService extends ChangeNotifier {
 
   /// Nuovi messaggi e stato delle chat. Silenzioso: gli errori di rete si riprovano dopo.
   Future<void> refresh() async {
-    if (!_ready || _polling) return;
+    if (!_ready) return;
+    if (_polling) {
+      // Arrivato un tocco mentre si sincronizzava: si rifà subito dopo.
+      _again = true;
+      return;
+    }
     _polling = true;
+    _again = false;
     try {
       await _run(() async {
         await _syncInbox();
@@ -268,6 +277,21 @@ class ChatService extends ChangeNotifier {
       _changed();
     }
     unawaited(_runAutoDownloads());
+    if (_again && !_disposed) unawaited(refresh());
+  }
+
+  bool _again = false;
+
+  /// Tocchi del server in tempo reale (Blocco 9): c'è qualcosa di nuovo, si sincronizza subito.
+  StreamSubscription<void>? _wake;
+
+  /// Il tempo reale è collegato: i controlli periodici diventano di riserva e più radi.
+  bool get live => server.live;
+
+  void _listenLive() {
+    _wake ??= server.wakeUps(myId).listen((_) {
+      if (!_disposed) unawaited(refresh());
+    });
   }
 
   Future<void> _loadConversations() async {

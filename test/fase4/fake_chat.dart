@@ -106,6 +106,17 @@ class FakeChatHub {
   final Map<String, Set<String>> contacts = <String, Set<String>>{};
   final Set<String> blocks = <String>{};
 
+  /// Tempo reale finto (Blocco 9): spento di base, i test lo accendono.
+  bool live = false;
+  final Map<String, StreamController<void>> _pokes = <String, StreamController<void>>{};
+
+  Stream<void> pokes(String uid) => (_pokes[uid] ??= StreamController<void>.broadcast()).stream;
+
+  /// «C'è qualcosa di nuovo» per [uid], come il database con Supabase Realtime.
+  void poke(String uid) {
+    if (live) _pokes[uid]?.add(null);
+  }
+
   /// Squilli (chi chiama, chat, video): sul server vero fanno partire la notifica.
   final List<(String, String, bool)> rings = <(String, String, bool)>[];
 
@@ -259,8 +270,17 @@ class FakeChatServer implements ChatServer {
     final int id = _push((int id) => FakeMsg(id, c.id, generation, uid, null, payload, hub.clock));
     c.lastId = id;
     c.lastAt = hub.clock;
+    for (final String u in c.status.keys.where((String u) => u != uid)) {
+      hub.poke(u);
+    }
     return (id, hub.clock);
   }
+
+  @override
+  bool get live => hub.live;
+
+  @override
+  Stream<void> wakeUps(String uid) => hub.pokes(uid);
 
   @override
   Future<(int, DateTime)> callSignal(String conversationId, int generation, String payload,
