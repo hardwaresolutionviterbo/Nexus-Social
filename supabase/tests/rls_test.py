@@ -2239,6 +2239,164 @@ def check_chat_media_phase4() -> None:
           f"{overwrite}, {still}, {removed}, {gone}")
 
 
+def check_chat_groups_phase4() -> None:
+    """T · Gruppi cifrati (Fase 4, Blocco 4): amministratori, inviti, gruppo cifrato, foto."""
+    ta, tb, td = token(UID_A), token(UID_B), token(UID_D)
+    for t, other in ((ta, UID_B), (tb, UID_A), (ta, UID_D), (td, UID_A), (tb, UID_D), (td, UID_B)):
+        rpc("unblock_user", {"p_user_id": other}, t)
+
+    def b64(n: int, size: int = 120) -> str:
+        return base64.b64encode(bytes([n % 256]) * size).decode()
+
+    def mine(tok) -> dict:
+        return {c["id"]: c for c in rows(rpc("chat_conversations", {}, tok))}
+
+    def got(tok, conv) -> list:
+        return [(m["kind"], m["sender_id"]) for m in rows(rpc("chat_sync", {"p_after": 0, "p_limit": 500}, tok))
+                if m["conversation_id"] == conv]
+
+    # Pacchetti chiave freschi per tutti (i casi R ne hanno consumati).
+    for tok, n in ((ta, 1), (tb, 3), (td, 4)):
+        s_id, key = rpc("chat_my_identity", {}, tok)
+        rpc("chat_add_key_packages", {"p_packages": [b64(200 + n, 300)] * 5}, tok)
+
+    # T1 · Creazione: B (che ha A in rubrica) entra, D riceve un invito
+    s1, conv = rpc("chat_create_group", {"p_title": "Gita al lago", "p_members": [UID_B, UID_D]}, ta)
+    long_title = rpc("chat_create_group", {"p_title": "x" * 61, "p_members": []}, ta)
+    a_view = mine(ta).get(conv, {})
+    d_view = mine(td).get(conv, {})
+    check("T1", "Gruppo creato: A amministratore, B membro da aggiungere, D invitato (richiesta)",
+          s1 == 200 and long_title[0] >= 400 and a_view.get("kind") == "group"
+          and a_view.get("my_role") == "admin" and a_view.get("title") == "Gita al lago"
+          and a_view.get("members") == 2 and a_view.get("pending") == 1
+          and d_view.get("status") == "request" and a_view.get("peer_id") is None,
+          f"{s1}, {long_title[0]}, {a_view.get('members')}, {a_view.get('pending')}, {d_view.get('status')}")
+
+    # T2 · Solo gli amministratori gestiscono il gruppo
+    b_add = rpc("chat_group_add", {"p_conversation": conv, "p_members": [UID_D]}, tb)
+    b_admin = rpc("chat_group_set_admin", {"p_conversation": conv, "p_user": UID_B, "p_admin": True}, tb)
+    b_title = rpc("chat_group_update", {"p_conversation": conv, "p_title": "Nuovo", "p_description": ""}, tb)
+    b_code = rpc("chat_group_invite_code", {"p_conversation": conv}, tb)
+    b_kp = rpc("chat_group_claim_key_package", {"p_conversation": conv, "p_user": UID_B}, tb)
+    b_commit = rpc("chat_group_commit", {"p_conversation": conv, "p_generation": 0, "p_group_id": b64(9, 16),
+                                          "p_commit": None, "p_welcome": b64(10, 300),
+                                          "p_added": [UID_B], "p_removed": []}, tb)
+    direct_kp = rpc("chat_claim_key_package", {"p_conversation": conv}, ta)
+    check("T2", "Un membro non aggiunge, non nomina, non rinomina, non crea codici né modifica il gruppo cifrato",
+          all(r[0] >= 400 for r in (b_add, b_admin, b_title, b_code, b_kp, b_commit, direct_kp)),
+          f"{[r[0] for r in (b_add, b_admin, b_title, b_code, b_kp, b_commit, direct_kp)]}")
+
+    # T3 · Nascita del gruppo cifrato con controllo della generazione
+    d_kp = rpc("chat_group_claim_key_package", {"p_conversation": conv, "p_user": UID_D}, ta)
+    kp = rpc("chat_group_claim_key_package", {"p_conversation": conv, "p_user": UID_B}, ta)
+    born = rpc("chat_group_commit", {"p_conversation": conv, "p_generation": 0, "p_group_id": b64(5, 16),
+                                      "p_commit": None, "p_welcome": b64(6, 300),
+                                      "p_added": [UID_B], "p_removed": []}, ta)
+    again = rpc("chat_group_commit", {"p_conversation": conv, "p_generation": 0, "p_group_id": b64(5, 16),
+                                       "p_commit": None, "p_welcome": b64(6, 300),
+                                       "p_added": [UID_B], "p_removed": []}, ta)
+    b_got = got(tb, conv)
+    check("T3", "Gruppo cifrato nato (generazione 1); doppione rifiutato; l'invitato non riceve nulla",
+          kp[0] == 200 and d_kp[0] >= 400 and born == (200, 1) and again[0] >= 400
+          and ("welcome", UID_A) in b_got and got(td, conv) == []
+          and mine(ta)[conv].get("pending") == 0,
+          f"{kp[0]}, {d_kp[0]}, {born}, {again[0]}, {b_got}")
+
+    # T4 · Messaggi: arrivano a chi è dentro; spariscono quando tutti li hanno ricevuti
+    s4, sent = rpc("chat_send", {"p_conversation": conv, "p_generation": 1, "p_payload": b64(30)}, ta)
+    msg = sent[0]["id"] if s4 == 200 and sent else 0
+    b_msgs = got(tb, conv)
+    d_send = rpc("chat_send", {"p_conversation": conv, "p_generation": 1, "p_payload": b64(31)}, td)
+    rpc("chat_mark", {"p_conversation": conv, "p_delivered": msg, "p_read": msg}, tb)
+    left = sql(f"select count(*) from public.chat_messages where conversation_id = '{conv}' and kind = 'app';")
+    ticks = mine(ta)[conv]
+    check("T4", "B riceve il messaggio e gli avvisi; l'invitato non scrive; letto da tutti → sparisce",
+          s4 == 200 and ("app", UID_A) in b_msgs and any(k == "event" for k, _ in b_msgs)
+          and d_send[0] >= 400 and left == "0"
+          and ticks.get("peer_read_upto") == msg,
+          f"{s4}, {b_msgs}, {d_send[0]}, {left}, {ticks.get('peer_read_upto')}")
+
+    # T5 · L'invitato accetta: viene aggiunto e non riceve i messaggi precedenti
+    s5, early = rpc("chat_send", {"p_conversation": conv, "p_generation": 1, "p_payload": b64(32)}, ta)
+    rpc("chat_respond_request", {"p_conversation": conv, "p_accept": True}, td)
+    pending = mine(ta)[conv].get("pending")
+    kp_d = rpc("chat_group_claim_key_package", {"p_conversation": conv, "p_user": UID_D}, ta)
+    step = rpc("chat_group_commit", {"p_conversation": conv, "p_generation": 1, "p_group_id": b64(5, 16),
+                                      "p_commit": b64(40, 200), "p_welcome": b64(41, 300),
+                                      "p_added": [UID_D], "p_removed": []}, ta)
+    d_got = got(td, conv)
+    b_got = got(tb, conv)
+    later = rpc("chat_send", {"p_conversation": conv, "p_generation": 2, "p_payload": b64(33)}, td)
+    check("T5", "Invito accettato: D aggiunto (generazione 2), riceve l'invito cifrato e non i messaggi di prima",
+          pending == 1 and kp_d[0] == 200 and step == (200, 2)
+          and ("welcome", UID_A) in d_got and ("app", UID_A) not in d_got
+          and ("commit", UID_A) in b_got and later[0] == 200,
+          f"{pending}, {kp_d[0]}, {step}, {d_got}, {later[0]}")
+
+    # T6 · Codice d'invito: solo amministratori; entra chi lo usa; revocato non vale più
+    code_s, code = rpc("chat_group_invite_code", {"p_conversation": conv}, ta)
+    rpc("chat_group_remove", {"p_conversation": conv, "p_user": UID_D}, td)
+    out = conv not in mine(td)
+    info = rpc("chat_group_invite_info", {"p_code": code}, td)
+    join = rpc("chat_group_join", {"p_code": code}, td)
+    d_state = sql(f"select status || '/' || mls_state from public.chat_members "
+                  f"where conversation_id = '{conv}' and user_id = '{UID_D}';")
+    rpc("chat_group_invite_revoke", {"p_conversation": conv}, ta)
+    rpc("chat_group_remove", {"p_conversation": conv, "p_user": UID_D}, td)
+    rejoin = rpc("chat_group_join", {"p_code": code}, td)
+    bogus = rpc("chat_group_join", {"p_code": "ZZZZZZZZZZ"}, td)
+    check("T6", "Uscita, rientro con il codice (vecchio telefono da togliere e riaggiungere); codice revocato o falso rifiutato",
+          code_s == 200 and isinstance(code, str) and len(code) == 10 and out
+          and info[0] == 200 and (rows(info) or [{}])[0].get("title") == "Gita al lago"
+          and join == (200, conv) and d_state == "active/to_readd"
+          and rejoin[0] >= 400 and bogus[0] >= 400,
+          f"{code_s}, {out}, {info[0]}, {join[0]}, {d_state}, {rejoin[0]}, {bogus[0]}")
+
+    # T7 · Amministratori: si nominano; il gruppo non resta mai senza
+    up = rpc("chat_group_set_admin", {"p_conversation": conv, "p_user": UID_B, "p_admin": True}, ta)
+    down_a = rpc("chat_group_set_admin", {"p_conversation": conv, "p_user": UID_A, "p_admin": False}, tb)
+    last = rpc("chat_group_set_admin", {"p_conversation": conv, "p_user": UID_B, "p_admin": False}, tb)
+    roles = {m["user_id"]: m["role"] for m in rows(rpc("chat_group_members", {"p_conversation": conv}, tb))}
+    check("T7", "B nominato amministratore; A tolto; l'ultimo amministratore non si toglie",
+          up[0] in (200, 204) and down_a[0] in (200, 204) and last[0] >= 400
+          and roles.get(UID_B) == "admin" and roles.get(UID_A) == "member",
+          f"{up[0]}, {down_a[0]}, {last[0]}, {roles}")
+
+    # T8 · Telefono nuovo: va riaggiunto; chi esce va tolto dal gruppo cifrato
+    rpc("chat_register_identity", {"p_signature_key": base64.b64encode(bytes([77]) * 32).decode(),
+                                   "p_packages": [b64(90, 300)]}, ta)
+    states = {m["user_id"]: m["mls_state"] for m in rows(rpc("chat_group_members", {"p_conversation": conv}, tb))}
+    readd = rpc("chat_group_claim_key_package", {"p_conversation": conv, "p_user": UID_A}, tb)
+    a_send = rpc("chat_send", {"p_conversation": conv, "p_generation": 2, "p_payload": b64(34)}, ta)
+    fix = rpc("chat_group_commit", {"p_conversation": conv, "p_generation": 2, "p_group_id": b64(5, 16),
+                                     "p_commit": b64(42, 200), "p_welcome": b64(43, 300),
+                                     "p_added": [UID_A], "p_removed": [UID_A]}, tb)
+    after = {m["user_id"]: m["mls_state"] for m in rows(rpc("chat_group_members", {"p_conversation": conv}, tb))}
+    check("T8", "Telefono nuovo di A: da riaggiungere (non scrive finché non rientra); B lo riaggiunge",
+          states.get(UID_A) == "to_readd" and readd[0] == 200 and a_send[0] >= 400
+          and fix == (200, 3) and after.get(UID_A) == "in",
+          f"{states}, {readd[0]}, {a_send[0]}, {fix}, {after}")
+
+    # T9 · Foto del gruppo e allegati: membri sì, estranei no
+    photo = f"chat-group-photos/{conv}/foto.jpg"
+    up_admin = storage("POST", photo, tb, b"\xff\xd8\xff" + b"0" * 200)
+    up_member = storage("PUT", photo, ta, b"\xff\xd8\xff" + b"1" * 200)
+    see_member = storage("GET", f"authenticated/{photo}", ta)
+    see_out = storage("GET", f"authenticated/{photo}", td)
+    media_in = storage("POST", f"chat-media/{conv}/{UID_A}/allegatoGruppo00001.bin", ta,
+                       bytes(range(256)), content_type="application/octet-stream")
+    media_out = storage("POST", f"chat-media/{conv}/{UID_D}/allegatoGruppo00002.bin", td,
+                        bytes(range(256)), content_type="application/octet-stream")
+    rpc("chat_group_update", {"p_conversation": conv, "p_title": "Gita al lago 2026",
+                              "p_description": "Sabato 9:00", "p_photo_changed": True}, tb)
+    view = mine(ta)[conv]
+    check("T9", "Foto: la cambia l'amministratore e la vede chi è nel gruppo; allegati solo per chi è dentro",
+          up_admin == 200 and up_member >= 400 and see_member == 200 and see_out >= 400
+          and media_in == 200 and media_out >= 400
+          and view.get("title") == "Gita al lago 2026" and view.get("photo_version") == 1,
+          f"{up_admin}, {up_member}, {see_member}, {see_out}, {media_in}, {media_out}, {view.get('title')}")
+
+
 def main() -> int:
     try:
         ids = setup()
@@ -2262,6 +2420,7 @@ def main() -> int:
     check_rubrica_server()
     check_chat_phase4()
     check_chat_media_phase4()
+    check_chat_groups_phase4()
     failed = [r for r in results if not r[2]]
     print(f"{'Caso':6} {'Esito':9} Descrizione")
     for case, desc, ok, detail in results:
