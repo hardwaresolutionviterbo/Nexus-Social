@@ -1,6 +1,6 @@
 # Fase 4 · Blocco 4 — Gruppi
 
-Ramo: `fase4/blocco4`. Migrazione: `supabase/migrations/0021_chat_gruppi.sql` (NON applicata al database reale: serve l'autorizzazione del titolare).
+Ramo: `fase4/blocco4`. Migrazione: `supabase/migrations/0021_chat_gruppi.sql` (applicata al database reale il 18/11/2026 con l'autorizzazione del titolare; file verificato con SHA-256 contro il commit 30762f7).
 
 ## Cosa c'è
 - **Nuovo gruppo** (Chat → Nuova chat → Nuovo gruppo): nome e persone dalla rubrica, fino a 256.
