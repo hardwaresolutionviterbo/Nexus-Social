@@ -116,9 +116,9 @@ enum CallPhase { idle, outgoing, incoming, connecting, active, ended }
 
 /// Suoneria della chiamata in arrivo (quella del telefono; finta nei test).
 abstract class CallRinger {
-  Future<void> start();
+  Future<void> start(String conversationId);
 
-  Future<void> stop();
+  Future<void> stop(String conversationId);
 }
 
 /// Chiamata in corso (una alla volta).
@@ -200,6 +200,7 @@ class CallService extends ChangeNotifier {
 
   final CallRinger? ringer;
   bool _ringing = false;
+  String _ringingIn = '';
 
   late final StreamSubscription<CallEnvelope> _sub;
   StreamSubscription<bool>? _link;
@@ -221,7 +222,9 @@ class CallService extends ChangeNotifier {
     if (ring != _ringing) {
       _ringing = ring;
       final CallRinger? r = ringer;
-      if (r != null) unawaited((ring ? r.start() : r.stop()).catchError((Object _) {}));
+      final String conv = s?.conversationId ?? _ringingIn;
+      if (ring) _ringingIn = conv;
+      if (r != null) unawaited((ring ? r.start(conv) : r.stop(conv)).catchError((Object _) {}));
     }
     chat.inCall = s != null && s.phase != CallPhase.ended && s.phase != CallPhase.idle;
     if (!_disposed) notifyListeners();

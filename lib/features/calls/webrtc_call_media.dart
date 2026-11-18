@@ -8,6 +8,7 @@ import 'package:just_audio/just_audio.dart' show AudioPlayer, AudioSource, LoopM
 import 'package:material_ui/material_ui.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show FunctionException, FunctionResponse, SupabaseClient;
 
+import '../../core/services/push_notifications.dart';
 import '../chat/chat_models.dart' show ChatFailure;
 import 'call_service.dart';
 
@@ -17,7 +18,9 @@ class SystemCallRinger implements CallRinger {
   AudioPlayer? _player;
 
   @override
-  Future<void> start() async {
+  Future<void> start(String conversationId) async {
+    // Se la chiamata era già a tutto schermo (app aperta dalla notifica), suona una volta sola.
+    await PushNotifications.cancelIncomingCall(conversationId);
     final AudioPlayer p = _player ??= AudioPlayer(handleAudioSessionActivation: false);
     await p.setAndroidAudioAttributes(const AndroidAudioAttributes(
       usage: AndroidAudioUsage.notificationRingtone,
@@ -29,7 +32,10 @@ class SystemCallRinger implements CallRinger {
   }
 
   @override
-  Future<void> stop() async => _player?.stop();
+  Future<void> stop(String conversationId) async {
+    await _player?.stop();
+    await PushNotifications.cancelIncomingCall(conversationId);
+  }
 }
 
 /// Credenziali del ponte dalla funzione `chiamate` (token di Firebase, come per `rubrica`).

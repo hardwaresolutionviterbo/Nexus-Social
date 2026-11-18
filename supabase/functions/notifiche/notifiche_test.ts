@@ -114,11 +114,18 @@ Deno.test('manda tutta la coda e toglie i telefoni non più registrati', async (
   assertEquals(dropped, ['fidSparitoxxxxxxxxxxxx']);
 });
 
-Deno.test('chiamata in arrivo: la notifica scade dopo 45 secondi', () => {
-  const m = buildMessage({ ...row(1), kind: 'call', collapse_key: 'call:00000000-0000-4000-8000-000000000001' }) as {
-    message: Record<string, any>;
-  };
+Deno.test('chiamata in arrivo: solo dati (la mostra il telefono a tutto schermo), scade dopo 45 secondi', () => {
+  const m = buildMessage({ ...row(1), kind: 'call', title: 'Anna R.', body: 'Chiamata in arrivo',
+    collapse_key: 'call:00000000-0000-4000-8000-000000000001' }) as { message: Record<string, any> };
+  assertEquals(m.message.notification, undefined);
   assertEquals(m.message.android.ttl, '45s');
-  assertEquals(m.message.data.tipo, 'call');
+  assertEquals(m.message.android.priority, 'HIGH');
+  assertEquals(m.message.data, {
+    tipo: 'call',
+    chat: '00000000-0000-4000-8000-000000000001',
+    notifica: '',
+    titolo: 'Anna R.',
+    testo: 'Chiamata in arrivo',
+  });
   assertEquals((buildMessage(row(2)) as { message: Record<string, any> }).message.android.ttl, undefined);
 });

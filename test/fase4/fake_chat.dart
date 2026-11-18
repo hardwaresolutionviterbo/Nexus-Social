@@ -903,13 +903,13 @@ class FakeRinger implements CallRinger {
   int rings = 0;
 
   @override
-  Future<void> start() async {
+  Future<void> start(String conversationId) async {
     ringing = true;
     rings++;
   }
 
   @override
-  Future<void> stop() async => ringing = false;
+  Future<void> stop(String conversationId) async => ringing = false;
 }
 
 /// Telefono finto con le chiamate.

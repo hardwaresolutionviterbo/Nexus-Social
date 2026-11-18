@@ -43,6 +43,9 @@ abstract final class PushNotifications {
 
   static final FlutterLocalNotificationsPlugin _local =
       FlutterLocalNotificationsPlugin();
+  /// Canale delle chiamate in arrivo (Blocco 10): suoneria, a tutto schermo.
+  static const String callChannelId = 'piazly_chiamate';
+
   static StreamSubscription<RemoteMessage>? _foregroundSubscription;
   static bool _initialized = false;
   static bool _channelReady = false;
@@ -70,6 +73,13 @@ abstract final class PushNotifications {
     } catch (_) {
       // Nessuna notifica di avvio.
     }
+    // App aperta dalla chiamata a tutto schermo (notifica locale).
+    try {
+      final NotificationAppLaunchDetails? launch = await _local.getNotificationAppLaunchDetails();
+      if (launch?.didNotificationLaunchApp ?? false) _tapped(launch!.notificationResponse);
+    } catch (_) {
+      // Nessuna chiamata di avvio.
+    }
 
     await _registerInstallation();
   }
@@ -82,6 +92,12 @@ abstract final class PushNotifications {
     if (notifica is String && notifica.isNotEmpty) openNotification.value = notifica;
   }
 
+  /// Tocco sulla chiamata a tutto schermo: si apre la chat, dove la chiamata compare.
+  static void _tapped(NotificationResponse? r) {
+    final String payload = r?.payload ?? '';
+    if (payload.startsWith('chiamata:') && payload.length > 9) openChat.value = payload.substring(9);
+  }
+
   static Future<void> _createChannel() async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
 
@@ -90,7 +106,9 @@ abstract final class PushNotifications {
         settings: const InitializationSettings(
           android: AndroidInitializationSettings('ic_stat_nexus'),
         ),
+        onDidReceiveNotificationResponse: _tapped,
       );
+      await _createCallChannel();
       final AndroidFlutterLocalNotificationsPlugin? android = _local
           .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin
@@ -267,6 +285,79 @@ abstract final class PushNotifications {
     return redacted.length <= 120 ? redacted : '${redacted.substring(0, 120)}…';
   }
 
+  static Future<void> _createCallChannel() async {
+    await _local
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(
+          const AndroidNotificationChannel(
+            callChannelId,
+            'Chiamate in arrivo',
+            description: 'Chiamate e videochiamate di Piazly',
+            importance: Importance.max,
+            playSound: true,
+            sound: UriAndroidNotificationSound('content://settings/system/ringtone'),
+            audioAttributesUsage: AudioAttributesUsage.notificationRingtone,
+            enableVibration: true,
+          ),
+        );
+  }
+
+  /// Numero fisso della notifica di una chiamata (uguale in tutti i processi).
+  static int callNotificationId(String conversationId) {
+    int h = 0x811c9dc5;
+    for (final int c in conversationId.codeUnits) {
+      h = ((h ^ c) * 0x01000193) & 0x7fffffff;
+    }
+    return 700000 + (h % 100000);
+  }
+
+  /// Chiamata in arrivo con l'app chiusa: a tutto schermo anche con il telefono bloccato,
+  /// con la suoneria che continua finché si risponde o per 45 secondi.
+  static Future<void> showIncomingCall({required String conversationId, required String title, required String body}) async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android || conversationId.isEmpty) return;
+    await _local.initialize(
+      settings: const InitializationSettings(android: AndroidInitializationSettings('ic_stat_nexus')),
+      onDidReceiveNotificationResponse: _tapped,
+    );
+    await _createCallChannel();
+    await _local.show(
+      id: callNotificationId(conversationId),
+      title: title,
+      body: body,
+      payload: 'chiamata:$conversationId',
+      notificationDetails: NotificationDetails(
+        android: AndroidNotificationDetails(
+          callChannelId,
+          'Chiamate in arrivo',
+          channelDescription: 'Chiamate e videochiamate di Piazly',
+          importance: Importance.max,
+          priority: Priority.max,
+          icon: 'ic_stat_nexus',
+          category: AndroidNotificationCategory.call,
+          fullScreenIntent: true,
+          ongoing: true,
+          autoCancel: true,
+          timeoutAfter: 45000,
+          visibility: NotificationVisibility.public,
+          audioAttributesUsage: AudioAttributesUsage.notificationRingtone,
+          sound: const UriAndroidNotificationSound('content://settings/system/ringtone'),
+          // Suona di continuo (FLAG_INSISTENT), come una chiamata.
+          additionalFlags: Int32List.fromList(<int>[4]),
+        ),
+      ),
+    );
+  }
+
+  /// La chiamata è stata vista nell'app (o è finita): via la notifica a tutto schermo.
+  static Future<void> cancelIncomingCall(String conversationId) async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    try {
+      await _local.cancel(id: callNotificationId(conversationId));
+    } catch (_) {
+      // Già tolta.
+    }
+  }
+
   static const NotificationDetails _details = NotificationDetails(
     android: AndroidNotificationDetails(
       channelId,
@@ -281,7 +372,16 @@ abstract final class PushNotifications {
 
 @pragma('vm:entry-point')
 Future<void> _onBackgroundMessage(RemoteMessage message) async {
-  // I messaggi con payload "notification" vengono mostrati dal sistema usando
-  // il canale predefinito configurato nel manifest. Qui resteranno disponibili
-  // i messaggi data-only per la Fase 4.
+  // I messaggi con payload "notification" li mostra il sistema. Le chiamate arrivano solo
+  // come dati (Fase 4, Blocco 10): qui si mostra la chiamata a tutto schermo.
+  if (message.data['tipo'] != 'call') return;
+  try {
+    await PushNotifications.showIncomingCall(
+      conversationId: '${message.data['chat'] ?? ''}',
+      title: '${message.data['titolo'] ?? 'Piazly'}',
+      body: '${message.data['testo'] ?? 'Chiamata in arrivo'}',
+    );
+  } catch (error) {
+    debugPrint('NEXUS_PUSH call=failed (${error.runtimeType})');
+  }
 }

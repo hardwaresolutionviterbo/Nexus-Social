@@ -14,6 +14,9 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <!-- Fase 4, Blocco 10: chiamata in arrivo a tutto schermo anche con il telefono bloccato. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Fase 3, Blocco 1: posizione solo con l'app aperta, chiesta dopo la spiegazione.
          Chi sceglie «approssimativa» concede solo la prima. Nessun accesso in background. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
@@ -41,6 +44,8 @@
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
             android:windowSoftInputMode="adjustResize">
             <!-- Specifies an Android theme to apply to this Activity as soon as
                  the Android process has started. This theme is visible to the user

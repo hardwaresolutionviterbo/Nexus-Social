@@ -53,6 +53,18 @@ export interface QueueRow {
 /** Messaggio FCM per un telefono. Solo titolo e testo generici: mai contenuti dei messaggi. */
 export function buildMessage(row: QueueRow): Record<string, unknown> {
   const tag = row.collapse_key.slice(0, 64);
+  if (row.kind === 'call') {
+    // Chiamata: solo dati, così il telefono mostra lui la chiamata a tutto schermo con la
+    // suoneria (anche bloccato). Scade dopo 45 secondi: una chiamata vecchia non squilla.
+    return {
+      message: {
+        fid: row.fid,
+        data: { tipo: 'call', chat: row.conversation_id ?? '', notifica: '', titolo: row.title, testo: row.body },
+        android: { priority: 'HIGH', ttl: '45s', collapse_key: tag },
+        apns: { headers: { 'apns-collapse-id': tag, 'apns-priority': '10' } },
+      },
+    };
+  }
   return {
     message: {
       fid: row.fid,
@@ -65,8 +77,6 @@ export function buildMessage(row: QueueRow): Record<string, unknown> {
       },
       android: {
         priority: 'HIGH',
-        // Una chiamata non risposta non deve squillare dopo: la notifica scade in 45 secondi.
-        ...(row.kind === 'call' ? { ttl: '45s' } : {}),
         collapse_key: tag,
         notification: { channel_id: 'nexus_social_default', tag, icon: 'ic_stat_nexus' },
       },
