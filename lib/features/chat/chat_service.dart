@@ -883,7 +883,7 @@ class ChatService extends ChangeNotifier {
     await _run(() => _transmit(
       conversationId,
       ChatContent.call(signal.encode(), localId: _localId()),
-      call: (ring: signal.action == CallAction.offer, video: signal.video),
+      call: (ring: signal.action == CallAction.offer || signal.action == CallAction.invite, video: signal.video),
     ));
   }
 
