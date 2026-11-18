@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuth;
-import 'package:cryptography_flutter/cryptography_flutter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:material_ui/material_ui.dart';
@@ -32,8 +31,6 @@ import 'features/security/security_repository.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Cifratura degli allegati con le funzioni native del telefono (più veloce).
-  FlutterCryptography.enable();
   final BackendStatus backend = await BackendBootstrap.initialize();
 
   if (AppConfig.hasFirebase) {

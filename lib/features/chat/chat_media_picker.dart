@@ -139,15 +139,16 @@ class RealChatDevice implements ChatDevice {
 
   @override
   Future<PickedMedia?> pickFile() async {
-    final FilePickerResult? r = await FilePicker.platform.pickFiles(withData: false);
-    final PlatformFile? f = r?.files.firstOrNull;
-    if (f == null || f.path == null) return null;
-    if (f.size > MediaLimits.maxBytes) {
-      throw ChatFailure('Documento troppo pesante (${formatBytes(f.size)}): massimo 50 MB.');
+    final List<PlatformFile> picked = await FilePicker.pickFiles();
+    final PlatformFile? f = picked.firstOrNull;
+    if (f == null) return null;
+    final int size = await f.xFile.length();
+    if (size > MediaLimits.maxBytes) {
+      throw ChatFailure('Documento troppo pesante (${formatBytes(size)}): massimo 50 MB.');
     }
     return PickedMedia(
       kind: MediaKind.file,
-      bytes: await File(f.path!).readAsBytes(),
+      bytes: await f.xFile.readAsBytes(),
       mime: _mimeFor(f.name),
       name: f.name,
     );
