@@ -112,7 +112,9 @@ declare
 begin
   select generation into v_gen from public.chat_conversations where id = p_conversation;
   insert into public.chat_messages (conversation_id, generation, sender_id, kind, payload)
-  values (p_conversation, v_gen, p_actor, 'event', encode(convert_to(p_event::text, 'UTF8'), 'base64'));
+  -- encode(…, 'base64') va a capo ogni 76 caratteri: si tolgono gli a capo.
+  values (p_conversation, v_gen, p_actor, 'event',
+          translate(encode(convert_to(p_event::text, 'UTF8'), 'base64'), E'\n\r', ''));
 end;
 $$;
 
