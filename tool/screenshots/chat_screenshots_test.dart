@@ -15,6 +15,7 @@ import 'package:nexus_social/features/chat/chat_group_screens.dart';
 import 'package:nexus_social/features/chat/chat_media.dart';
 import 'package:nexus_social/features/chat/chat_media_picker.dart';
 import 'package:nexus_social/features/chat/chat_models.dart';
+import 'package:nexus_social/features/chat/chat_safety_screens.dart';
 import 'package:nexus_social/features/chat/chat_screen.dart';
 import 'package:nexus_social/features/chat/chat_service.dart';
 import 'package:nexus_social/features/chat/chat_thread_screen.dart';
@@ -498,6 +499,28 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await shoot(tester, 'chat_22_backup_attivo', ChatBackupScreen(backup: old, now: () => now));
     old.dispose();
+    me.dispose();
+    for (final ChatService o in others.values) {
+      o.dispose();
+    }
+  });
+
+  testWidgets('chat 23-24 · Segnala e Condividi l\'incontro', (tester) async {
+    final (ChatService me, Map<String, ChatService> others, Map<String, String> conv) =
+        (await tester.runAsync(_scene))!;
+    await shoot(tester, 'chat_23_segnala',
+        ReportChatScreen(chat: me, conversationId: conv[dario]!, now: () => now), before: () async {
+      await tester.tap(find.byKey(const ValueKey<String>('motivo_truffa')));
+      await tester.pumpAndSettle();
+    });
+    await tester.pumpWidget(const SizedBox());
+    await shoot(tester, 'chat_24_incontro',
+        ShareMeetingScreen(chat: me, withName: 'Bruno B. (@bruno_b)', excludeId: bruno, now: () => now),
+        before: () async {
+      await tester.enterText(find.byKey(const ValueKey<String>('incontro_luogo')), 'Bar Centrale, piazza Roma');
+      await tester.tap(find.byKey(ValueKey<String>('fidato_$giulia')));
+      await tester.pumpAndSettle();
+    });
     me.dispose();
     for (final ChatService o in others.values) {
       o.dispose();
