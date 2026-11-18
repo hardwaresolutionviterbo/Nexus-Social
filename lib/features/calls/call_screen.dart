@@ -79,6 +79,11 @@ class _CallScreenState extends State<CallScreen> {
   }
 
   String _status(CallState s) => switch (s.phase) {
+    CallPhase.outgoing when s.group => s.peers.isEmpty ? 'Chiamata di gruppo… squilla' : _people(s),
+    CallPhase.incoming when s.group =>
+      '${_c.memberName(s.conversationId, s.invitedBy)} · ${s.video ? 'videochiamata' : 'chiamata'} di gruppo',
+    CallPhase.active when s.group =>
+      '${s.startedAt == null ? '' : '${callDuration(_c.chat.now().difference(s.startedAt!))} · '}${_people(s)}',
     CallPhase.outgoing => s.video ? 'Videochiamata… squilla' : 'Chiamata… squilla',
     CallPhase.incoming => s.video ? 'Videochiamata in arrivo' : 'Chiamata in arrivo',
     CallPhase.connecting => 'Collegamento…',
@@ -87,12 +92,46 @@ class _CallScreenState extends State<CallScreen> {
     CallPhase.idle => '',
   };
 
+  String _people(CallState s) => '${s.peers.length + 1} persone';
+
+  /// Video degli altri nel gruppo: uno grande, due in colonna, tre o più in griglia.
+  Widget? _groupVideo(CallState s) {
+    final List<Widget> views = <Widget>[
+      for (final String p in s.peers)
+        if (_c.currentGroupMedia?.remoteView(p) case final Widget v)
+          Stack(
+            fit: StackFit.expand,
+            children: [
+              v,
+              Positioned(
+                left: 8,
+                bottom: 8,
+                child: Text(_c.memberName(s.conversationId, p),
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ),
+    ];
+    if (views.isEmpty) return null;
+    if (views.length == 1) return views.single;
+    return GridView.count(
+      crossAxisCount: views.length == 2 ? 1 : 2,
+      childAspectRatio: views.length == 2 ? 1.2 : 0.75,
+      physics: const NeverScrollableScrollPhysics(),
+      children: views,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final CallState? s = _c.state;
     if (s == null) return const Scaffold(backgroundColor: Color(0xFF101522));
-    final Widget? remote = s.video && s.phase == CallPhase.active ? _c.currentMedia?.remoteView() : null;
-    final Widget? local = s.video && s.cameraOn ? _c.currentMedia?.localView() : null;
+    final Widget? remote = s.video && s.phase == CallPhase.active
+        ? (s.group ? _groupVideo(s) : _c.currentMedia?.remoteView())
+        : null;
+    final Widget? local = s.video && s.cameraOn
+        ? (s.group ? _c.currentGroupMedia?.localView() : _c.currentMedia?.localView())
+        : null;
     const TextStyle light = TextStyle(color: Colors.white);
     return PopScope(
       canPop: false,
@@ -125,7 +164,17 @@ class _CallScreenState extends State<CallScreen> {
                           style: light.copyWith(fontSize: compact ? 20 : 26, fontWeight: FontWeight.w700)),
                       const SizedBox(height: 6),
                       Text(_status(s), key: const ValueKey<String>('chiamata_stato'),
+                          textAlign: TextAlign.center,
                           style: light.copyWith(fontSize: 16, color: Colors.white70)),
+                      if (s.group && s.peers.isNotEmpty && remote == null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          s.peers.map((String p) => _c.memberName(s.conversationId, p)).join(', '),
+                          key: const ValueKey<String>('chiamata_partecipanti'),
+                          textAlign: TextAlign.center,
+                          style: light.copyWith(fontSize: 14, color: Colors.white60),
+                        ),
+                      ],
                       const SizedBox(height: 6),
                       Row(
                         mainAxisSize: MainAxisSize.min,

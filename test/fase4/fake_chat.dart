@@ -291,7 +291,9 @@ class FakeChatServer implements ChatServer {
   Future<(int, DateTime)> callSignal(String conversationId, int generation, String payload,
       {required bool ring, required bool video}) async {
     final FakeConv c = _member(conversationId);
-    if (c.group || c.status[uid] != 'active' || c.status[c.other(uid)] != 'active' || hub.blocked(uid, c.other(uid))) {
+    if (c.group) {
+      if (c.status[uid] != 'active' || c.mls[uid] != 'in') throw const ChatFailure('Chiamata non possibile in questa chat.');
+    } else if (c.status[uid] != 'active' || c.status[c.other(uid)] != 'active' || hub.blocked(uid, c.other(uid))) {
       throw const ChatFailure('Chiamata non possibile in questa chat.');
     }
     if (ring) hub.rings.add((uid, conversationId, video));
@@ -900,6 +902,60 @@ class FakeCallMedia implements CallMedia {
   }
 }
 
+/// Chiamata di gruppo finta: ogni collegamento si «accende» quando arriva la risposta.
+class FakeGroupCallMedia implements GroupCallMedia {
+  final StreamController<(String, bool)> _up = StreamController<(String, bool)>.broadcast();
+  final Set<String> peers = <String>{};
+
+  void _on(String peer) => scheduleMicrotask(() => _up.isClosed ? null : _up.add((peer, true)));
+
+  @override
+  Stream<(String, bool)> get connected => _up.stream;
+
+  @override
+  Future<void> open({required List<IceServer> ice, required bool video}) async {}
+
+  @override
+  Future<String> offerTo(String peer) async {
+    peers.add(peer);
+    return 'v=0 offerta per $peer';
+  }
+
+  @override
+  Future<String> answerFrom(String peer, String offer) async {
+    peers.add(peer);
+    _on(peer);
+    return 'v=0 risposta a $peer';
+  }
+
+  @override
+  Future<void> acceptAnswer(String peer, String answer) async => _on(peer);
+
+  @override
+  Future<void> drop(String peer) async => peers.remove(peer);
+
+  @override
+  Future<void> setMicrophone(bool on) async {}
+
+  @override
+  Future<void> setCamera(bool on) async {}
+
+  @override
+  Future<void> switchCamera() async {}
+
+  @override
+  Future<void> setSpeaker(bool on) async {}
+
+  @override
+  Widget? remoteView(String peer) => null;
+
+  @override
+  Widget? localView() => null;
+
+  @override
+  Future<void> close() async => _up.close();
+}
+
 class FakeIce implements IceProvider {
   @override
   Future<List<IceServer>> servers() async => const <IceServer>[IceServer(urls: <String>['stun:stun.example.org'])];
@@ -922,4 +978,11 @@ class FakeRinger implements CallRinger {
 /// Telefono finto con le chiamate.
 CallService Function(ChatService) fakeCalls({Duration ring = const Duration(seconds: 45), FakeRinger? ringer}) =>
     (ChatService chat) =>
-        CallService(chat: chat, ice: FakeIce(), media: FakeCallMedia.new, ringTimeout: ring, ringer: ringer);
+        CallService(
+          chat: chat,
+          ice: FakeIce(),
+          media: FakeCallMedia.new,
+          groupMedia: FakeGroupCallMedia.new,
+          ringTimeout: ring,
+          ringer: ringer,
+        );

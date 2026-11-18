@@ -122,6 +122,7 @@ ChatService _chatFor(String uid) {
       chat: chat,
       ice: SupabaseIceProvider(Supabase.instance.client),
       media: WebRtcCallMedia.new,
+      groupMedia: WebRtcGroupCallMedia.new,
       ringer: SystemCallRinger(),
     ),
     // Backup cifrato con password (Blocco 6): la chiave resta nell'archivio sicuro del telefono.

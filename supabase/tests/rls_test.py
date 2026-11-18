@@ -2690,6 +2690,56 @@ def check_preview_phase4() -> None:
     rpc("push_unregister", {"p_fid": fid}, ta)
 
 
+def check_group_calls_phase4() -> None:
+    """GC · Chiamate di gruppo (Fase 4, Blocco 10): solo chi è dentro il gruppo, squillo ai membri."""
+    ta, tb, tc = token(UID_A), token(UID_B), token(UID_C)
+    for t, other in ((ta, UID_B), (tb, UID_A)):
+        rpc("unblock_user", {"p_user_id": other}, t)
+    _, conv = rpc("chat_create_group", {"p_title": "Calcetto", "p_members": [UID_B]}, ta)
+    sql(f"update public.chat_members set status = 'active', mls_state = 'in', muted_until = null "
+        f"where conversation_id = '{conv}';")
+    sql(f"update public.chat_conversations set generation = 1 where id = '{conv}';")
+    fid = "fidTelefonoGruppoB_" + "x" * 12
+    rpc("push_register", {"p_fid": fid, "p_platform": "android"}, tb)
+    rpc("push_set_settings", {"p_messages": True, "p_comments": True, "p_market": True, "p_preview": True,
+                              "p_dnd_enabled": False, "p_dnd_from": "22:00", "p_dnd_to": "07:00",
+                              "p_time_zone": "Europe/Rome"}, tb)
+
+    def signal(tok, ring=True, video=False):
+        return rpc("call_signal", {"p_conversation": conv, "p_generation": 1,
+                                   "p_payload": base64.b64encode(bytes([8]) * 60).decode(),
+                                   "p_ring": ring, "p_video": video}, tok)
+
+    def queue() -> list:
+        out = sql(f"select kind || '|' || title || '|' || body from private.push_queue where user_id = '{UID_B}';")
+        return [line for line in out.splitlines() if line]
+
+    sql("delete from private.push_queue;")
+    sql(f"delete from private.call_rings where user_id = '{UID_A}';")
+    ring = signal(ta, video=True)
+    rung = queue()
+    sql("delete from private.push_queue;")
+    join = signal(tb, ring=False)
+    after_join = queue()
+    outsider = signal(tc)
+    check("GC1", "Chiamata di gruppo: squilla ai membri («Calcetto · Videochiamata di gruppo»); entrare non squilla; da fuori no",
+          ring[0] == 200 and len(rung) == 1 and rung[0].startswith("call|Calcetto|")
+          and rung[0].endswith("Videochiamata di gruppo") and join[0] == 200 and after_join == [] and outsider[0] >= 400,
+          f"{ring[0]}, {rung}, {join[0]}, {after_join}, {outsider[0]}")
+
+    sql(f"update public.chat_members set mls_state = 'to_add' where conversation_id = '{conv}' and user_id = '{UID_B}';")
+    not_in = signal(tb)
+    sql(f"update public.chat_members set mls_state = 'in' where conversation_id = '{conv}' and user_id = '{UID_B}';")
+    sql("delete from private.push_queue;")
+    sql(f"update public.chat_members set muted_until = 'infinity' where conversation_id = '{conv}' and user_id = '{UID_B}';")
+    muted = signal(ta)
+    muted_queue = queue()
+    sql(f"update public.chat_members set muted_until = null where conversation_id = '{conv}';")
+    check("GC2", "Chi non è ancora dentro la cifratura non chiama; gruppo silenziato: nessuno squillo",
+          not_in[0] >= 400 and muted[0] == 200 and muted_queue == [], f"{not_in[0]}, {muted[0]}, {muted_queue}")
+    rpc("push_unregister", {"p_fid": fid}, tb)
+
+
 def check_push_phase4() -> None:
     """U · Notifiche (Fase 4, Blocco 5): coda server, silenzia, non disturbare, mai i Mi piace."""
     ta, tb = token(UID_A), token(UID_B)
@@ -2833,6 +2883,7 @@ def main() -> int:
     check_calls_phase4()
     check_realtime_phase4()
     check_preview_phase4()
+    check_group_calls_phase4()
     failed = [r for r in results if not r[2]]
     print(f"{'Caso':6} {'Esito':9} Descrizione")
     for case, desc, ok, detail in results:

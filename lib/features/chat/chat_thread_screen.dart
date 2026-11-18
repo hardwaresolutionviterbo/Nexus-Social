@@ -346,7 +346,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
 
   Future<void> _call(ChatConversation c, {required bool video}) async {
     try {
-      await widget.chat.calls!.start(c.id, video: video);
+      if (c.isGroup) {
+        await widget.chat.calls!.startGroup(c.id, video: video);
+      } else {
+        await widget.chat.calls!.start(c.id, video: video);
+      }
     } on ChatFailure catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -474,7 +478,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
               ),
             ),
             actions: [
-              if (c != null && !c.isGroup && !c.isRequest && widget.chat.calls != null) ...[
+              if (c != null &&
+                  !c.isRequest &&
+                  widget.chat.calls != null &&
+                  (!c.isGroup ||
+                      (widget.chat.calls!.groupMedia != null && c.myMlsState == 'in' && c.members <= 8))) ...[
                 IconButton(
                   key: const ValueKey<String>('chiama_voce'),
                   tooltip: 'Chiamata vocale',

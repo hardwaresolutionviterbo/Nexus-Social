@@ -261,3 +261,181 @@ class WebRtcCallMedia implements CallMedia {
     if (!_connected.isClosed) await _connected.close();
   }
 }
+
+/// Chiamata di gruppo con WebRTC: un collegamento per ogni altra persona (fino a 3), con lo
+/// stesso microfono e la stessa fotocamera.
+class WebRtcGroupCallMedia implements GroupCallMedia {
+  List<IceServer> _ice = const <IceServer>[];
+  bool _video = false;
+  MediaStream? _local;
+  final RTCVideoRenderer _localView = RTCVideoRenderer();
+  final Map<String, RTCPeerConnection> _pcs = <String, RTCPeerConnection>{};
+  final Map<String, RTCVideoRenderer> _views = <String, RTCVideoRenderer>{};
+  final StreamController<(String, bool)> _connected = StreamController<(String, bool)>.broadcast();
+
+  @override
+  Stream<(String, bool)> get connected => _connected.stream;
+
+  @override
+  Future<void> open({required List<IceServer> ice, required bool video}) async {
+    _ice = ice;
+    _video = video;
+    try {
+      _local = await navigator.mediaDevices.getUserMedia(<String, Object>{
+        'audio': true,
+        'video': video
+            ? <String, Object>{
+                'mandatory': <String, String>{'minWidth': '480', 'minHeight': '360', 'minFrameRate': '20'},
+                'facingMode': 'user',
+                'optional': <Object>[],
+              }
+            : false,
+      });
+    } catch (_) {
+      throw ChatFailure(video
+          ? 'Piazly non può usare fotocamera e microfono. Consentili in Impostazioni → App → Piazly → Autorizzazioni.'
+          : 'Piazly non può usare il microfono. Consentilo in Impostazioni → App → Piazly → Autorizzazioni.');
+    }
+    if (video) {
+      await _localView.initialize();
+      _localView.srcObject = _local;
+    }
+    await Helper.setSpeakerphoneOn(true);
+  }
+
+  Future<RTCPeerConnection> _pc(String peer) async {
+    final RTCPeerConnection? have = _pcs[peer];
+    if (have != null) return have;
+    final RTCPeerConnection pc = await createPeerConnection(<String, Object>{
+      'iceServers': <Map<String, Object>>[for (final IceServer s in _ice) s.toMap()],
+      'sdpSemantics': 'unified-plan',
+    });
+    _pcs[peer] = pc;
+    final MediaStream local = _local!;
+    for (final MediaStreamTrack t in local.getTracks()) {
+      await pc.addTrack(t, local);
+    }
+    if (_video) {
+      final RTCVideoRenderer view = RTCVideoRenderer();
+      await view.initialize();
+      _views[peer] = view;
+      pc.onTrack = (RTCTrackEvent e) {
+        if (e.streams.isNotEmpty) view.srcObject = e.streams.first;
+      };
+    }
+    pc.onIceConnectionState = (RTCIceConnectionState s) {
+      if (_connected.isClosed) return;
+      if (s == RTCIceConnectionState.RTCIceConnectionStateConnected ||
+          s == RTCIceConnectionState.RTCIceConnectionStateCompleted) {
+        _connected.add((peer, true));
+      }
+      if (s == RTCIceConnectionState.RTCIceConnectionStateFailed) _connected.add((peer, false));
+    };
+    return pc;
+  }
+
+  Future<String> _complete(RTCPeerConnection pc) async {
+    final Completer<void> done = Completer<void>();
+    void finish() {
+      if (!done.isCompleted) done.complete();
+    }
+
+    pc.onIceGatheringState = (RTCIceGatheringState s) {
+      if (s == RTCIceGatheringState.RTCIceGatheringStateComplete) finish();
+    };
+    pc.onIceCandidate = (RTCIceCandidate c) {
+      if ((c.candidate ?? '').contains(' typ relay')) Timer(const Duration(milliseconds: 300), finish);
+    };
+    if (pc.iceGatheringState != RTCIceGatheringState.RTCIceGatheringStateComplete) {
+      await done.future.timeout(const Duration(milliseconds: 2500), onTimeout: () {});
+    }
+    return (await pc.getLocalDescription())!.sdp!;
+  }
+
+  @override
+  Future<String> offerTo(String peer) async {
+    final RTCPeerConnection pc = await _pc(peer);
+    final RTCSessionDescription offer = await pc.createOffer(<String, Object>{
+      'offerToReceiveAudio': true,
+      'offerToReceiveVideo': _video,
+    });
+    await pc.setLocalDescription(offer);
+    return _complete(pc);
+  }
+
+  @override
+  Future<String> answerFrom(String peer, String offer) async {
+    final RTCPeerConnection pc = await _pc(peer);
+    await pc.setRemoteDescription(RTCSessionDescription(offer, 'offer'));
+    final RTCSessionDescription answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    return _complete(pc);
+  }
+
+  @override
+  Future<void> acceptAnswer(String peer, String answer) async {
+    await _pcs[peer]?.setRemoteDescription(RTCSessionDescription(answer, 'answer'));
+  }
+
+  @override
+  Future<void> drop(String peer) async {
+    final RTCPeerConnection? pc = _pcs.remove(peer);
+    await pc?.close();
+    final RTCVideoRenderer? view = _views.remove(peer);
+    if (view != null) {
+      view.srcObject = null;
+      await view.dispose();
+    }
+  }
+
+  @override
+  Future<void> setMicrophone(bool on) async {
+    for (final MediaStreamTrack t in _local?.getAudioTracks() ?? const <MediaStreamTrack>[]) {
+      t.enabled = on;
+    }
+  }
+
+  @override
+  Future<void> setCamera(bool on) async {
+    for (final MediaStreamTrack t in _local?.getVideoTracks() ?? const <MediaStreamTrack>[]) {
+      t.enabled = on;
+    }
+  }
+
+  @override
+  Future<void> switchCamera() async {
+    final List<MediaStreamTrack> v = _local?.getVideoTracks() ?? const <MediaStreamTrack>[];
+    if (v.isNotEmpty) await Helper.switchCamera(v.first);
+  }
+
+  @override
+  Future<void> setSpeaker(bool on) => Helper.setSpeakerphoneOn(on);
+
+  @override
+  Widget? remoteView(String peer) {
+    final RTCVideoRenderer? view = _views[peer];
+    return view == null ? null : RTCVideoView(view, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover);
+  }
+
+  @override
+  Widget? localView() => _video
+      ? RTCVideoView(_localView, mirror: true, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover)
+      : null;
+
+  @override
+  Future<void> close() async {
+    for (final String peer in _pcs.keys.toList()) {
+      await drop(peer);
+    }
+    for (final MediaStreamTrack t in _local?.getTracks() ?? const <MediaStreamTrack>[]) {
+      await t.stop();
+    }
+    await _local?.dispose();
+    _local = null;
+    if (_video) {
+      _localView.srcObject = null;
+      await _localView.dispose();
+    }
+    if (!_connected.isClosed) await _connected.close();
+  }
+}
