@@ -438,7 +438,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                   text: chatPreview(_replyTo),
                   onClose: () => setState(() => _replyTo = null),
                 ),
-              if (_recording != null)
+              if (c != null && group && (c.isRequest || c.myMlsState != 'in'))
+                const SizedBox(height: 12)
+              else if (_recording != null)
                 _RecordingBar(
                   since: _recording!,
                   onCancel: () => _stopVoice(send: false),

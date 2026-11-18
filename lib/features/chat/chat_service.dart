@@ -182,8 +182,16 @@ class ChatService extends ChangeNotifier {
 
   List<ChatMessage> _messagesOf(String id) => _messages[id] ?? const <ChatMessage>[];
 
-  List<ChatMessage> _visible(String id) =>
-      <ChatMessage>[..._messagesOf(id), ...?_pending[id]];
+  /// In ordine di tempo (gli avvisi del gruppo possono arrivare dopo i messaggi).
+  List<ChatMessage> _visible(String id) {
+    final List<ChatMessage> saved = List<ChatMessage>.of(_messagesOf(id));
+    final List<int> order = List<int>.generate(saved.length, (int i) => i);
+    order.sort((int x, int y) {
+      final int byTime = saved[x].at.compareTo(saved[y].at);
+      return byTime != 0 ? byTime : x.compareTo(y);
+    });
+    return <ChatMessage>[for (final int i in order) saved[i], ...?_pending[id]];
+  }
 
   /// Messaggi della chat, dal più vecchio.
   List<ChatMessage> messages(String id) => _visible(id);
@@ -432,6 +440,13 @@ class ChatService extends ChangeNotifier {
     } finally {
       _autoRunning = false;
     }
+  }
+
+  /// Orario di un avviso locale: subito dopo l'ultimo messaggio della chat.
+  DateTime _noticeTime(String conversationId) {
+    final List<ChatMessage> list = _messagesOf(conversationId);
+    if (list.isEmpty) return DateTime.now();
+    return list.map((m) => m.at).reduce((a, b) => a.isAfter(b) ? a : b);
   }
 
   Future<void> _notice(String conversationId, DateTime at, {required bool renewed, String text = ''}) =>
@@ -931,7 +946,7 @@ class ChatService extends ChangeNotifier {
     if (s != null && s.groupId != started.groupId) await crypto.dropGroup(s.groupId);
     final LocalSession fresh = LocalSession(generation, started.groupId);
     await store.setSession(c.id, fresh);
-    if (c.generation > 0) await _notice(c.id, DateTime.now(), renewed: true);
+    if (c.generation > 0) await _notice(c.id, _noticeTime(c.id), renewed: true);
     _conversations[c.id] = c.copyWith(
       generation: generation,
       groupId: started.groupId,
@@ -1092,7 +1107,7 @@ class ChatService extends ChangeNotifier {
     final Map<String, Set<String>> roster = await _crypto!.roster(groupId);
     final bool fine = joiners.every((j) => roster[j.userId]?.contains(j.signatureKey) ?? false);
     if (!fine) {
-      await _notice(conversationId, DateTime.now(), renewed: false,
+      await _notice(conversationId, _noticeTime(conversationId), renewed: false,
           text: 'Attenzione: la chiave di un membro non corrisponde. Verifica con lui di persona.');
     }
   }

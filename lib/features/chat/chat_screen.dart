@@ -165,7 +165,7 @@ class _E2eBanner extends StatelessWidget {
           const SizedBox(width: 6),
           Expanded(
             child: Text(
-              'Le chat sono cifrate end-to-end: le leggete solo voi due.',
+              'Le chat sono cifrate end-to-end: le leggono solo le persone della chat.',
               style: theme.textTheme.bodySmall,
             ),
           ),
