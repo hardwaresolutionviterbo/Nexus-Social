@@ -157,7 +157,7 @@ jobs:
           - difetto: chiamate_squillano_sempre
             caso: X1
           - difetto: canale_altrui_leggibile
-            caso: Z3
+            caso: RT3
 
     steps:
       - name: Checkout

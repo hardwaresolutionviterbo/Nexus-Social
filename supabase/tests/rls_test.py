@@ -2579,7 +2579,7 @@ def check_calls_phase4() -> None:
 
 
 def check_realtime_phase4() -> None:
-    """Z · Tempo reale (Fase 4, Blocco 9): tocchi vuoti sul canale privato, solo per il proprietario."""
+    """RT · Tempo reale (Fase 4, Blocco 9): tocchi vuoti sul canale privato, solo per il proprietario."""
     ta, tb = token(UID_A), token(UID_B)
     for t, other in ((ta, UID_B), (tb, UID_A)):
         rpc("unblock_user", {"p_user_id": other}, t)
@@ -2598,36 +2598,41 @@ def check_realtime_phase4() -> None:
     sent = rpc("chat_send", {"p_conversation": conv, "p_generation": gen,
                              "p_payload": base64.b64encode(bytes([5]) * 60).decode()}, tb)
     a1, b1 = pokes(UID_A), pokes(UID_B)
-    payloads = sql(f"select distinct payload::text from realtime.messages where topic = 'u:{UID_A}';")
-    check("Z1", "Messaggio → tocco vuoto sul canale di chi riceve (non di chi scrive)",
-          sent[0] == 200 and a1 == a0 + 1 and b1 == b0 and payloads == "{}",
-          f"{sent[0]}, {a0}->{a1}, {b0}->{b1}, {payloads!r}")
+    # realtime.send aggiunge solo un identificativo casuale del tocco: nessun contenuto.
+    with_content = sql(f"select count(*) from realtime.messages where topic like 'u:%' "
+                       "and (payload - 'id') <> '{}'::jsonb;")
+    check("RT1", "Messaggio → tocco vuoto sul canale di chi riceve (non di chi scrive)",
+          sent[0] == 200 and a1 == a0 + 1 and b1 == b0 and with_content == "0",
+          f"{sent[0]}, {a0}->{a1}, {b0}->{b1}, con contenuto={with_content}")
 
-    rpc("chat_mark", {"p_conversation": conv, "p_delivered": sent[1][0]["id"] if isinstance(sent[1], list) and sent[1] else 0,
-                      "p_read": 0}, ta)
+    first = sent[1][0]["id"] if isinstance(sent[1], list) and sent[1] else 0
+    rpc("chat_mark", {"p_conversation": conv, "p_delivered": first, "p_read": 0}, ta)
     b2 = pokes(UID_B)
-    check("Z2", "Spunte: anche chi ha scritto riceve un tocco", b2 >= b1 + 1, f"{b1}->{b2}")
+    check("RT2", "Spunte: anche chi ha scritto riceve un tocco", b2 >= b1 + 1, f"{b1}->{b2}")
 
-    def visible(sub: str, topic: str) -> str:
+    # La regola del canale (applicata da Supabase Realtime per ogni ascoltatore).
+    policies = sql("select count(*) || '|' || coalesce(string_agg(qual, ' '), '') from pg_policies "
+                   "where schemaname = 'realtime' and tablename = 'messages' and cmd in ('SELECT', 'ALL') "
+                   "and permissive = 'PERMISSIVE';")
+    count, _, qual = policies.partition("|")
+
+    def allowed(sub: str | None, topic: str) -> str:
         now = int(time.time())
-        claims = json.dumps({"iss": f"https://securetoken.google.com/{PROJECT}", "aud": PROJECT, "sub": sub,
-                             "iat": now - 10, "exp": now + 3600}).replace("'", "''")
-        return sql("begin; set local role anon; "
-                   f"select set_config('request.jwt.claims', '{claims}', true); "
-                   f"select set_config('realtime.topic', '{topic}', true); "
-                   f"select count(*) from realtime.messages where topic = '{topic}'; rollback;")
+        claims = "" if sub is None else json.dumps({
+            "iss": f"https://securetoken.google.com/{PROJECT}", "aud": PROJECT, "sub": sub,
+            "iat": now - 10, "exp": now + 3600})
+        out = sql("begin; "
+                  f"select set_config('request.jwt.claims', '{claims}', true); "
+                  f"select set_config('realtime.topic', '{topic}', true); "
+                  "select coalesce((select realtime.topic()) = 'u:' || public.current_uid_raw(), false); rollback;")
+        vals = [line.strip() for line in out.splitlines() if line.strip() in ("t", "f")]
+        return vals[-1] if vals else "?"
 
-    def last_number(out: str) -> str:
-        nums = [line.strip() for line in out.splitlines() if line.strip().isdigit()]
-        return nums[-1] if nums else "?"
-
-    own = last_number(visible(UID_A, f"u:{UID_A}"))
-    other = last_number(visible(UID_B, f"u:{UID_A}"))
-    no_token = last_number(sql("begin; set local role anon; "
-                   f"select set_config('realtime.topic', 'u:{UID_A}', true); "
-                   f"select count(*) from realtime.messages where topic = 'u:{UID_A}'; rollback;"))
-    check("Z3", "Il canale u:<uid> lo legge solo il proprietario; altri utenti e anonimi no",
-          int(own) >= 1 and other == "0" and no_token == "0", f"{own}, {other}, {no_token}")
+    own, other, anon = allowed(UID_A, f"u:{UID_A}"), allowed(UID_B, f"u:{UID_A}"), allowed(None, f"u:{UID_A}")
+    check("RT3", "Il canale u:<uid> lo ascolta solo il proprietario; altri utenti e anonimi no",
+          count == "1" and "current_uid_raw" in qual and "topic" in qual
+          and (own, other, anon) == ("t", "f", "f"),
+          f"regole={count}, {own}, {other}, {anon}")
 
 
 def check_push_phase4() -> None:
