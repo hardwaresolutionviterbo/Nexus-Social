@@ -1,5 +1,6 @@
 // Anteprime per il titolare (Fase 4, Blocco 1): la chat con dati finti.
 // Non fa parte dei test di regressione: lo esegue solo il workflow «Anteprime schermate».
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -9,6 +10,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:nexus_social/core/theme/app_theme.dart';
 import 'package:nexus_social/features/chat/chat_media.dart';
 import 'package:nexus_social/features/chat/chat_media_picker.dart';
+import 'package:nexus_social/features/chat/chat_models.dart';
 import 'package:nexus_social/features/chat/chat_screen.dart';
 import 'package:nexus_social/features/chat/chat_service.dart';
 import 'package:nexus_social/features/chat/chat_thread_screen.dart';
@@ -192,17 +194,13 @@ void main() {
     await tester.pumpAndSettle();
     if (before != null) await before();
     await tester.pumpAndSettle();
-    // Le foto si decodificano solo fuori dal tempo finto dei test. Due giri: gli allegati
-    // passano dall'anteprima sfocata al file vero dopo aver letto la cartella.
-    for (int round = 0; round < 3; round++) {
-      await tester.runAsync(() async {
-        await Future<void>.delayed(const Duration(milliseconds: 200));
-        for (final Element e in find.byType(Image).evaluate()) {
-          await precacheImage((e.widget as Image).image, e);
-        }
-      });
-      await tester.pumpAndSettle();
-    }
+    // Le foto si decodificano solo fuori dal tempo finto dei test.
+    await tester.runAsync(() async {
+      for (final Element e in find.byType(Image).evaluate()) {
+        await precacheImage((e.widget as Image).image, e);
+      }
+    });
+    await tester.pumpAndSettle();
     try {
       await expectLater(find.byType(MaterialApp), matchesGoldenFile('out/$name.png'));
     } finally {
@@ -304,6 +302,27 @@ void main() {
     b.dispose();
   });
 
+  /// Decodifica in anticipo, fuori dal tempo finto, le foto già salvate sul telefono:
+  /// così il fumetto le trova pronte.
+  Future<void> warm(ChatService me, String conv) async {
+    for (final ChatMessage m in me.messages(conv)) {
+      if (m.media?.kind != MediaKind.image) continue;
+      final File? f = await me.localFileOf(m);
+      if (f == null) continue;
+      final Completer<void> done = Completer<void>();
+      final ImageStream stream = FileImage(f).resolve(ImageConfiguration.empty);
+      late final ImageStreamListener l;
+      l = ImageStreamListener((ImageInfo _, bool _) {
+        if (!done.isCompleted) done.complete();
+        stream.removeListener(l);
+      }, onError: (Object _, StackTrace? _) {
+        if (!done.isCompleted) done.complete();
+      });
+      stream.addListener(l);
+      await done.future;
+    }
+  }
+
   Future<(ChatService, ChatService, String)> scene3() async {
     final FakeChatHub hub = FakeChatHub()
       ..addPerson(io, 'anna.r', 'Anna R.')
@@ -330,6 +349,7 @@ void main() {
     await b.refresh();
     await b.markRead(conv);
     await me.refresh();
+    await warm(me, conv);
     return (me, b, conv);
   }
 
