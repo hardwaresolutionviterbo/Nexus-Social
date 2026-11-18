@@ -1,9 +1,12 @@
 // Fase 4 · Blocco 1: il motore della chat con la cifratura MLS vera e un server in memoria
 // con le regole della migrazione 0019. Ogni «telefono» ha le sue chiavi e i suoi messaggi.
 import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexus_social/features/chat/chat_crypto.dart';
+import 'package:nexus_social/features/chat/chat_media.dart';
 import 'package:nexus_social/features/chat/chat_models.dart';
 import 'package:nexus_social/features/chat/chat_service.dart';
 import 'package:nexus_social/features/chat/chat_store.dart';
@@ -15,7 +18,11 @@ const String bruno = 'utenteBruno00000000000000002';
 const String dario = 'utenteDario00000000000000004';
 
 Future<ChatService> phone(FakeChatHub hub, String uid, {ChatStore? store}) async {
+  final Directory files = Directory.systemTemp.createTempSync('piazly_allegati_');
+  addTearDown(() => files.deleteSync(recursive: true));
   final ChatService s = ChatService(
+    media: hub.media,
+    files: ChatMediaFiles(Future<Directory>.value(files)),
     server: hub.serverFor(uid),
     crypto: () => MlsChatCrypto.open(uid: uid, dbPath: ':memory:'),
     store: store ?? MemoryChatStore(),
@@ -215,6 +222,80 @@ void main() {
     // Le reazioni e le eliminazioni non contano come messaggi non letti: per B resta solo
     // il primo messaggio di A (mai aperto).
     expect(b.threads.firstWhere((t) => t.conversation.id == ab).unread, 1);
+    a.dispose();
+    b.dispose();
+    d.dispose();
+  });
+
+  test('Blocco 3 · foto e documento cifrati: il server vede solo byte illeggibili', () async {
+    final ChatService a = await phone(hub, anna);
+    final ChatService b = await phone(hub, bruno);
+    final ChatService d = await phone(hub, dario);
+    final String ab = await a.openDirect(bruno);
+    final Uint8List photo = Uint8List.fromList(List<int>.generate(70000, (int i) => (i * 7) % 251));
+    await a.sendMedia(ab, kind: MediaKind.image, bytes: photo, mime: 'image/jpeg',
+        width: 1200, height: 900, thumb: base64Encode(<int>[1, 2, 3]), caption: 'La bici');
+    final ChatMessage sent = a.messages(ab).single;
+    expect(sent.serverId, isNotNull);
+    expect(sent.media!.path, startsWith('$ab/$anna/'));
+    expect((await a.localFileOf(sent))!.readAsBytesSync(), photo, reason: 'chi invia ha la sua copia');
+
+    // Sul server: cifrato (diverso, più lungo di 28 byte) e nessuna chiave in chiaro.
+    final Uint8List onServer = hub.media.files[sent.media!.path]!;
+    expect(onServer.length, photo.length + 28);
+    expect(onServer.sublist(12, 112), isNot(photo.sublist(0, 100)));
+
+    await b.refresh();
+    final ChatMessage got = b.messages(ab).single;
+    expect(got.body, 'La bici');
+    expect(got.media!.kind, MediaKind.image);
+    expect(got.media!.width, 1200);
+    final File file = await b.download(got);
+    expect(file.readAsBytesSync(), photo);
+    expect(hub.media.files.containsKey(sent.media!.path), isFalse, reason: 'scaricato: via dal server');
+    expect(b.messages(ab).single.localFile, isNotEmpty);
+
+    // Documento, poi inoltro a D: nuova chiave e nuovo percorso, nella chat con D.
+    final Uint8List pdf = Uint8List.fromList(utf8.encode('%PDF-1.4 contratto di prova'));
+    await b.sendMedia(ab, kind: MediaKind.file, bytes: pdf, mime: 'application/pdf', name: 'contratto.pdf');
+    await a.refresh();
+    final ChatMessage doc = a.messages(ab).last;
+    expect(doc.media!.name, 'contratto.pdf');
+    await expectLater(a.forward(doc, <String>[await a.openDirect(dario)]), throwsA(isA<ChatFailure>()),
+        reason: 'prima va scaricato');
+    await a.download(doc);
+    final String ad = await a.openDirect(dario);
+    await a.forward(a.messages(ab).last, <String>[ad]);
+    await d.refresh();
+    final ChatMessage fwd = d.requests.single.last!;
+    expect(fwd.forwarded, isTrue);
+    expect(fwd.media!.path, startsWith('$ad/$anna/'));
+    expect(fwd.media!.key, isNot(doc.media!.key));
+    expect((await d.download(fwd)).readAsBytesSync(), pdf);
+
+    // Allegato manomesso sul server: rifiutato.
+    await a.sendMedia(ab, kind: MediaKind.audio, bytes: Uint8List.fromList(List<int>.filled(5000, 9)),
+        mime: 'audio/mp4', durationMs: 4200);
+    final ChatMessage voice = a.messages(ab).last;
+    hub.media.files[voice.media!.path]![40] ^= 0xFF;
+    await b.refresh();
+    await expectLater(b.download(b.messages(ab).last), throwsA(isA<ChatFailure>()));
+
+    // Elimina per tutti: l'allegato sparisce anche dal server.
+    await a.sendMedia(ab, kind: MediaKind.video, bytes: Uint8List.fromList(List<int>.filled(9000, 3)),
+        mime: 'video/mp4');
+    final ChatMessage video = a.messages(ab).last;
+    await a.deleteForEveryone(video);
+    expect(hub.media.files.containsKey(video.media!.path), isFalse);
+    await b.refresh();
+    expect(b.messages(ab).last.deleted, isTrue);
+    expect(b.messages(ab).last.media, isNull);
+
+    // Troppo pesante: rifiutato prima di partire.
+    await expectLater(
+      a.sendMedia(ab, kind: MediaKind.file, bytes: Uint8List(MediaLimits.maxBytes + 1), mime: 'application/zip'),
+      throwsA(isA<ChatFailure>()),
+    );
     a.dispose();
     b.dispose();
     d.dispose();

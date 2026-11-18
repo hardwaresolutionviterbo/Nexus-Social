@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'chat_media.dart';
+
 /// Errore da mostrare all'utente (testo già in italiano).
 class ChatFailure implements Exception {
   const ChatFailure(this.message, {this.conflict = false});
@@ -152,20 +154,34 @@ class ChatContent {
   const ChatContent.text(this.body, {required this.localId, this.quote, this.forwarded = false})
     : type = 'text',
       target = null,
-      emoji = null;
+      emoji = null,
+      media = null;
+
+  /// Allegato cifrato con didascalia facoltativa in [body].
+  const ChatContent.media(
+    this.body, {
+    required this.localId,
+    required ChatMedia this.media,
+    this.quote,
+    this.forwarded = false,
+  }) : type = 'media',
+       target = null,
+       emoji = null;
 
   const ChatContent.delete({required this.localId, required String this.target})
     : type = 'del',
       body = '',
       quote = null,
       forwarded = false,
-      emoji = null;
+      emoji = null,
+      media = null;
 
   const ChatContent.react({required this.localId, required String this.target, required String this.emoji})
     : type = 'react',
       body = '',
       quote = null,
-      forwarded = false;
+      forwarded = false,
+      media = null;
 
   const ChatContent._(
     this.type,
@@ -175,6 +191,7 @@ class ChatContent {
     this.forwarded = false,
     this.target,
     this.emoji,
+    this.media,
   });
 
   final String type;
@@ -184,10 +201,14 @@ class ChatContent {
   final bool forwarded;
   final String? target;
   final String? emoji;
+  final ChatMedia? media;
 
   static const int maxTextLength = 4000;
 
   bool get isText => type == 'text';
+
+  /// Testo o allegato: diventa un fumetto nella conversazione.
+  bool get isMessage => type == 'text' || (type == 'media' && media != null);
 
   List<int> encode() => utf8.encode(jsonEncode(<String, Object>{
     'v': 1,
@@ -198,6 +219,7 @@ class ChatContent {
     if (forwarded) 'f': true,
     'tg': ?target,
     'e': ?emoji,
+    if (media != null) 'md': media!.toJson(),
   }));
 
   /// null se il contenuto non è riconosciuto (versioni future: «aggiorna l'app»).
@@ -224,6 +246,17 @@ class ChatContent {
       switch (type) {
         case 'text':
           return ChatContent._(type, body, id, quote: quote, forwarded: json['f'] == true);
+        case 'media':
+          final ChatMedia? media = ChatMedia.fromJson(json['md']);
+          if (media == null) return null;
+          return ChatContent._(
+            type,
+            body.length > MediaLimits.maxCaption ? body.substring(0, MediaLimits.maxCaption) : body,
+            id,
+            quote: quote,
+            forwarded: json['f'] == true,
+            media: media,
+          );
         case 'del':
           return target is String ? ChatContent._(type, '', id, target: target) : null;
         case 'react':
@@ -253,8 +286,9 @@ enum MessageKind {
   notice,
 }
 
-/// Evento su un messaggio già salvato: elimina per tutti, reazione, elimina per me.
-enum ChatEventKind { delete, react, hide }
+/// Evento su un messaggio già salvato: elimina per tutti, reazione, elimina per me,
+/// allegato salvato sul telefono ([ChatEvent.value] = nome del file).
+enum ChatEventKind { delete, react, hide, saved }
 
 class ChatEvent {
   const ChatEvent({
@@ -265,6 +299,7 @@ class ChatEvent {
     required this.at,
     this.emoji = '',
     this.serverId,
+    this.value = '',
   });
 
   final String conversationId;
@@ -276,9 +311,11 @@ class ChatEvent {
   final DateTime at;
   final String emoji;
   final int? serverId;
+  final String value;
 
   Map<String, Object?> toJson() => <String, Object?>{
     'ev': kind.name,
+    if (value.isNotEmpty) 'v': value,
     't': target,
     'm': byMe,
     'a': at.toUtc().toIso8601String(),
@@ -298,6 +335,7 @@ class ChatEvent {
       at: at.toLocal(),
       emoji: (j['x'] as String?) ?? '',
       serverId: (j['s'] as num?)?.toInt(),
+      value: (j['v'] as String?) ?? '',
     );
   }
 }
@@ -318,6 +356,8 @@ class ChatMessage {
     this.deleted = false,
     this.myReaction = '',
     this.peerReaction = '',
+    this.media,
+    this.localFile = '',
   });
 
   final String localId;
@@ -339,7 +379,16 @@ class ChatMessage {
   final String myReaction;
   final String peerReaction;
 
+  /// Allegato (null per i messaggi di solo testo).
+  final ChatMedia? media;
+
+  /// Nome del file in chiaro sul telefono, se già scaricato (o inviato da qui).
+  final String localFile;
+
+  /// Messaggio normale non eliminato (testo o allegato).
   bool get isText => kind == MessageKind.text && !deleted;
+
+  bool get hasMedia => media != null && !deleted;
 
   /// Si può eliminare per tutti: mio, già inviato, entro 48 ore.
   bool canDeleteForEveryone(DateTime now) =>
@@ -351,6 +400,7 @@ class ChatMessage {
     bool? deleted,
     String? myReaction,
     String? peerReaction,
+    String? localFile,
   }) => ChatMessage(
     localId: localId,
     conversationId: conversationId,
@@ -365,10 +415,14 @@ class ChatMessage {
     deleted: deleted ?? this.deleted,
     myReaction: myReaction ?? this.myReaction,
     peerReaction: peerReaction ?? this.peerReaction,
+    media: (deleted ?? this.deleted) ? null : media,
+    localFile: (deleted ?? this.deleted) ? '' : (localFile ?? this.localFile),
   );
 
   Map<String, Object?> toJson() => <String, Object?>{
     'l': localId,
+    if (media != null) 'md': media!.toJson(),
+    if (localFile.isNotEmpty) 'lf': localFile,
     's': serverId,
     'm': mine,
     'k': kind.name,
@@ -395,6 +449,8 @@ class ChatMessage {
           ? ChatQuote(localId: q['id'] as String, authorId: q['a'] as String, text: q['x'] as String)
           : null,
       forwarded: j['f'] == true,
+      media: ChatMedia.fromJson(j['md']),
+      localFile: (j['lf'] as String?) ?? '',
     );
   }
 
@@ -431,6 +487,8 @@ List<ChatMessage> foldChatEvents(List<ChatMessage> messages, List<ChatEvent> eve
       case ChatEventKind.react:
         if (m.deleted || m.kind != MessageKind.text) continue;
         out[i] = e.byMe ? m.copyWith(myReaction: e.emoji) : m.copyWith(peerReaction: e.emoji);
+      case ChatEventKind.saved:
+        if (m.media != null && !m.deleted) out[i] = m.copyWith(localFile: e.value);
     }
   }
   return out.whereType<ChatMessage>().toList();

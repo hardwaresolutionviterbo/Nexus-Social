@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 
 import 'chat_crypto.dart';
+import 'chat_media.dart';
 import 'chat_models.dart';
 import 'chat_server.dart';
 import 'chat_store.dart';
@@ -19,6 +22,8 @@ class ChatService extends ChangeNotifier {
     required this.store,
     required this.myId,
     this.contactsLoader,
+    this.media,
+    this.files,
     this.fastPoll = const Duration(seconds: 3),
     this.slowPoll = const Duration(seconds: 10),
   }) : _openCrypto = crypto;
@@ -27,6 +32,10 @@ class ChatService extends ChangeNotifier {
   final ChatStore store;
   final String myId;
   final Future<List<ChatContact>> Function()? contactsLoader;
+
+  /// Allegati cifrati sul server e in chiaro sul telefono (Blocco 3).
+  final ChatMediaServer? media;
+  final ChatMediaFiles? files;
   final Duration fastPoll;
   final Duration slowPoll;
 
@@ -203,6 +212,7 @@ class ChatService extends ChangeNotifier {
       _polling = false;
       _changed();
     }
+    unawaited(_runAutoDownloads());
   }
 
   Future<void> _loadConversations() async {
@@ -293,18 +303,47 @@ class ChatService extends ChangeNotifier {
       ));
       return;
     }
-    final bool text = content != null && content.isText;
-    await _append(ChatMessage(
+    final bool ok = content != null && content.isMessage;
+    final ChatMessage m = ChatMessage(
       localId: content?.localId ?? 'srv-${e.id}',
       conversationId: e.conversationId,
       serverId: e.id,
       mine: false,
-      kind: text ? MessageKind.text : MessageKind.unreadable,
-      body: text ? content.body : '',
+      kind: ok ? MessageKind.text : MessageKind.unreadable,
+      body: ok ? content.body : '',
       at: e.createdAt,
-      quote: text ? content.quote : null,
-      forwarded: text && content.forwarded,
-    ));
+      quote: ok ? content.quote : null,
+      forwarded: ok && content.forwarded,
+      media: ok ? content.media : null,
+    );
+    await _append(m);
+    final ChatMedia? md = m.media;
+    if (md != null &&
+        (md.kind == MediaKind.image || md.kind == MediaKind.audio) &&
+        md.size <= MediaLimits.autoDownloadBytes) {
+      _autoDownload.add(m);
+    }
+  }
+
+  /// Foto e vocali piccoli da scaricare da soli dopo la sincronizzazione.
+  final List<ChatMessage> _autoDownload = <ChatMessage>[];
+  bool _autoRunning = false;
+
+  Future<void> _runAutoDownloads() async {
+    if (_autoRunning || media == null || files == null) return;
+    _autoRunning = true;
+    try {
+      while (_autoDownload.isNotEmpty && !_disposed) {
+        final ChatMessage m = _autoDownload.removeAt(0);
+        try {
+          await download(m);
+        } catch (_) {
+          // Si potrà scaricare toccandolo.
+        }
+      }
+    } finally {
+      _autoRunning = false;
+    }
   }
 
   Future<void> _notice(String conversationId, DateTime at, {required bool renewed}) => _append(
@@ -378,16 +417,7 @@ class ChatService extends ChangeNotifier {
     if (body.length > ChatContent.maxTextLength) {
       throw const ChatFailure('Messaggio troppo lungo (massimo 4.000 caratteri).');
     }
-    final ChatConversation? c = _conversations[conversationId];
-    final ChatQuote? quote = replyTo == null || !replyTo.isText
-        ? null
-        : ChatQuote(
-            localId: replyTo.localId,
-            authorId: replyTo.mine ? myId : (c?.peerId ?? ''),
-            text: replyTo.body.length > ChatQuote.maxText
-                ? replyTo.body.substring(0, ChatQuote.maxText)
-                : replyTo.body,
-          );
+    final ChatQuote? quote = _quoteOf(replyTo, _conversations[conversationId]);
     final ChatMessage local = ChatMessage(
       localId: _localId(),
       conversationId: conversationId,
@@ -420,9 +450,162 @@ class ChatService extends ChangeNotifier {
     if (conversationIds.length > 5) {
       throw const ChatFailure('Puoi inoltrare a 5 chat per volta.');
     }
+    final ChatMedia? md = message.media;
+    if (md != null) {
+      // L'allegato si cifra di nuovo, con una chiave nuova, per ogni chat.
+      final File? file = message.localFile.isEmpty ? null : await files?.existing(message.localFile);
+      if (file == null) throw const ChatFailure('Scarica prima l\'allegato, poi inoltralo.');
+      for (final String id in conversationIds) {
+        await sendMedia(
+          id,
+          kind: md.kind,
+          bytes: await file.readAsBytes(),
+          mime: md.mime,
+          name: md.name,
+          width: md.width,
+          height: md.height,
+          durationMs: md.durationMs,
+          thumb: md.thumb,
+          caption: message.body,
+          forwarded: true,
+        );
+      }
+      return;
+    }
     for (final String id in conversationIds) {
       await send(id, message.body, forwarded: true);
     }
+  }
+
+  final Map<String, Future<File>> _downloading = <String, Future<File>>{};
+
+  /// L'allegato del messaggio [localId] si sta scaricando.
+  bool isDownloading(String localId) => _downloading.containsKey(localId);
+
+  /// File in chiaro dell'allegato sul telefono, se c'è.
+  Future<File?> localFileOf(ChatMessage m) async =>
+      m.localFile.isEmpty ? null : await files?.existing(m.localFile);
+
+  /// Invia un allegato già preparato (foto ridotta, vocale, video, documento).
+  Future<void> sendMedia(
+    String conversationId, {
+    required MediaKind kind,
+    required Uint8List bytes,
+    required String mime,
+    String name = '',
+    int width = 0,
+    int height = 0,
+    int durationMs = 0,
+    String thumb = '',
+    String caption = '',
+    ChatMessage? replyTo,
+    bool forwarded = false,
+  }) async {
+    final ChatMediaFiles? store = files;
+    if (media == null || store == null) throw const ChatFailure('Allegati non disponibili.');
+    if (bytes.isEmpty) throw const ChatFailure('File vuoto.');
+    if (bytes.length > MediaLimits.maxBytes) {
+      throw const ChatFailure('File troppo pesante: massimo 50 MB.');
+    }
+    final String text = caption.trim();
+    if (text.length > MediaLimits.maxCaption) {
+      throw const ChatFailure('Didascalia troppo lunga (massimo 1.000 caratteri).');
+    }
+    final String localId = _localId();
+    final ChatMedia draft = ChatMedia(
+      kind: kind,
+      path: '',
+      key: '',
+      size: bytes.length,
+      mime: mime,
+      name: name,
+      width: width,
+      height: height,
+      durationMs: durationMs,
+      thumb: thumb,
+    );
+    // Copia in chiaro sul telefono: il fumetto si vede subito.
+    final String fileName = '$localId.${draft.extension}';
+    await (await store.fileFor(fileName)).writeAsBytes(bytes, flush: true);
+    final ChatConversation? c = _conversations[conversationId];
+    final ChatMessage local = ChatMessage(
+      localId: localId,
+      conversationId: conversationId,
+      mine: true,
+      kind: MessageKind.text,
+      body: text,
+      at: DateTime.now(),
+      ticks: MessageTicks.sending,
+      quote: _quoteOf(replyTo, c),
+      forwarded: forwarded,
+      media: draft,
+      localFile: fileName,
+    );
+    (_pending[conversationId] ??= <ChatMessage>[]).add(local);
+    _changed();
+    await _deliver(local);
+  }
+
+  ChatQuote? _quoteOf(ChatMessage? replyTo, ChatConversation? c) => replyTo == null || !replyTo.isText
+      ? null
+      : ChatQuote(
+          localId: replyTo.localId,
+          authorId: replyTo.mine ? myId : (c?.peerId ?? ''),
+          text: _quoteText(replyTo),
+        );
+
+  static String _quoteText(ChatMessage m) {
+    final String base = m.body.isNotEmpty
+        ? m.body
+        : switch (m.media?.kind) {
+            MediaKind.image => '📷 Foto',
+            MediaKind.video => '🎬 Video',
+            MediaKind.audio => '🎤 Messaggio vocale',
+            MediaKind.file => '📄 ${m.media!.name}',
+            null => '',
+          };
+    return base.length > ChatQuote.maxText ? base.substring(0, ChatQuote.maxText) : base;
+  }
+
+  /// Scarica e decifra l'allegato; chi riceve poi lo cancella dal server.
+  Future<File> download(ChatMessage m) async {
+    final ChatMedia? md = m.media;
+    final ChatMediaFiles? store = files;
+    final ChatMediaServer? server = media;
+    if (md == null || store == null || server == null || md.path.isEmpty) {
+      throw const ChatFailure('Allegato non disponibile.');
+    }
+    final File? have = await localFileOf(m);
+    if (have != null) return have;
+    final Future<File>? running = _downloading[m.localId];
+    if (running != null) return running;
+    final Future<File> job = _fetch(m, md, store, server);
+    _downloading[m.localId] = job;
+    _changed();
+    try {
+      return await job;
+    } finally {
+      _downloading.remove(m.localId);
+      _changed();
+    }
+  }
+
+  Future<File> _fetch(ChatMessage m, ChatMedia md, ChatMediaFiles store, ChatMediaServer server) async {
+    final Uint8List blob = await server.download(md.path);
+    final Uint8List plain = await MediaCipher.decrypt(blob, md.key);
+    final String fileName = '${m.localId}.${md.extension}';
+    final File file = await store.fileFor(fileName);
+    await file.writeAsBytes(plain, flush: true);
+    await _run(() => _appendEvent(ChatEvent(
+      conversationId: m.conversationId,
+      kind: ChatEventKind.saved,
+      target: m.localId,
+      byMe: true,
+      at: DateTime.now(),
+      value: fileName,
+    )));
+    if (!m.mine) await server.remove(md.path);
+    return file;
   }
 
   /// Reazione al messaggio; la stessa reazione toccata di nuovo si toglie.
@@ -447,6 +630,9 @@ class ChatService extends ChangeNotifier {
       ChatContent.delete(localId: _localId(), target: message.localId),
       ChatEventKind.delete,
     );
+    // L'allegato non serve più a nessuno: via anche dal server.
+    final String? path = message.media?.path;
+    if (path != null && path.isNotEmpty) await media?.remove(path);
   }
 
   /// «Elimina per me»: sparisce solo da questo telefono.
@@ -457,6 +643,7 @@ class ChatService extends ChangeNotifier {
       _changed();
       return;
     }
+    if (message.localFile.isNotEmpty) await files?.deleteAll(<String>[message.localFile]);
     await _run(() => _appendEvent(ChatEvent(
       conversationId: message.conversationId,
       kind: ChatEventKind.hide,
@@ -511,18 +698,70 @@ class ChatService extends ChangeNotifier {
     }
   }
 
-  Future<void> _deliver(ChatMessage local) async {
+  /// Cifra e carica l'allegato (fuori dalla fila: può richiedere tempo).
+  Future<ChatMessage> _uploaded(ChatMessage local) async {
+    final ChatMedia? draft = local.media;
+    if (draft == null || draft.path.isNotEmpty) return local;
+    final File? file = await localFileOf(local);
+    if (file == null) throw const ChatFailure('File non più disponibile sul telefono.');
+    final (Uint8List blob, String key) = await MediaCipher.encrypt(await file.readAsBytes());
+    final String path = '${local.conversationId}/$myId/${MediaCipher.randomName()}.bin';
+    await media!.upload(path, blob);
+    final ChatMessage ready = ChatMessage(
+      localId: local.localId,
+      conversationId: local.conversationId,
+      mine: true,
+      kind: local.kind,
+      body: local.body,
+      at: local.at,
+      ticks: local.ticks,
+      quote: local.quote,
+      forwarded: local.forwarded,
+      media: ChatMedia(
+        kind: draft.kind,
+        path: path,
+        key: key,
+        size: draft.size,
+        mime: draft.mime,
+        name: draft.name,
+        width: draft.width,
+        height: draft.height,
+        durationMs: draft.durationMs,
+        thumb: draft.thumb,
+      ),
+      localFile: local.localFile,
+    );
+    final List<ChatMessage>? list = _pending[local.conversationId];
+    final int i = list?.indexWhere((m) => m.localId == local.localId) ?? -1;
+    if (i >= 0) list![i] = ready;
+    return ready;
+  }
+
+  Future<void> _deliver(ChatMessage pending) async {
+    ChatMessage local = pending;
     try {
+      local = await _uploaded(pending);
+      final ChatMessage ready = local;
       await _run(() async {
+        final ChatMedia? md = ready.media;
         final (int, DateTime) sent = await _transmit(
-          local.conversationId,
-          ChatContent.text(
-            local.body,
-            localId: local.localId,
-            quote: local.quote,
-            forwarded: local.forwarded,
-          ),
+          ready.conversationId,
+          md == null
+              ? ChatContent.text(
+                  ready.body,
+                  localId: ready.localId,
+                  quote: ready.quote,
+                  forwarded: ready.forwarded,
+                )
+              : ChatContent.media(
+                  ready.body,
+                  localId: ready.localId,
+                  media: md,
+                  quote: ready.quote,
+                  forwarded: ready.forwarded,
+                ),
         );
+        final ChatMessage local = ready;
         _pending[local.conversationId]?.removeWhere((m) => m.localId == local.localId);
         await _append(ChatMessage(
           localId: local.localId,
@@ -534,6 +773,8 @@ class ChatService extends ChangeNotifier {
           at: sent.$2,
           quote: local.quote,
           forwarded: local.forwarded,
+          media: local.media,
+          localFile: local.localFile,
         ));
         await _loadConversations();
       });

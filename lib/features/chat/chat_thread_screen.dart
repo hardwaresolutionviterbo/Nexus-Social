@@ -1,9 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../profile/avatar_view.dart';
 import '../profile/profile_repository.dart';
+import 'chat_media.dart';
+import 'chat_media_picker.dart';
+import 'chat_media_widgets.dart';
 import 'chat_models.dart';
 import 'chat_screen.dart' show TicksIcon, chatPreview, chatTimeLabel;
 import 'chat_service.dart';
@@ -59,6 +64,7 @@ class ChatThreadScreen extends StatefulWidget {
     this.profiles,
     this.fallbackName = '',
     this.now = DateTime.now,
+    this.device,
   });
 
   final ChatService chat;
@@ -66,6 +72,9 @@ class ChatThreadScreen extends StatefulWidget {
   final ProfileRepository? profiles;
   final String fallbackName;
   final DateTime Function() now;
+
+  /// Fotocamera, galleria, documenti, microfono (finto nei test).
+  final ChatDevice? device;
 
   static Future<void> open(
     BuildContext context, {
@@ -90,6 +99,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   /// Messaggio a cui si sta rispondendo (barra sopra il campo di testo).
   ChatMessage? _replyTo;
 
+  late final ChatDevice _device = widget.device ?? RealChatDevice();
+
+  /// Registrazione del vocale in corso: da quando.
+  DateTime? _recording;
+  Timer? _recordTick;
+
   @override
   void initState() {
     super.initState();
@@ -104,6 +119,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     widget.chat.setOpenConversation(null);
     _text.dispose();
     _focus.dispose();
+    _recordTick?.cancel();
+    if (_recording != null) unawaited(_device.cancelVoice());
     super.dispose();
   }
 
@@ -145,6 +162,101 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     } finally {
       if (mounted) setState(() => _answering = false);
     }
+  }
+
+  String get _peerName {
+    final ChatConversation? c = widget.chat.conversation(widget.conversationId);
+    if (c == null) return widget.fallbackName;
+    return c.peerName.isEmpty ? '@${c.peerUsername}' : c.peerName;
+  }
+
+  /// Graffetta: Galleria, Fotocamera, Video, Documento.
+  Future<void> _attach() async {
+    final String? choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (BuildContext ctx) => const _AttachSheet(),
+    );
+    if (!mounted || choice == null) return;
+    PickedMedia? picked;
+    try {
+      picked = switch (choice) {
+        'galleria' => await _device.pickImage(camera: false),
+        'fotocamera' => await _device.pickImage(camera: true),
+        'video' => await _device.pickVideo(),
+        _ => await _device.pickFile(),
+      };
+    } on ChatFailure catch (f) {
+      _toast(f.message);
+      return;
+    } catch (_) {
+      _toast('Non è stato possibile aprire il file.');
+      return;
+    }
+    if (picked == null || !mounted) return;
+    final String? caption = await Navigator.of(context).push<String>(
+      MaterialPageRoute<String>(builder: (_) => MediaPreviewScreen(media: picked!, peerName: _peerName)),
+    );
+    if (caption == null || !mounted) return;
+    await _sendPicked(picked, caption: caption);
+  }
+
+  Future<void> _sendPicked(PickedMedia p, {String caption = ''}) async {
+    final ChatMessage? replyTo = _replyTo;
+    setState(() => _replyTo = null);
+    try {
+      await widget.chat.sendMedia(
+        widget.conversationId,
+        kind: p.kind,
+        bytes: p.bytes,
+        mime: p.mime,
+        name: p.name,
+        width: p.width,
+        height: p.height,
+        durationMs: p.durationMs,
+        thumb: p.thumb,
+        caption: caption,
+        replyTo: replyTo,
+      );
+    } on ChatFailure catch (f) {
+      if (mounted) _toast(f.message);
+    }
+  }
+
+  Future<void> _startVoice() async {
+    try {
+      if (!await _device.startVoice()) {
+        _toast('Per i vocali serve il permesso del microfono (Impostazioni del telefono).');
+        return;
+      }
+    } catch (_) {
+      _toast('Il microfono non è disponibile.');
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _recording = DateTime.now());
+    _recordTick = Timer.periodic(const Duration(milliseconds: 250), (_) {
+      if (!mounted) return;
+      setState(() {});
+      final DateTime? start = _recording;
+      if (start != null && DateTime.now().difference(start) >= MediaLimits.maxVoice) _stopVoice(send: true);
+    });
+  }
+
+  Future<void> _stopVoice({required bool send}) async {
+    _recordTick?.cancel();
+    _recordTick = null;
+    setState(() => _recording = null);
+    if (!send) {
+      await _device.cancelVoice();
+      return;
+    }
+    final PickedMedia? voice = await _device.stopVoice();
+    if (voice == null) {
+      _toast('Vocale troppo corto.');
+      return;
+    }
+    await _sendPicked(voice);
   }
 
   String _authorName(ChatConversation? c, String authorId) =>
@@ -265,6 +377,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                     if (i == messages.length) return const _E2eNote();
                     final ChatMessage m = messages[messages.length - 1 - i];
                     return _Bubble(
+                      chat: widget.chat,
                       message: m,
                       ticks: m.ticksFor(c),
                       now: now,
@@ -283,7 +396,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                   text: chatPreview(_replyTo),
                   onClose: () => setState(() => _replyTo = null),
                 ),
-              _Composer(controller: _text, focus: _focus, onSend: _send),
+              if (_recording != null)
+                _RecordingBar(
+                  since: _recording!,
+                  onCancel: () => _stopVoice(send: false),
+                  onSend: () => _stopVoice(send: true),
+                )
+              else
+                _Composer(
+                  controller: _text,
+                  focus: _focus,
+                  onSend: _send,
+                  onAttach: _attach,
+                  onVoice: _startVoice,
+                ),
             ],
           ),
         );
@@ -384,6 +510,7 @@ class _RequestBanner extends StatelessWidget {
 
 class _Bubble extends StatelessWidget {
   const _Bubble({
+    required this.chat,
     required this.message,
     required this.ticks,
     required this.now,
@@ -392,6 +519,7 @@ class _Bubble extends StatelessWidget {
     this.onLongPress,
   });
 
+  final ChatService chat;
   final ChatMessage message;
   final MessageTicks ticks;
   final DateTime now;
@@ -467,7 +595,12 @@ class _Bubble extends StatelessWidget {
             ),
           if (message.quote != null)
             _QuoteBox(author: quoteAuthor ?? '', text: message.quote!.text, mine: mine),
-          Text(message.body, style: theme.textTheme.bodyLarge),
+          if (message.hasMedia)
+            Padding(
+              padding: EdgeInsets.only(bottom: message.body.isEmpty ? 0 : 6),
+              child: MediaContent(chat: chat, message: message, mine: mine),
+            ),
+          if (message.body.isNotEmpty) Text(message.body, style: theme.textTheme.bodyLarge),
         ],
       );
     }
@@ -533,11 +666,19 @@ class _Bubble extends StatelessWidget {
 }
 
 class _Composer extends StatelessWidget {
-  const _Composer({required this.controller, required this.focus, required this.onSend});
+  const _Composer({
+    required this.controller,
+    required this.focus,
+    required this.onSend,
+    required this.onAttach,
+    required this.onVoice,
+  });
 
   final TextEditingController controller;
   final FocusNode focus;
   final VoidCallback onSend;
+  final VoidCallback onAttach;
+  final VoidCallback onVoice;
 
   @override
   Widget build(BuildContext context) {
@@ -550,6 +691,12 @@ class _Composer extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
+            IconButton(
+              key: const ValueKey<String>('chat_allega'),
+              onPressed: onAttach,
+              icon: const Icon(Icons.attach_file_rounded),
+              tooltip: 'Allega',
+            ),
             Expanded(
               child: TextField(
                 key: const ValueKey<String>('chat_testo'),
@@ -574,15 +721,15 @@ class _Composer extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             IconButton.filled(
-              key: const ValueKey<String>('chat_invia'),
-              onPressed: canSend ? onSend : null,
+              key: ValueKey<String>(canSend ? 'chat_invia' : 'chat_vocale'),
+              onPressed: canSend ? onSend : onVoice,
               style: IconButton.styleFrom(
                 backgroundColor: AppColors.brandOrange,
                 foregroundColor: Colors.white,
                 fixedSize: const Size(48, 48),
               ),
-              icon: const Icon(Icons.send_rounded),
-              tooltip: 'Invia',
+              icon: Icon(canSend ? Icons.send_rounded : Icons.mic_rounded),
+              tooltip: canSend ? 'Invia' : 'Registra un vocale',
             ),
           ],
         ),
@@ -745,7 +892,7 @@ class _MessageActions extends StatelessWidget {
               ),
             ),
           if (text && sent) action('rispondi', Icons.reply_rounded, 'Rispondi'),
-          if (text) action('copia', Icons.copy_rounded, 'Copia'),
+          if (text && message.body.isNotEmpty) action('copia', Icons.copy_rounded, 'Copia'),
           if (text && sent) action('inoltra', Icons.shortcut_rounded, 'Inoltra'),
           action('elimina', Icons.delete_outline_rounded, 'Elimina', color: theme.colorScheme.error),
         ],
@@ -842,6 +989,116 @@ class _ForwardScreenState extends State<ForwardScreen> {
           onPressed: _chosen.isEmpty || _sending ? null : _send,
           icon: const Icon(Icons.send_rounded),
           label: Text(_chosen.isEmpty ? 'Scegli fino a 5 chat' : 'Inoltra (${_chosen.length})'),
+        ),
+      ),
+    );
+  }
+}
+
+/// Scelta dell'allegato.
+class _AttachSheet extends StatelessWidget {
+  const _AttachSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    Widget item(String key, IconData icon, String label, Color color) => Expanded(
+      child: InkWell(
+        key: ValueKey<String>('allega_$key'),
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => Navigator.of(context).pop(key),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Column(
+            children: [
+              CircleAvatar(
+                radius: 28,
+                backgroundColor: color,
+                child: Icon(icon, color: Colors.white, size: 26),
+              ),
+              const SizedBox(height: 8),
+              Text(label, style: Theme.of(context).textTheme.labelLarge),
+            ],
+          ),
+        ),
+      ),
+    );
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                item('galleria', Icons.photo_library_rounded, 'Galleria', const Color(0xFF7C4DFF)),
+                item('fotocamera', Icons.photo_camera_rounded, 'Fotocamera', AppColors.brandOrange),
+                item('video', Icons.videocam_rounded, 'Video', const Color(0xFFE53935)),
+                item('documento', Icons.description_rounded, 'Documento', AppColors.brandBlue),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Gli allegati sono cifrati sul telefono prima di partire. Massimo 50 MB.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Barra della registrazione del vocale: puntino rosso, tempo, annulla e invia.
+class _RecordingBar extends StatelessWidget {
+  const _RecordingBar({required this.since, required this.onCancel, required this.onSend});
+
+  final DateTime since;
+  final VoidCallback onCancel;
+  final VoidCallback onSend;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final int ms = DateTime.now().difference(since).inMilliseconds;
+    return SafeArea(
+      top: false,
+      child: Container(
+        key: const ValueKey<String>('registrazione'),
+        margin: const EdgeInsets.fromLTRB(10, 6, 10, 10),
+        padding: const EdgeInsets.fromLTRB(8, 4, 4, 4),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: BorderRadius.circular(28),
+        ),
+        child: Row(
+          children: [
+            IconButton(
+              key: const ValueKey<String>('registrazione_annulla'),
+              onPressed: onCancel,
+              icon: Icon(Icons.delete_outline_rounded, color: theme.colorScheme.error),
+              tooltip: 'Annulla',
+            ),
+            const Icon(Icons.fiber_manual_record_rounded, color: Color(0xFFE53935), size: 14),
+            const SizedBox(width: 6),
+            Text(formatDuration(ms), style: theme.textTheme.titleMedium),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text('Registrazione… (max 5 min)',
+                  style: theme.textTheme.bodySmall, overflow: TextOverflow.ellipsis),
+            ),
+            IconButton.filled(
+              key: const ValueKey<String>('registrazione_invia'),
+              onPressed: onSend,
+              style: IconButton.styleFrom(
+                backgroundColor: AppColors.brandOrange,
+                foregroundColor: Colors.white,
+                fixedSize: const Size(48, 48),
+              ),
+              icon: const Icon(Icons.send_rounded),
+              tooltip: 'Invia il vocale',
+            ),
+          ],
         ),
       ),
     );

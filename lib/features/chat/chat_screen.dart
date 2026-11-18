@@ -4,6 +4,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/widgets/nexus_ui.dart';
 import '../profile/avatar_view.dart';
 import '../profile/profile_repository.dart';
+import 'chat_media.dart';
 import 'chat_models.dart';
 import 'chat_service.dart';
 import 'chat_thread_screen.dart';
@@ -269,6 +270,16 @@ String chatPreview(ChatMessage? m) {
   switch (m.kind) {
     case MessageKind.text:
       if (m.deleted) return m.mine ? 'Hai eliminato questo messaggio' : 'Questo messaggio è stato eliminato';
+      final ChatMedia? md = m.media;
+      if (md != null) {
+        final String label = switch (md.kind) {
+          MediaKind.image => '📷 Foto',
+          MediaKind.video => '🎬 Video',
+          MediaKind.audio => '🎤 Messaggio vocale (${formatDuration(md.durationMs)})',
+          MediaKind.file => '📄 ${md.name.isEmpty ? 'Documento' : md.name}',
+        };
+        return m.body.isEmpty ? label : '$label · ${m.body.replaceAll('\n', ' ')}';
+      }
       return m.body.replaceAll('\n', ' ');
     case MessageKind.unreadable:
       return 'Messaggio non disponibile';

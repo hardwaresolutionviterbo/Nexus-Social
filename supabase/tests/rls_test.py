@@ -392,6 +392,9 @@ def storage(method: str, path: str, jwt: str | None, data: bytes | None = None,
     except urllib.error.HTTPError as err:
         err.read()
         return err.code
+    except (urllib.error.URLError, TimeoutError, ConnectionError):
+        # Connessione chiusa dal server (per esempio file oltre il limite): rifiutato.
+        return 599
 
 
 def check_profile_block2() -> None:
@@ -2197,7 +2200,7 @@ def check_chat_media_phase4() -> None:
     s_foreign_folder = up(ta, f"{conv}/{UID_B}/allegatoIntruso00001.bin")
     s_outsider = up(td, f"{conv}/{UID_D}/allegatoEstraneo0001.bin")
     s_jpeg = up(ta, f"{conv}/{UID_A}/allegatoInChiaro0001.bin", "image/jpeg")
-    s_name = up(ta, f"{conv}/{UID_A}/nome con spazi.bin")
+    s_name = up(ta, f"{conv}/{UID_A}/corto.bin")
     s_big = up(ta, f"{conv}/{UID_A}/allegatoTroppoGrande1.bin", data=b"x" * (52428800 + 1))
     check("S1", "Allegato caricato solo da chi è nella chat, nella propria cartella, cifrato, ≤ 50 MB",
           s_own == 200 and s_foreign_folder >= 400 and s_outsider >= 400 and s_jpeg >= 400

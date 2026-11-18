@@ -1,8 +1,11 @@
 // Server della chat in memoria, con le stesse regole della migrazione 0019, e una
 // «cifratura» finta per i test di interfaccia (i test del motore usano MLS vero).
 import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:nexus_social/features/chat/chat_crypto.dart';
+import 'package:nexus_social/features/chat/chat_media.dart';
 import 'package:nexus_social/features/chat/chat_models.dart';
 import 'package:nexus_social/features/chat/chat_server.dart';
 import 'package:nexus_social/features/chat/chat_service.dart';
@@ -43,8 +46,28 @@ class FakePerson {
   final String name;
 }
 
+/// Contenitore degli allegati in memoria, condiviso dai telefoni finti.
+class FakeMediaServer implements ChatMediaServer {
+  final Map<String, Uint8List> files = <String, Uint8List>{};
+
+  @override
+  Future<void> upload(String path, Uint8List bytes) async => files[path] = Uint8List.fromList(bytes);
+
+  @override
+  Future<Uint8List> download(String path) async {
+    final Uint8List? f = files[path];
+    if (f == null) throw const ChatFailure('Allegato non più disponibile sul server.');
+    return f;
+  }
+
+  @override
+  Future<void> remove(String path) async => files.remove(path);
+}
+
 /// Il «database» condiviso dai telefoni finti.
 class FakeChatHub {
+  final FakeMediaServer media = FakeMediaServer();
+
   final Map<String, FakePerson> people = <String, FakePerson>{};
   final Map<String, String> identities = <String, String>{};
   final Map<String, List<String>> packages = <String, List<String>>{};
@@ -281,8 +304,10 @@ class FakeChatCrypto implements ChatCrypto {
 }
 
 /// Telefono finto pronto all'uso (cifratura finta, messaggi in memoria, nessun timer utile).
-Future<ChatService> fakePhone(FakeChatHub hub, String uid, {String key = 'chiave'}) async {
+Future<ChatService> fakePhone(FakeChatHub hub, String uid, {String key = 'chiave', Directory? files}) async {
   final ChatService s = ChatService(
+    media: hub.media,
+    files: files == null ? null : ChatMediaFiles(Future<Directory>.value(files)),
     server: hub.serverFor(uid),
     crypto: () async => FakeChatCrypto(uid, key: key),
     store: MemoryChatStore(),

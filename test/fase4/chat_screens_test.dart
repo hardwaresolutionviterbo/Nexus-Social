@@ -1,8 +1,12 @@
 // Fase 4 · Blocco 1: schermate della chat (lista, conversazione, richieste, nuova chat,
 // «Contatta» dagli annunci) con un server finto e una cifratura finta.
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:nexus_social/core/theme/app_theme.dart';
+import 'package:nexus_social/features/chat/chat_media.dart';
+import 'package:nexus_social/features/chat/chat_media_picker.dart';
 import 'package:nexus_social/features/chat/chat_models.dart';
 import 'package:nexus_social/features/chat/chat_screen.dart';
 import 'package:nexus_social/features/chat/chat_service.dart';
@@ -13,6 +17,46 @@ import 'fake_chat.dart';
 const String io = 'utenteAnna000000000000000001';
 const String bruno = 'utenteBruno00000000000000002';
 const String dario = 'utenteDario00000000000000004';
+
+/// Telefono finto: niente fotocamera vera, niente microfono vero.
+class FakeDevice implements ChatDevice {
+  FakeDevice({this.micAllowed = true});
+
+  final bool micAllowed;
+  int voiceStarts = 0;
+  bool cancelled = false;
+
+  @override
+  Future<PickedMedia?> pickImage({required bool camera}) async => null;
+
+  @override
+  Future<PickedMedia?> pickVideo() async => throw const ChatFailure('Video troppo pesante (80,0 MB): massimo 50 MB.');
+
+  @override
+  Future<PickedMedia?> pickFile() async => PickedMedia(
+    kind: MediaKind.file,
+    bytes: Uint8List.fromList(<int>[1, 2, 3]),
+    mime: 'application/pdf',
+    name: 'preventivo.pdf',
+  );
+
+  @override
+  Future<bool> startVoice() async {
+    voiceStarts++;
+    return micAllowed;
+  }
+
+  @override
+  Future<PickedMedia?> stopVoice() async => PickedMedia(
+    kind: MediaKind.audio,
+    bytes: Uint8List.fromList(<int>[4, 5, 6]),
+    mime: 'audio/mp4',
+    durationMs: 3000,
+  );
+
+  @override
+  Future<void> cancelVoice() async => cancelled = true;
+}
 
 Widget app(Widget home) => MaterialApp(theme: AppTheme.light, home: home);
 
@@ -254,6 +298,72 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Messaggio inoltrato'), findsOneWidget);
     expect(find.text('Inoltrato'), findsOneWidget);
+    await finish(tester, <ChatService>[me, b]);
+  });
+
+  testWidgets('Blocco 3 · graffetta e microfono: scelta, anteprima, registrazione', (WidgetTester tester) async {
+    tall(tester);
+    final ChatService me = await fakePhone(hub, io);
+    final ChatService b = await fakePhone(hub, bruno);
+    final String conv = await me.openDirect(bruno);
+    final FakeDevice device = FakeDevice();
+    await tester.pumpWidget(app(ChatThreadScreen(chat: me, conversationId: conv, device: device)));
+    await tester.pumpAndSettle();
+
+    // Campo vuoto: microfono al posto di «Invia».
+    expect(find.byKey(const ValueKey<String>('chat_vocale')), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('chat_invia')), findsNothing);
+
+    // Graffetta → le quattro scelte.
+    await tester.tap(find.byKey(const ValueKey<String>('chat_allega')));
+    await tester.pumpAndSettle();
+    for (final String k in <String>['galleria', 'fotocamera', 'video', 'documento']) {
+      expect(find.byKey(ValueKey<String>('allega_$k')), findsOneWidget);
+    }
+    expect(find.textContaining('Massimo 50 MB'), findsOneWidget);
+
+    // Video troppo pesante: messaggio chiaro, nessun invio.
+    await tester.tap(find.byKey(const ValueKey<String>('allega_video')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('massimo 50 MB'), findsOneWidget);
+
+    // Documento → anteprima con nome e peso → Invia.
+    await tester.tap(find.byKey(const ValueKey<String>('chat_allega')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey<String>('allega_documento')));
+    await tester.pumpAndSettle();
+    expect(find.text('Invia a Bruno B.'), findsOneWidget);
+    expect(find.textContaining('preventivo.pdf'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey<String>('anteprima_invia')));
+    await tester.pumpAndSettle();
+    // In questo test il telefono finto non ha la cartella degli allegati.
+    expect(find.text('Allegati non disponibili.'), findsOneWidget);
+
+    // Vocale: barra di registrazione, annulla.
+    await tester.tap(find.byKey(const ValueKey<String>('chat_vocale')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey<String>('registrazione')), findsOneWidget);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.tap(find.byKey(const ValueKey<String>('registrazione_annulla')));
+    await tester.pump();
+    expect(device.cancelled, isTrue);
+    expect(find.byKey(const ValueKey<String>('registrazione')), findsNothing);
+    await finish(tester, <ChatService>[me, b]);
+  });
+
+  testWidgets('Blocco 3 · microfono negato: si spiega come attivarlo', (WidgetTester tester) async {
+    tall(tester);
+    final ChatService me = await fakePhone(hub, io);
+    final ChatService b = await fakePhone(hub, bruno);
+    final String conv = await me.openDirect(bruno);
+    await tester.pumpWidget(app(
+      ChatThreadScreen(chat: me, conversationId: conv, device: FakeDevice(micAllowed: false)),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey<String>('chat_vocale')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('permesso del microfono'), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('registrazione')), findsNothing);
     await finish(tester, <ChatService>[me, b]);
   });
 

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuth;
+import 'package:cryptography_flutter/cryptography_flutter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:material_ui/material_ui.dart';
@@ -14,6 +15,7 @@ import 'core/services/auth_gateway.dart';
 import 'core/services/backend_bootstrap.dart';
 import 'core/services/firebase_services.dart';
 import 'features/chat/chat_crypto.dart';
+import 'features/chat/chat_media.dart';
 import 'features/chat/chat_models.dart';
 import 'features/chat/chat_server.dart';
 import 'features/chat/chat_service.dart';
@@ -30,6 +32,8 @@ import 'features/security/security_repository.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Cifratura degli allegati con le funzioni native del telefono (più veloce).
+  FlutterCryptography.enable();
   final BackendStatus backend = await BackendBootstrap.initialize();
 
   if (AppConfig.hasFirebase) {
@@ -99,6 +103,8 @@ ChatService _chatFor(String uid) {
       secrets: const FlutterSecureStorage(),
     ),
     store: FileChatStore(folder),
+    media: SupabaseChatMediaServer(Supabase.instance.client),
+    files: ChatMediaFiles(folder.then((Directory d) => Directory('${d.path}/allegati'))),
     myId: uid,
     contactsLoader: () async {
       try {
