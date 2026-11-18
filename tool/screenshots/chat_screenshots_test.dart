@@ -468,6 +468,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey<String>('silenzia_chat')));
       await tester.pumpAndSettle();
     });
+    await tester.pumpWidget(const SizedBox());
     await shoot(tester, 'chat_17_lista_silenziata', AppShell(chat: me));
     me.dispose();
     for (final ChatService o in others.values) {
