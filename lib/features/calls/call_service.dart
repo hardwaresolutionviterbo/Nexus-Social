@@ -402,6 +402,11 @@ class CallService extends ChangeNotifier {
         } catch (_) {
           await hangUp(reason: 'Chiamata non riuscita');
         }
+      case CallAction.invite:
+      case CallAction.join:
+      case CallAction.leave:
+        // Passaggi delle chiamate di gruppo: in una chat a due non servono.
+        return;
       case CallAction.end:
       case CallAction.reject:
       case CallAction.busy:
