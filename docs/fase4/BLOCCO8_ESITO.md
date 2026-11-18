@@ -1,8 +1,7 @@
 # Fase 4 · Blocco 8 · Chiamate vocali e videochiamate — esito
 
 Ramo `fase4/blocco8`, nato da `fase4/blocco7`.
-Stato: **pronto. Per la migrazione 0025, la funzione `chiamate` e il nuovo invio di
-`notifiche` serve l'autorizzazione del titolare.**
+Stato: **server attivo (autorizzato il 18/11/2026), da provare sul telefono**.
 
 ## Cosa fa
 - Nelle chat a due già accettate ci sono due pulsanti in alto: **chiamata vocale** e
@@ -61,3 +60,9 @@ Stato: **pronto. Per la migrazione 0025, la funzione `chiamate` e il nuovo invio
 - **Funzioni:** test Deno di `chiamate` (accesso, limite, ponte mancante: solo STUN) e di
   `notifiche` (scadenza a 45 secondi).
 - **Anteprime:** chat_25 (in arrivo), chat_26 (in corso).
+
+## Server reale (18/11/2026, autorizzato)
+- Migrazione 0025 applicata dal file del commit `bafdbd8`, con impronta verificata. Permessi
+  di anon allineati.
+- Funzione `chiamate` pubblicata: senza accesso risponde 401, come previsto.
+- Funzione `notifiche` ripubblicata (scadenza delle chiamate a 45 secondi). Prova: 200.
