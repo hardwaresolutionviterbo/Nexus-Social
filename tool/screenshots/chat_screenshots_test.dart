@@ -192,13 +192,17 @@ void main() {
     await tester.pumpAndSettle();
     if (before != null) await before();
     await tester.pumpAndSettle();
-    // Le foto si decodificano solo fuori dal tempo finto dei test.
-    await tester.runAsync(() async {
-      for (final Element e in find.byType(Image).evaluate()) {
-        await precacheImage((e.widget as Image).image, e);
-      }
-    });
-    await tester.pumpAndSettle();
+    // Le foto si decodificano solo fuori dal tempo finto dei test. Due giri: gli allegati
+    // passano dall'anteprima sfocata al file vero dopo aver letto la cartella.
+    for (int round = 0; round < 3; round++) {
+      await tester.runAsync(() async {
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        for (final Element e in find.byType(Image).evaluate()) {
+          await precacheImage((e.widget as Image).image, e);
+        }
+      });
+      await tester.pumpAndSettle();
+    }
     try {
       await expectLater(find.byType(MaterialApp), matchesGoldenFile('out/$name.png'));
     } finally {
