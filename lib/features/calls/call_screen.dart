@@ -103,115 +103,125 @@ class _CallScreenState extends State<CallScreen> {
           children: [
             if (remote != null) Positioned.fill(child: remote),
             SafeArea(
-              child: Column(
-                children: [
-                  const SizedBox(height: 40),
-                  if (remote == null)
-                    CircleAvatar(
-                      radius: 56,
-                      backgroundColor: AppColors.brandOrange,
-                      child: Text(
-                        s.peerName.isEmpty ? '?' : s.peerName.characters.first.toUpperCase(),
-                        style: const TextStyle(color: Colors.white, fontSize: 44, fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                  const SizedBox(height: 18),
-                  Text(s.peerName, key: const ValueKey<String>('chiamata_nome'),
-                      style: light.copyWith(fontSize: 26, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 6),
-                  Text(_status(s), key: const ValueKey<String>('chiamata_stato'),
-                      style: light.copyWith(fontSize: 16, color: Colors.white70)),
-                  const SizedBox(height: 6),
-                  Row(
+              child: LayoutBuilder(
+                builder: (BuildContext context, BoxConstraints box) {
+                  // Telefono girato (o schermo basso): tutto più compatto, niente tagli.
+                  final bool compact = box.maxHeight < 560;
+                  final Widget header = Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.lock_rounded, size: 13, color: Colors.white54),
-                      const SizedBox(width: 4),
-                      Text('Cifrata end-to-end', style: light.copyWith(fontSize: 12, color: Colors.white54)),
+                      SizedBox(height: compact ? 12 : 40),
+                      if (remote == null)
+                        CircleAvatar(
+                          radius: compact ? 30 : 56,
+                          backgroundColor: AppColors.brandOrange,
+                          child: Text(
+                            s.peerName.isEmpty ? '?' : s.peerName.characters.first.toUpperCase(),
+                            style: TextStyle(color: Colors.white, fontSize: compact ? 24 : 44, fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      SizedBox(height: compact ? 8 : 18),
+                      Text(s.peerName, key: const ValueKey<String>('chiamata_nome'),
+                          style: light.copyWith(fontSize: compact ? 20 : 26, fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 6),
+                      Text(_status(s), key: const ValueKey<String>('chiamata_stato'),
+                          style: light.copyWith(fontSize: 16, color: Colors.white70)),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.lock_rounded, size: 13, color: Colors.white54),
+                          const SizedBox(width: 4),
+                          Text('Cifrata end-to-end', style: light.copyWith(fontSize: 12, color: Colors.white54)),
+                        ],
+                      ),
                     ],
-                  ),
-                  const Spacer(),
-                  if (s.phase == CallPhase.incoming)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 48),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          _RoundButton(
-                            key: const ValueKey<String>('chiamata_rifiuta'),
-                            icon: Icons.call_end_rounded,
-                            color: const Color(0xFFE53935),
-                            label: 'Rifiuta',
-                            onTap: () => _guard(_c.reject),
-                          ),
-                          _RoundButton(
-                            key: const ValueKey<String>('chiamata_rispondi'),
-                            icon: s.video ? Icons.videocam_rounded : Icons.call_rounded,
-                            color: const Color(0xFF2E7D32),
-                            label: 'Rispondi',
-                            onTap: () => _guard(_c.accept),
-                          ),
-                        ],
+                  );
+                  final List<Widget> options = <Widget>[
+                    _RoundButton(
+                      key: const ValueKey<String>('chiamata_microfono'),
+                      icon: s.micOn ? Icons.mic_rounded : Icons.mic_off_rounded,
+                      color: s.micOn ? Colors.white24 : Colors.white,
+                      iconColor: s.micOn ? Colors.white : Colors.black87,
+                      label: s.micOn ? 'Microfono' : 'Muto',
+                      onTap: () => _guard(_c.toggleMic),
+                    ),
+                    if (s.video)
+                      _RoundButton(
+                        key: const ValueKey<String>('chiamata_fotocamera'),
+                        icon: s.cameraOn ? Icons.videocam_rounded : Icons.videocam_off_rounded,
+                        color: s.cameraOn ? Colors.white24 : Colors.white,
+                        iconColor: s.cameraOn ? Colors.white : Colors.black87,
+                        label: 'Fotocamera',
+                        onTap: () => _guard(_c.toggleCamera),
                       ),
-                    )
-                  else if (s.phase != CallPhase.ended)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 40),
-                      child: Column(
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                            children: [
-                              _RoundButton(
-                                key: const ValueKey<String>('chiamata_microfono'),
-                                icon: s.micOn ? Icons.mic_rounded : Icons.mic_off_rounded,
-                                color: s.micOn ? Colors.white24 : Colors.white,
-                                iconColor: s.micOn ? Colors.white : Colors.black87,
-                                label: s.micOn ? 'Microfono' : 'Muto',
-                                onTap: () => _guard(_c.toggleMic),
-                              ),
-                              if (s.video)
-                                _RoundButton(
-                                  key: const ValueKey<String>('chiamata_fotocamera'),
-                                  icon: s.cameraOn ? Icons.videocam_rounded : Icons.videocam_off_rounded,
-                                  color: s.cameraOn ? Colors.white24 : Colors.white,
-                                  iconColor: s.cameraOn ? Colors.white : Colors.black87,
-                                  label: 'Fotocamera',
-                                  onTap: () => _guard(_c.toggleCamera),
-                                ),
-                              if (s.video)
-                                _RoundButton(
-                                  key: const ValueKey<String>('chiamata_gira'),
-                                  icon: Icons.cameraswitch_rounded,
-                                  color: Colors.white24,
-                                  label: 'Gira',
-                                  onTap: () => _guard(_c.switchCamera),
-                                )
-                              else
-                                _RoundButton(
-                                  key: const ValueKey<String>('chiamata_altoparlante'),
-                                  icon: Icons.volume_up_rounded,
-                                  color: s.speakerOn ? Colors.white : Colors.white24,
-                                  iconColor: s.speakerOn ? Colors.black87 : Colors.white,
-                                  label: 'Vivavoce',
-                                  onTap: () => _guard(_c.toggleSpeaker),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 28),
-                          _RoundButton(
-                            key: const ValueKey<String>('chiamata_chiudi'),
-                            icon: Icons.call_end_rounded,
-                            color: const Color(0xFFE53935),
-                            label: 'Chiudi',
-                            onTap: () => _guard(_c.hangUp),
-                          ),
-                        ],
+                    if (s.video)
+                      _RoundButton(
+                        key: const ValueKey<String>('chiamata_gira'),
+                        icon: Icons.cameraswitch_rounded,
+                        color: Colors.white24,
+                        label: 'Gira',
+                        onTap: () => _guard(_c.switchCamera),
+                      )
+                    else
+                      _RoundButton(
+                        key: const ValueKey<String>('chiamata_altoparlante'),
+                        icon: Icons.volume_up_rounded,
+                        color: s.speakerOn ? Colors.white : Colors.white24,
+                        iconColor: s.speakerOn ? Colors.black87 : Colors.white,
+                        label: 'Vivavoce',
+                        onTap: () => _guard(_c.toggleSpeaker),
                       ),
-                    )
-                  else
-                    const SizedBox(height: 120),
-                ],
+                  ];
+                  final Widget hangUp = _RoundButton(
+                    key: const ValueKey<String>('chiamata_chiudi'),
+                    icon: Icons.call_end_rounded,
+                    color: const Color(0xFFE53935),
+                    label: 'Chiudi',
+                    onTap: () => _guard(_c.hangUp),
+                  );
+                  Widget controls;
+                  if (s.phase == CallPhase.incoming) {
+                    controls = Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _RoundButton(
+                          key: const ValueKey<String>('chiamata_rifiuta'),
+                          icon: Icons.call_end_rounded,
+                          color: const Color(0xFFE53935),
+                          label: 'Rifiuta',
+                          onTap: () => _guard(_c.reject),
+                        ),
+                        _RoundButton(
+                          key: const ValueKey<String>('chiamata_rispondi'),
+                          icon: s.video ? Icons.videocam_rounded : Icons.call_rounded,
+                          color: const Color(0xFF2E7D32),
+                          label: 'Rispondi',
+                          onTap: () => _guard(_c.accept),
+                        ),
+                      ],
+                    );
+                  } else if (s.phase == CallPhase.ended) {
+                    controls = const SizedBox(height: 40);
+                  } else if (compact) {
+                    controls = Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [...options, hangUp]);
+                  } else {
+                    controls = Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: options),
+                        const SizedBox(height: 28),
+                        hangUp,
+                      ],
+                    );
+                  }
+                  return Column(
+                    children: [
+                      Expanded(child: SingleChildScrollView(child: Center(child: header))),
+                      Padding(padding: EdgeInsets.only(bottom: compact ? 12 : 40, top: 8), child: controls),
+                    ],
+                  );
+                },
               ),
             ),
             if (local != null)

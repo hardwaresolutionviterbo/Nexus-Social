@@ -9,6 +9,11 @@
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <!-- Fase 4, Blocco 3: messaggi vocali in chat (chiesto solo quando si registra). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Fase 4, Blocco 8: videochiamate (fotocamera chiesta solo alla prima videochiamata)
+         e vivavoce durante le chiamate. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
     <!-- Fase 3, Blocco 1: posizione solo con l'app aperta, chiesta dopo la spiegazione.
          Chi sceglie «approssimativa» concede solo la prima. Nessun accesso in background. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />

@@ -114,6 +114,13 @@ abstract class CallMedia {
 
 enum CallPhase { idle, outgoing, incoming, connecting, active, ended }
 
+/// Suoneria della chiamata in arrivo (quella del telefono; finta nei test).
+abstract class CallRinger {
+  Future<void> start();
+
+  Future<void> stop();
+}
+
 /// Chiamata in corso (una alla volta).
 class CallState {
   const CallState({
@@ -176,6 +183,7 @@ class CallService extends ChangeNotifier {
     required this.media,
     this.ringTimeout = const Duration(seconds: 45),
     this.offerMaxAge = const Duration(seconds: 45),
+    this.ringer,
   }) {
     _sub = chat.callSignals.listen(_onSignal);
   }
@@ -189,6 +197,9 @@ class CallService extends ChangeNotifier {
 
   /// Un'offerta più vecchia di così (telefono spento, app chiusa a lungo) è una chiamata persa.
   final Duration offerMaxAge;
+
+  final CallRinger? ringer;
+  bool _ringing = false;
 
   late final StreamSubscription<CallEnvelope> _sub;
   StreamSubscription<bool>? _link;
@@ -206,6 +217,12 @@ class CallService extends ChangeNotifier {
 
   void _set(CallState? s) {
     _state = s;
+    final bool ring = s?.phase == CallPhase.incoming;
+    if (ring != _ringing) {
+      _ringing = ring;
+      final CallRinger? r = ringer;
+      if (r != null) unawaited((ring ? r.start() : r.stop()).catchError((Object _) {}));
+    }
     chat.inCall = s != null && s.phase != CallPhase.ended && s.phase != CallPhase.idle;
     if (!_disposed) notifyListeners();
   }
@@ -282,6 +299,8 @@ class CallService extends ChangeNotifier {
           return;
         }
         _offer = sig.sdp;
+        // Le credenziali del ponte si preparano mentre squilla: la risposta parte subito.
+        unawaited(ice.servers().then((_) {}, onError: (Object _) {}));
         _set(CallState(
           phase: CallPhase.incoming,
           conversationId: e.conversationId,

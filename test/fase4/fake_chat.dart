@@ -898,6 +898,21 @@ class FakeIce implements IceProvider {
   Future<List<IceServer>> servers() async => const <IceServer>[IceServer(urls: <String>['stun:stun.example.org'])];
 }
 
+class FakeRinger implements CallRinger {
+  bool ringing = false;
+  int rings = 0;
+
+  @override
+  Future<void> start() async {
+    ringing = true;
+    rings++;
+  }
+
+  @override
+  Future<void> stop() async => ringing = false;
+}
+
 /// Telefono finto con le chiamate.
-CallService Function(ChatService) fakeCalls({Duration ring = const Duration(seconds: 45)}) =>
-    (ChatService chat) => CallService(chat: chat, ice: FakeIce(), media: FakeCallMedia.new, ringTimeout: ring);
+CallService Function(ChatService) fakeCalls({Duration ring = const Duration(seconds: 45), FakeRinger? ringer}) =>
+    (ChatService chat) =>
+        CallService(chat: chat, ice: FakeIce(), media: FakeCallMedia.new, ringTimeout: ring, ringer: ringer);

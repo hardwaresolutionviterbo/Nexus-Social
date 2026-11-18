@@ -1,12 +1,27 @@
 import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuth, User;
+import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show FunctionException, FunctionResponse, SupabaseClient;
 
 import '../chat/chat_models.dart' show ChatFailure;
 import 'call_service.dart';
+
+/// Suoneria del telefono per la chiamata in arrivo: rispetta silenzioso e vibrazione.
+class SystemCallRinger implements CallRinger {
+  @override
+  Future<void> start() => FlutterRingtonePlayer().play(
+    android: AndroidSounds.ringtone,
+    ios: IosSounds.electronic,
+    looping: true,
+    asAlarm: false,
+  );
+
+  @override
+  Future<void> stop() => FlutterRingtonePlayer().stop();
+}
 
 /// Credenziali del ponte dalla funzione `chiamate` (token di Firebase, come per `rubrica`).
 class SupabaseIceProvider implements IceProvider {
@@ -18,8 +33,24 @@ class SupabaseIceProvider implements IceProvider {
     IceServer(urls: <String>['stun:stun.cloudflare.com:3478']),
   ];
 
+  /// Credenziali già pronte (valgono un'ora): si riusano per 50 minuti, così la chiamata parte
+  /// subito invece di aspettare la funzione.
+  List<IceServer>? _cached;
+  DateTime _cachedAt = DateTime.fromMillisecondsSinceEpoch(0);
+
   @override
   Future<List<IceServer>> servers() async {
+    final List<IceServer>? cached = _cached;
+    if (cached != null && DateTime.now().difference(_cachedAt) < const Duration(minutes: 50)) return cached;
+    final List<IceServer> fresh = await _fetch();
+    if (fresh.length > 1) {
+      _cached = fresh;
+      _cachedAt = DateTime.now();
+    }
+    return fresh;
+  }
+
+  Future<List<IceServer>> _fetch() async {
     final User? user = FirebaseAuth.instance.currentUser;
     if (user == null) throw const ChatFailure('Accesso richiesto.');
     final String token = await user.getIdToken() ?? '';
@@ -71,10 +102,23 @@ class WebRtcCallMedia implements CallMedia {
       await _remoteView.initialize();
       _renderers = true;
     }
-    final MediaStream local = _local = await navigator.mediaDevices.getUserMedia(<String, Object>{
-      'audio': true,
-      'video': video ? <String, Object>{'facingMode': 'user', 'width': 640, 'height': 480} : false,
-    });
+    final MediaStream local;
+    try {
+      local = _local = await navigator.mediaDevices.getUserMedia(<String, Object>{
+        'audio': true,
+        'video': video
+            ? <String, Object>{
+                'mandatory': <String, String>{'minWidth': '640', 'minHeight': '480', 'minFrameRate': '24'},
+                'facingMode': 'user',
+                'optional': <Object>[],
+              }
+            : false,
+      });
+    } catch (e) {
+      throw ChatFailure(video
+          ? 'Piazly non può usare fotocamera e microfono. Consentili in Impostazioni → App → Piazly → Autorizzazioni.'
+          : 'Piazly non può usare il microfono. Consentilo in Impostazioni → App → Piazly → Autorizzazioni.');
+    }
     if (video) _localView.srcObject = local;
     final RTCPeerConnection pc = _pc = await createPeerConnection(<String, Object>{
       'iceServers': <Map<String, Object>>[for (final IceServer s in ice) s.toMap()],
@@ -106,15 +150,24 @@ class WebRtcCallMedia implements CallMedia {
     await Helper.setSpeakerphoneOn(video);
   }
 
-  /// Aspetta che i candidati siano raccolti (al massimo 5 secondi) e dà la descrizione completa.
+  /// Aspetta i candidati e dà la descrizione completa. Non serve aspettarli tutti: appena c'è
+  /// un candidato del ponte (relay) basta un attimo in più; al massimo 2,5 secondi.
   Future<String> _complete() async {
     final RTCPeerConnection pc = _pc!;
     final Completer<void> done = Completer<void>();
+    void finish() {
+      if (!done.isCompleted) done.complete();
+    }
+
     pc.onIceGatheringState = (RTCIceGatheringState s) {
-      if (s == RTCIceGatheringState.RTCIceGatheringStateComplete && !done.isCompleted) done.complete();
+      if (s == RTCIceGatheringState.RTCIceGatheringStateComplete) finish();
     };
-    if (pc.iceGatheringState == RTCIceGatheringState.RTCIceGatheringStateComplete) return (await pc.getLocalDescription())!.sdp!;
-    await done.future.timeout(const Duration(seconds: 5), onTimeout: () {});
+    pc.onIceCandidate = (RTCIceCandidate c) {
+      if ((c.candidate ?? '').contains(' typ relay')) Timer(const Duration(milliseconds: 300), finish);
+    };
+    if (pc.iceGatheringState != RTCIceGatheringState.RTCIceGatheringStateComplete) {
+      await done.future.timeout(const Duration(milliseconds: 2500), onTimeout: () {});
+    }
     return (await pc.getLocalDescription())!.sdp!;
   }
 

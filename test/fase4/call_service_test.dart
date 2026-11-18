@@ -212,4 +212,46 @@ void main() {
       b.dispose();
     });
   }, timeout: const Timeout(Duration(seconds: 60)));
+
+  test('la suoneria suona solo mentre la chiamata arriva', () async {
+    final FakeRinger ringer = FakeRinger();
+    final ChatService a = await fakePhone(hub, io, calls: fakeCalls());
+    final ChatService b = await fakePhone(hub, bruno, calls: fakeCalls(ringer: ringer));
+    final String conv = await a.openDirect(bruno);
+    await a.send(conv, 'Ciao');
+    await b.refresh();
+    await b.send(conv, 'Ciao Anna');
+    await a.refresh();
+    await a.calls!.start(conv, video: true);
+    await b.refresh();
+    await settle();
+    expect(ringer.ringing, isTrue);
+    await b.calls!.accept();
+    await settle();
+    expect(ringer.ringing, isFalse);
+    expect(ringer.rings, 1);
+    a.dispose();
+    b.dispose();
+  });
+
+  testWidgets('telefono girato: la schermata della chiamata non esce dai bordi', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(2412, 1080);
+    tester.view.devicePixelRatio = 2.75;
+    addTearDown(tester.view.reset);
+    final (ChatService a, ChatService b, String conv) = (await tester.runAsync(pair))!;
+    await tester.runAsync(() async {
+      await a.calls!.start(conv, video: false);
+      await settle();
+    });
+    await tester.pumpWidget(MaterialApp(theme: AppTheme.light, home: CallScreen(calls: a.calls!)));
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(find.byKey(const ValueKey<String>('chiamata_chiudi')), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 2));
+    await tester.runAsync(() async {
+      a.dispose();
+      b.dispose();
+    });
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }
