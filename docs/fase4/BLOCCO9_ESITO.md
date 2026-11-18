@@ -33,3 +33,9 @@ messaggi e chiamate ci mettevano qualche secondo ad arrivare.
 - Database: 196/196, con i nuovi RT1–RT3 e la controprova `canale_altrui_leggibile`, che deve
   far fallire RT3.
 - I test del database ora avviano anche il servizio Realtime.
+
+## Server reale (18/11/2026, autorizzato)
+Migrazione 0026 applicata dal file del commit `f59da16`, con impronta verificata. Risultato:
+- 1 regola sul canale;
+- 2 trigger;
+- permessi di anon allineati.

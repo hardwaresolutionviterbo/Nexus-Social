@@ -43,7 +43,7 @@ l'accesso con SMS e per l'invio delle notifiche. Tutto il resto è su Supabase. 
 | 6 | Backup della chat cifrato con password | Sul ramo `fase4/blocco6`, server attivo, da provare | [`BLOCCO6_ESITO.md`](docs/fase4/BLOCCO6_ESITO.md) |
 | 7 | «Segnala» con i messaggi scelti, «Condividi l'incontro», notifiche dei commenti che aprono l'annuncio | Sul ramo `fase4/blocco7`, server attivo, da provare | [`BLOCCO7_ESITO.md`](docs/fase4/BLOCCO7_ESITO.md) |
 | 8 | Chiamate vocali e videochiamate (chat a due) | Sul ramo `fase4/blocco8`, server attivo, da provare | [`BLOCCO8_ESITO.md`](docs/fase4/BLOCCO8_ESITO.md) |
-| 9 | Messaggi e chiamate in tempo reale | Sul ramo `fase4/blocco9`, migrazione 0026 da applicare | [`BLOCCO9_ESITO.md`](docs/fase4/BLOCCO9_ESITO.md) |
+| 9 | Messaggi e chiamate in tempo reale | Sul ramo `fase4/blocco9`, server attivo, da provare | [`BLOCCO9_ESITO.md`](docs/fase4/BLOCCO9_ESITO.md) |
 | 10 | Chiamate di gruppo, schermata di chiamata di sistema | Da fare | |
 
 Le scelte tecniche della chat sono in [`docs/fase4/DECISIONI.md`](docs/fase4/DECISIONI.md).
@@ -56,7 +56,7 @@ Le scelte tecniche della chat sono in [`docs/fase4/DECISIONI.md`](docs/fase4/DEC
 | Modifiche approvate al piano | [`docs/fase1/MODIFICHE_AL_PIANO.md`](docs/fase1/MODIFICHE_AL_PIANO.md) |
 | Piano e risultato di ogni blocco | `docs/faseN/PIANO_OPERATIVO.md` e `docs/faseN/BLOCCOn_ESITO.md` |
 | Bozze legali (privacy, termini, regole), **non ancora verificate da un professionista** | [`docs/fase0/`](docs/fase0/) |
-| Schema del database e regole di sicurezza | [`supabase/migrations/`](supabase/migrations/): `0001`–`0025`, tutte applicate al database reale |
+| Schema del database e regole di sicurezza | [`supabase/migrations/`](supabase/migrations/): `0001`–`0026`, tutte applicate al database reale |
 | Funzioni del server | [`supabase/functions/`](supabase/functions/): `rubrica`, `notifiche` e `chiamate` |
 | Test di sicurezza del database | [`supabase/tests/rls_test.py`](supabase/tests/rls_test.py), eseguiti su un database temporaneo (workflow Supabase RLS) |
 | Codice dell'app | [`lib/`](lib/), una cartella per sezione in `lib/features/` |
