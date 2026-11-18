@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:material_ui/material_ui.dart';
 import 'package:nexus_social/core/theme/app_theme.dart';
+import 'package:nexus_social/features/calls/call_screen.dart';
 import 'package:nexus_social/features/chat/chat_backup.dart';
 import 'package:nexus_social/features/chat/chat_backup_screen.dart';
 import 'package:nexus_social/features/chat/chat_backup_service.dart';
@@ -525,6 +526,40 @@ void main() {
     for (final ChatService o in others.values) {
       o.dispose();
     }
+  });
+
+  testWidgets('chat 25-26 · chiamata in arrivo e in corso', (tester) async {
+    final FakeChatHub hub = FakeChatHub()
+      ..addPerson(io, 'anna.r', 'Anna R.')
+      ..addPerson(bruno, 'bruno_b', 'Bruno B.')
+      ..contacts[io] = <String>{bruno}
+      ..contacts[bruno] = <String>{io};
+    final (ChatService a, ChatService b, String conv) = (await tester.runAsync(() async {
+      final ChatService a = await fakePhone(hub, io, calls: fakeCalls());
+      final ChatService b = await fakePhone(hub, bruno, calls: fakeCalls());
+      final String conv = await a.openDirect(bruno);
+      await a.send(conv, 'Ciao');
+      await b.refresh();
+      await b.send(conv, 'Ciao Anna');
+      await a.refresh();
+      await b.calls!.start(conv, video: false);
+      await a.refresh();
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+      return (a, b, conv);
+    }))!;
+    await shoot(tester, 'chat_25_chiamata_in_arrivo', CallScreen(calls: a.calls!));
+    await tester.runAsync(() async {
+      await a.calls!.accept();
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+    });
+    await tester.pumpWidget(const SizedBox());
+    await shoot(tester, 'chat_26_chiamata_in_corso', CallScreen(calls: a.calls!));
+    await tester.pumpWidget(const SizedBox());
+    await tester.runAsync(() async {
+      a.dispose();
+      b.dispose();
+    });
+    expect(conv, isNotEmpty);
   });
 
   testWidgets('chat 18 · Profilo → Notifiche', (tester) async {
