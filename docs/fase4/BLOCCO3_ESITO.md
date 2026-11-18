@@ -1,6 +1,6 @@
 # Fase 4 · Blocco 3 — Foto, video, vocali e documenti
 
-Ramo: `fase4/blocco3`. Migrazione: `supabase/migrations/0020_chat_allegati.sql` (NON applicata al database reale: serve l'autorizzazione del titolare).
+Ramo: `fase4/blocco3`. Migrazione: `supabase/migrations/0020_chat_allegati.sql` (applicata al database reale il 18/11/2026 con l'autorizzazione del titolare; file verificato con SHA-256 contro il commit 240bed6).
 
 ## Cosa c'è
 - **Graffetta**: Galleria, Fotocamera, Video, Documento; anteprima prima di inviare, con didascalia.
