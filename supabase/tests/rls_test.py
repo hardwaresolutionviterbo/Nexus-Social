@@ -2262,6 +2262,9 @@ def check_chat_groups_phase4() -> None:
 
     # T1 · Creazione: B (che ha A in rubrica) entra, D riceve un invito
     s1, conv = rpc("chat_create_group", {"p_title": "Gita al lago", "p_members": [UID_B, UID_D]}, ta)
+    if not isinstance(conv, str):
+        check("T1", "Gruppo creato", False, f"{s1}, {conv}")
+        return
     long_title = rpc("chat_create_group", {"p_title": "x" * 61, "p_members": []}, ta)
     a_view = mine(ta).get(conv, {})
     d_view = mine(td).get(conv, {})
