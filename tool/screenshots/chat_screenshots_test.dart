@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:material_ui/material_ui.dart';
 import 'package:nexus_social/core/theme/app_theme.dart';
+import 'package:nexus_social/features/chat/chat_group_screens.dart';
 import 'package:nexus_social/features/chat/chat_media.dart';
 import 'package:nexus_social/features/chat/chat_media_picker.dart';
 import 'package:nexus_social/features/chat/chat_models.dart';
@@ -370,5 +371,90 @@ void main() {
     });
     me.dispose();
     b.dispose();
+  });
+
+  Future<(ChatService, List<ChatService>, String)> scene4() async {
+    final FakeChatHub hub = FakeChatHub()
+      ..addPerson(io, 'anna.r', 'Anna R.')
+      ..addPerson(bruno, 'bruno_b', 'Bruno B.')
+      ..addPerson(giulia, 'giulia.m', 'Giulia M.')
+      ..addPerson(marco, 'marco_t', 'Marco T.')
+      ..addPerson(dario, 'dario88', 'Dario V.')
+      ..contacts[io] = <String>{bruno, giulia, marco}
+      ..contacts[bruno] = <String>{io}
+      ..contacts[giulia] = <String>{io}
+      ..contacts[marco] = <String>{io};
+    final ChatService me = await fakePhone(hub, io);
+    final List<ChatService> others = <ChatService>[
+      for (final String id in <String>[bruno, giulia, marco, dario]) await fakePhone(hub, id),
+    ];
+    hub.clock = DateTime(2026, 11, 18, 17, 30);
+    final String g = await me.createGroup('Gita al lago', <String>[bruno, giulia, marco, dario]);
+    for (final ChatService o in others) {
+      await o.refresh();
+    }
+    await me.send(g, 'Allora confermato sabato? Partenza alle 9 dal parcheggio');
+    for (final ChatService o in others.take(3)) {
+      await o.refresh();
+    }
+    await others[0].send(g, 'Ci sono! Porto io il pallone');
+    await others[1].send(g, 'Anche io, con la macchina: 3 posti liberi');
+    await me.refresh();
+    await me.react(me.messages(g).last, '❤️');
+    await others[2].refresh();
+    await others[2].send(g, 'Prenoto io il tavolo per pranzo, siamo in 4?',
+        replyTo: others[2].messages(g).firstWhere((m) => m.body.startsWith('Allora')));
+    await me.refresh();
+    for (final ChatService o in others.take(3)) {
+      await o.refresh();
+      await o.markRead(g);
+    }
+    await me.refresh();
+    return (me, others, g);
+  }
+
+  testWidgets('chat 11 · gruppo con nomi, citazione e reazione', (tester) async {
+    final (ChatService me, List<ChatService> others, String g) = (await tester.runAsync(scene4))!;
+    await shoot(tester, 'chat_11_gruppo', ChatThreadScreen(chat: me, conversationId: g, now: () => now));
+    me.dispose();
+    for (final ChatService o in others) {
+      o.dispose();
+    }
+  });
+
+  testWidgets('chat 12 · info del gruppo', (tester) async {
+    final (ChatService me, List<ChatService> others, String g) = (await tester.runAsync(scene4))!;
+    await tester.runAsync(() => me.groupMembers(g));
+    await shoot(tester, 'chat_12_info_gruppo', GroupInfoScreen(chat: me, conversationId: g));
+    me.dispose();
+    for (final ChatService o in others) {
+      o.dispose();
+    }
+  });
+
+  testWidgets('chat 13 · nuovo gruppo', (tester) async {
+    final (ChatService me, List<ChatService> others, String _) = (await tester.runAsync(scene4))!;
+    await shoot(tester, 'chat_13_nuovo_gruppo', NewGroupScreen(chat: me), before: () async {
+      await tester.enterText(find.byKey(const ValueKey<String>('gruppo_nome')), 'Calcetto giovedì');
+      await tester.tap(find.byKey(ValueKey<String>('scegli_$bruno')));
+      await tester.tap(find.byKey(ValueKey<String>('scegli_$marco')));
+      await tester.pumpAndSettle();
+    });
+    me.dispose();
+    for (final ChatService o in others) {
+      o.dispose();
+    }
+  });
+
+  testWidgets('chat 14 · lista con il gruppo e l\'invito', (tester) async {
+    final (ChatService me, List<ChatService> others, String _) = (await tester.runAsync(scene4))!;
+    await shoot(tester, 'chat_14_lista_gruppi', AppShell(chat: me));
+    // Dario (non in rubrica di Anna) vede l'invito tra le richieste.
+    await shoot(tester, 'chat_15_invito_gruppo',
+        ChatThreadScreen(chat: others[3], conversationId: others[3].requests.single.conversation.id, now: () => now));
+    me.dispose();
+    for (final ChatService o in others) {
+      o.dispose();
+    }
   });
 }
