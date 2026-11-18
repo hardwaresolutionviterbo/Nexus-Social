@@ -19,7 +19,7 @@ Niente arriva in `main` né sul database reale senza l'autorizzazione del titola
 | 1 | Fondamenta: app installabile, servizi, tema, navigazione | **Completata** | [`docs/fase1/CHECKLIST.md`](docs/fase1/CHECKLIST.md) |
 | 2 | Accesso con SMS, profilo, privacy e blocchi, sicurezza (PIN, impronta), rubrica | **Completata, in `main`** | [`docs/fase2/`](docs/fase2/) |
 | 3 | Mappa Sociale 3D, annunci, annunci vicini e filtri, commenti, Mi piace, notifiche nell'app | **Completata, in `main`** | [`docs/fase3/`](docs/fase3/) |
-| 4 | Chat cifrata, allegati, gruppi, notifiche, backup, chiamate | **In corso**: Blocchi 1–4 in `main`, Blocco 5 (notifiche) da provare, Blocco 6 (backup) pronto | [`docs/fase4/`](docs/fase4/) |
+| 4 | Chat cifrata, allegati, gruppi, notifiche, backup, chiamate | **In corso**: Blocchi 1–4 in `main`, Blocco 5 (notifiche) da provare, Blocco 6 (backup) da provare | [`docs/fase4/`](docs/fase4/) |
 | 5 | Scambia e Vendita: categorie, annunci, ricerca, proposte, feedback | **Completata, in `main`** | [`docs/fase5/`](docs/fase5/) |
 | 6 | Aziende, promozioni, abbonamento 9,99 €/mese | Da iniziare | |
 | 7 | Gestionale Admin dentro l'app | Da iniziare | |
@@ -40,7 +40,7 @@ l'accesso con SMS e per l'invio delle notifiche. Tutto il resto è su Supabase. 
 | 3 | Foto, video, vocali e documenti cifrati | In `main` | [`BLOCCO3_ESITO.md`](docs/fase4/BLOCCO3_ESITO.md) |
 | 4 | Gruppi cifrati, amministratori, codice d'invito | In `main` | [`BLOCCO4_ESITO.md`](docs/fase4/BLOCCO4_ESITO.md) |
 | 5 | Notifiche ad app chiusa, «Silenzia», «Non disturbare» | Sul ramo `fase4/blocco5`, server attivo, da provare | [`BLOCCO5_ESITO.md`](docs/fase4/BLOCCO5_ESITO.md) |
-| 6 | Backup della chat cifrato con password | Sul ramo `fase4/blocco6`, migrazione 0023 da applicare | [`BLOCCO6_ESITO.md`](docs/fase4/BLOCCO6_ESITO.md) |
+| 6 | Backup della chat cifrato con password | Sul ramo `fase4/blocco6`, server attivo, da provare | [`BLOCCO6_ESITO.md`](docs/fase4/BLOCCO6_ESITO.md) |
 | 7+ | Chiamate, «Condividi l'incontro», segnalazione delle chat | Da fare | |
 
 Le scelte tecniche della chat sono in [`docs/fase4/DECISIONI.md`](docs/fase4/DECISIONI.md).
@@ -53,7 +53,7 @@ Le scelte tecniche della chat sono in [`docs/fase4/DECISIONI.md`](docs/fase4/DEC
 | Modifiche approvate al piano | [`docs/fase1/MODIFICHE_AL_PIANO.md`](docs/fase1/MODIFICHE_AL_PIANO.md) |
 | Piano e risultato di ogni blocco | `docs/faseN/PIANO_OPERATIVO.md` e `docs/faseN/BLOCCOn_ESITO.md` |
 | Bozze legali (privacy, termini, regole), **non ancora verificate da un professionista** | [`docs/fase0/`](docs/fase0/) |
-| Schema del database e regole di sicurezza | [`supabase/migrations/`](supabase/migrations/): `0001`–`0022` applicate al database reale, `0023` (backup) da applicare |
+| Schema del database e regole di sicurezza | [`supabase/migrations/`](supabase/migrations/): `0001`–`0023`, tutte applicate al database reale |
 | Funzioni del server | [`supabase/functions/`](supabase/functions/): `rubrica` e `notifiche` |
 | Test di sicurezza del database | [`supabase/tests/rls_test.py`](supabase/tests/rls_test.py), eseguiti su un database temporaneo (workflow Supabase RLS) |
 | Codice dell'app | [`lib/`](lib/), una cartella per sezione in `lib/features/` |

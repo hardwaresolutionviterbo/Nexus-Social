@@ -1,7 +1,7 @@
 # Fase 4 · Blocco 6 · Backup della chat — esito
 
 Ramo `fase4/blocco6`, nato da `fase4/blocco5`.
-Stato: **pronto, migrazione 0023 da applicare con l'autorizzazione del titolare**.
+Stato: **pronto, migrazione 0023 applicata al database reale il 18/11/2026 (autorizzata), da provare sul telefono**.
 
 Il piano di lavoro non prevede questa funzione. L'ha chiesta il titolare il 16/11/2026: chi
 cambia telefono deve ritrovare le chat, come con il backup di WhatsApp.
@@ -51,3 +51,9 @@ Il limite di 48 ore di «elimina per tutti» confrontava l'ora vera con le date 
 (16/11). Dal 18/11 i test non passavano più. Adesso il motore riceve l'ora dall'esterno e i
 test usano quella del server finto.
 L'app non cambia.
+
+## Server reale
+Migrazione 0023 applicata il 18/11/2026 con l'autorizzazione del titolare, dal file del
+commit `882985c` con impronta verificata. Risultato:
+- bucket `chat-backups` privato, limite di 20 MB, 4 regole;
+- permessi di anon allineati.
