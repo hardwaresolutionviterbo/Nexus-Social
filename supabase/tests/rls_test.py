@@ -2400,6 +2400,118 @@ def check_chat_groups_phase4() -> None:
           f"{up_admin}, {up_member}, {see_member}, {see_out}, {media_in}, {media_out}, {view.get('title')}")
 
 
+def check_push_phase4() -> None:
+    """U · Notifiche (Fase 4, Blocco 5): coda server, silenzia, non disturbare, mai i Mi piace."""
+    ta, tb = token(UID_A), token(UID_B)
+    for t, other in ((ta, UID_B), (tb, UID_A)):
+        rpc("unblock_user", {"p_user_id": other}, t)
+    fid_a = "fidTelefonoA_" + "x" * 20
+
+    def queue(user=UID_A) -> list:
+        out = sql(f"select kind || '|' || title || '|' || body || '|' || count from private.push_queue "
+                  f"where user_id = '{user}' order by id;")
+        return [line for line in out.splitlines() if line]
+
+    def clear() -> None:
+        sql("delete from private.push_queue;")
+
+    def b64(n: int) -> str:
+        return base64.b64encode(bytes([n]) * 60).decode()
+
+    reg = rpc("push_register", {"p_fid": fid_a, "p_platform": "android"}, ta)
+    bad = rpc("push_register", {"p_fid": "x", "p_platform": "android"}, ta)
+    steal = rpc("push_register", {"p_fid": fid_a, "p_platform": "android"}, tb)
+    owner_b = sql(f"select user_id from public.push_devices where fid = '{fid_a}';")
+    rpc("push_register", {"p_fid": fid_a, "p_platform": "android"}, ta)
+    owner_a = sql(f"select user_id from public.push_devices where fid = '{fid_a}';")
+    direct = [get(f"/rest/v1/{t}?select=*", ta) for t in ("push_devices", "push_settings")]
+    server_fns = [rpc(f, {}, ta)[0] for f in ("push_claim", "push_server_config")]
+    check("U1", "Telefono registrato per le notifiche (uno per account); tabelle e funzioni del server chiuse",
+          reg[0] in (200, 204) and bad[0] >= 400 and steal[0] in (200, 204) and owner_b == UID_B
+          and owner_a == UID_A and all(denied(d) for d in direct) and all(x >= 400 for x in server_fns),
+          f"{reg[0]}, {bad[0]}, {owner_b == UID_B}, {owner_a == UID_A}, {[d[0] for d in direct]}, {server_fns}")
+
+    _, conv = rpc("chat_open_direct", {"p_user": UID_A}, tb)
+    gen = int(sql(f"select generation from public.chat_conversations where id = '{conv}';") or 0)
+    if gen == 0:
+        sql(f"update public.chat_conversations set generation = 1 where id = '{conv}';")
+        gen = 1
+    rpc("push_set_settings", {"p_messages": True, "p_comments": True, "p_market": True, "p_preview": True,
+                              "p_dnd_enabled": False, "p_dnd_from": "22:00", "p_dnd_to": "07:00",
+                              "p_time_zone": "Europe/Rome"}, ta)
+
+    def send() -> int:
+        return rpc("chat_send", {"p_conversation": conv, "p_generation": gen, "p_payload": b64(7)}, tb)[0]
+
+    clear()
+    s1, s2 = send(), send()
+    q = queue()
+    check("U2", "Messaggio → notifica per chi riceve (non per chi scrive), raggruppata, senza testo",
+          s1 == 200 and s2 == 200 and len(q) == 1 and q[0].startswith("chat|")
+          and q[0].endswith("|2 nuovi messaggi|2") and queue(UID_B) == [],
+          f"{s1}, {s2}, {q}, {queue(UID_B)}")
+
+    clear()
+    mute = rpc("chat_set_mute", {"p_conversation": conv, "p_until": "infinity"}, ta)
+    send()
+    muted = queue()
+    past = rpc("chat_set_mute", {"p_conversation": conv, "p_until": "2020-01-01T00:00:00Z"}, ta)
+    rpc("chat_set_mute", {"p_conversation": conv, "p_until": None}, ta)
+    send()
+    check("U3", "Chat silenziata: nessuna notifica; riattivata: di nuovo",
+          mute[0] in (200, 204) and muted == [] and past[0] >= 400 and len(queue()) == 1,
+          f"{mute[0]}, {muted}, {past[0]}, {queue()}")
+
+    clear()
+    now_rome = sql("select to_char(now() at time zone 'Europe/Rome', 'HH24:MI');")
+    hour = int(now_rome[:2])
+    dnd = rpc("push_set_settings", {"p_messages": True, "p_comments": True, "p_market": True, "p_preview": True,
+                                    "p_dnd_enabled": True, "p_dnd_from": f"{(hour - 1) % 24:02d}:00",
+                                    "p_dnd_to": f"{(hour + 2) % 24:02d}:00", "p_time_zone": "Europe/Rome"}, ta)
+    send()
+    quiet = queue()
+    bad_tz = rpc("push_set_settings", {"p_messages": True, "p_comments": True, "p_market": True,
+                                       "p_preview": True, "p_dnd_enabled": False, "p_dnd_from": "22:00",
+                                       "p_dnd_to": "07:00", "p_time_zone": "Luna/Base"}, ta)
+    rpc("push_set_settings", {"p_messages": False, "p_comments": True, "p_market": True, "p_preview": False,
+                              "p_dnd_enabled": False, "p_dnd_from": "22:00", "p_dnd_to": "07:00",
+                              "p_time_zone": "Europe/Rome"}, ta)
+    send()
+    off = queue()
+    rpc("push_set_settings", {"p_messages": True, "p_comments": True, "p_market": True, "p_preview": False,
+                              "p_dnd_enabled": False, "p_dnd_from": "22:00", "p_dnd_to": "07:00",
+                              "p_time_zone": "Europe/Rome"}, ta)
+    send()
+    hidden = queue()
+    check("U4", "Non disturbare e messaggi spenti: nessuna notifica; senza anteprima nemmeno il nome",
+          dnd[0] in (200, 204) and quiet == [] and bad_tz[0] >= 400 and off == []
+          and hidden == ["chat|Piazly|Hai un nuovo messaggio|1"],
+          f"{dnd[0]}, {quiet}, {bad_tz[0]}, {off}, {hidden}")
+    rpc("push_set_settings", {"p_messages": True, "p_comments": True, "p_market": True, "p_preview": True,
+                              "p_dnd_enabled": False, "p_dnd_from": "22:00", "p_dnd_to": "07:00",
+                              "p_time_zone": "Europe/Rome"}, ta)
+
+    clear()
+    listing = sql("select id from public.listings order by created_at limit 1;")
+    likes = comments = []
+    if listing:
+        sql("insert into public.notifications (recipient_id, kind, listing_id, actor_id) values "
+            f"('{UID_A}', 'listing_like', '{listing}', '{UID_B}');")
+        likes = queue()
+        sql("insert into public.notifications (recipient_id, kind, listing_id, actor_id) values "
+            f"('{UID_A}', 'listing_comment', '{listing}', '{UID_B}');")
+        comments = queue()
+    check("U5", "Mi piace: nessuna notifica; commento: notifica «ha commentato il tuo annuncio»",
+          bool(listing) and likes == [] and len(comments) == 1 and comments[0].startswith("comment|Piazly|")
+          and "ha commentato il tuo annuncio" in comments[0],
+          f"{bool(listing)}, {likes}, {comments}")
+
+    claimed = sql("select count(*) from public.push_claim(50);")
+    left = sql("select count(*) from private.push_queue;")
+    check("U6", "La funzione del server prende le notifiche (una per telefono) e svuota la coda",
+          claimed == "1" and left == "0", f"{claimed}, {left}")
+
+
 def main() -> int:
     try:
         ids = setup()
@@ -2424,6 +2536,7 @@ def main() -> int:
     check_chat_phase4()
     check_chat_media_phase4()
     check_chat_groups_phase4()
+    check_push_phase4()
     failed = [r for r in results if not r[2]]
     print(f"{'Caso':6} {'Esito':9} Descrizione")
     for case, desc, ok, detail in results:
