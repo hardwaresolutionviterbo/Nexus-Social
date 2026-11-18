@@ -66,3 +66,17 @@ Stato: **server attivo (autorizzato il 18/11/2026), da provare sul telefono**.
   di anon allineati.
 - Funzione `chiamate` pubblicata: senza accesso risponde 401, come previsto.
 - Funzione `notifiche` ripubblicata (scadenza delle chiamate a 45 secondi). Prova: 200.
+
+## Correzioni dopo la prova del titolare (18/11/2026, ramo `fase4/blocco9b`)
+- **Videochiamate non partivano:** mancava il permesso della fotocamera nell'app. Aggiunti
+  `CAMERA` (chiesto alla prima videochiamata) e `MODIFY_AUDIO_SETTINGS` (vivavoce). Se il
+  permesso è negato, l'app ora dice dove attivarlo.
+- **Barra gialla con il telefono girato:** la schermata della chiamata ora si adatta: tutto più
+  compatto, pulsanti su una riga. C'è un test con il telefono in orizzontale.
+- **Nessuna suoneria:** ora suona la suoneria scelta nel telefono, sul canale «suoneria»: con il
+  silenzioso o la vibrazione resta muta, come le chiamate normali. Resta anche la vibrazione.
+- **Chiamata lenta a partire:**
+  - le credenziali del ponte si tengono pronte per 50 minuti;
+  - chi riceve le prepara mentre squilla;
+  - i candidati di collegamento si aspettano al massimo 2,5 secondi invece di 5.
+- 314 test superati.
