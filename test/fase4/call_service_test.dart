@@ -16,6 +16,9 @@ const String bruno = 'utenteBruno00000000000000002';
 const String giulia = 'utenteGiulia0000000000000003';
 const String dario = 'utenteDario00000000000000004';
 
+/// I passaggi della chiamata arrivano un attimo dopo la sincronizzazione.
+Future<void> settle() => Future<void>.delayed(const Duration(milliseconds: 30));
+
 void main() {
   late FakeChatHub hub;
 
@@ -42,9 +45,6 @@ void main() {
     await settle();
     return (a, b, conv);
   }
-
-  /// I passaggi della chiamata arrivano un attimo dopo la sincronizzazione.
-  Future<void> settle() => Future<void>.delayed(const Duration(milliseconds: 30));
 
   List<String> notices(ChatService s, String conv) =>
       s.messages(conv).where((ChatMessage m) => m.kind == MessageKind.notice).map((ChatMessage m) => m.body).toList();
