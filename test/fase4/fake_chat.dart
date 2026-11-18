@@ -143,7 +143,12 @@ class FakeChatServer implements ChatServer {
     if (!hub.identities.containsKey(userId)) {
       throw const ChatFailure('Questa persona non ha ancora attivato la chat.');
     }
-    final FakeConv c = FakeConv('conv-${++hub._conv}', uid, userId, hub.clock);
+    final FakeConv c = FakeConv(
+      '00000000-0000-4000-8000-${(++hub._conv).toString().padLeft(12, '0')}',
+      uid,
+      userId,
+      hub.clock,
+    );
     c.status[uid] = 'active';
     c.status[userId] = (hub.contacts[userId] ?? const <String>{}).contains(uid) ? 'active' : 'request';
     for (final String p in <String>[uid, userId]) {

@@ -76,7 +76,8 @@ void main() {
   /// Smonta le schermate e poi chiude i telefoni finti (nessun timer rimasto).
   Future<void> finish(WidgetTester tester, List<ChatService> phones) async {
     await tester.pumpWidget(const SizedBox());
-    await tester.pump(const Duration(seconds: 1));
+    // Anche i messaggi a comparsa (4 secondi) devono chiudersi.
+    await tester.pump(const Duration(seconds: 5));
     for (final ChatService p in phones) {
       p.dispose();
     }
@@ -326,6 +327,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey<String>('allega_video')));
     await tester.pumpAndSettle();
     expect(find.textContaining('massimo 50 MB'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
 
     // Documento → anteprima con nome e peso → Invia.
     await tester.tap(find.byKey(const ValueKey<String>('chat_allega')));

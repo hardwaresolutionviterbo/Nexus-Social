@@ -4,8 +4,11 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as img;
 import 'package:material_ui/material_ui.dart';
 import 'package:nexus_social/core/theme/app_theme.dart';
+import 'package:nexus_social/features/chat/chat_media.dart';
+import 'package:nexus_social/features/chat/chat_media_picker.dart';
 import 'package:nexus_social/features/chat/chat_screen.dart';
 import 'package:nexus_social/features/chat/chat_service.dart';
 import 'package:nexus_social/features/chat/chat_thread_screen.dart';
@@ -136,6 +139,40 @@ Future<(ChatService, Map<String, ChatService>, Map<String, String>)> _scene() as
   return (me, others, conv);
 }
 
+/// Telefono finto per le anteprime: il microfono «registra» subito.
+class _Device implements ChatDevice {
+  @override
+  Future<PickedMedia?> pickImage({required bool camera}) async => null;
+  @override
+  Future<PickedMedia?> pickVideo() async => null;
+  @override
+  Future<PickedMedia?> pickFile() async => null;
+  @override
+  Future<bool> startVoice() async => true;
+  @override
+  Future<PickedMedia?> stopVoice() async => null;
+  @override
+  Future<void> cancelVoice() async {}
+}
+
+/// Foto di prova: un tramonto sfumato con una «bici» stilizzata.
+Uint8List _photo() {
+  final img.Image p = img.Image(width: 1200, height: 900);
+  for (int y = 0; y < 900; y++) {
+    final int r = 255 - y ~/ 8, g = 140 + y ~/ 12, b = 90 + y ~/ 5;
+    img.drawLine(p, x1: 0, y1: y, x2: 1199, y2: y, color: img.ColorRgb8(r, g.clamp(0, 255), b.clamp(0, 255)));
+  }
+  img.fillCircle(p, x: 900, y: 260, radius: 110, color: img.ColorRgb8(255, 230, 150));
+  for (final int cx in <int>[420, 780]) {
+    img.drawCircle(p, x: cx, y: 640, radius: 150, color: img.ColorRgb8(30, 35, 60));
+    img.drawCircle(p, x: cx, y: 640, radius: 146, color: img.ColorRgb8(30, 35, 60));
+  }
+  img.drawLine(p, x1: 420, y1: 640, x2: 600, y2: 440, color: img.ColorRgb8(30, 35, 60), thickness: 14);
+  img.drawLine(p, x1: 600, y1: 440, x2: 780, y2: 640, color: img.ColorRgb8(30, 35, 60), thickness: 14);
+  img.drawLine(p, x1: 420, y1: 640, x2: 600, y2: 640, color: img.ColorRgb8(30, 35, 60), thickness: 14);
+  return img.encodeJpg(p, quality: 85);
+}
+
 void main() {
   setUpAll(_loadFonts);
   final DateTime now = DateTime(2026, 11, 16, 19);
@@ -257,6 +294,54 @@ void main() {
     await shoot(tester, 'chat_7_azioni',
         ChatThreadScreen(chat: me, conversationId: conv, now: () => now), before: () async {
       await tester.longPress(find.textContaining('Via Roma 10'));
+      await tester.pumpAndSettle();
+    });
+    me.dispose();
+    b.dispose();
+  });
+
+  Future<(ChatService, ChatService, String)> scene3() async {
+    final FakeChatHub hub = FakeChatHub()
+      ..addPerson(io, 'anna.r', 'Anna R.')
+      ..addPerson(bruno, 'bruno_b', 'Bruno B.')
+      ..contacts[io] = <String>{bruno}
+      ..contacts[bruno] = <String>{io};
+    final ChatService me = await fakePhone(hub, io, files: Directory.systemTemp.createTempSync('anna_'));
+    final ChatService b = await fakePhone(hub, bruno, files: Directory.systemTemp.createTempSync('bruno_'));
+    hub.clock = DateTime(2026, 11, 18, 10, 2);
+    final String conv = await b.openDirect(io);
+    final PickedMedia? photo = await prepareImage(_photo());
+    await b.sendMedia(conv, kind: MediaKind.image, bytes: photo!.bytes, mime: 'image/jpeg',
+        width: photo.width, height: photo.height, thumb: photo.thumb, caption: 'Eccola, appena lavata');
+    await me.refresh();
+    await me.download(me.messages(conv).last);
+    await me.sendMedia(conv, kind: MediaKind.audio, bytes: Uint8List.fromList(List<int>.filled(30000, 1)),
+        mime: 'audio/mp4', durationMs: 14000);
+    await b.refresh();
+    await b.sendMedia(conv, kind: MediaKind.file, bytes: Uint8List.fromList(List<int>.filled(245000, 2)),
+        mime: 'application/pdf', name: 'Preventivo_bici.pdf');
+    await b.sendMedia(conv, kind: MediaKind.video, bytes: Uint8List.fromList(List<int>.filled(8400000, 3)),
+        mime: 'video/mp4', name: 'giro_prova.mp4');
+    await me.refresh();
+    await b.refresh();
+    await b.markRead(conv);
+    await me.refresh();
+    return (me, b, conv);
+  }
+
+  testWidgets('chat 8 · foto, vocale, documento e video cifrati', (tester) async {
+    final (ChatService me, ChatService b, String conv) = (await tester.runAsync(scene3))!;
+    await shoot(tester, 'chat_8_allegati',
+        ChatThreadScreen(chat: me, conversationId: conv, now: () => now, device: _Device()));
+    me.dispose();
+    b.dispose();
+  });
+
+  testWidgets('chat 9 · graffetta: cosa allegare', (tester) async {
+    final (ChatService me, ChatService b, String conv) = (await tester.runAsync(scene3))!;
+    await shoot(tester, 'chat_9_allega',
+        ChatThreadScreen(chat: me, conversationId: conv, now: () => now, device: _Device()), before: () async {
+      await tester.tap(find.byKey(const ValueKey<String>('chat_allega')));
       await tester.pumpAndSettle();
     });
     me.dispose();
