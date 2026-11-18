@@ -89,8 +89,8 @@ revoke all on function private.poke_on_chat_message() from public, anon, authent
 revoke all on function private.poke_on_chat_member() from public, anon, authenticated;
 
 -- Canale privato: lo ascolta solo il proprietario (token Firebase valido). Nessuno ci scrive
--- dall'app: i tocchi li manda solo il database.
-alter table realtime.messages enable row level security;
+-- dall'app: i tocchi li manda solo il database. (La sicurezza a livello di riga su
+-- realtime.messages è già attiva in Supabase.)
 
 drop policy if exists "tocchi della chat: solo il proprio canale" on realtime.messages;
 create policy "tocchi della chat: solo il proprio canale"

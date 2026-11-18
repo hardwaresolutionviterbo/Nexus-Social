@@ -59,7 +59,7 @@ jobs:
         run: |
           set -euo pipefail
           cd "${SB_WORKDIR}"
-          supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor,postgres-meta,realtime,mailpit
+          supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor,postgres-meta,mailpit
           supabase status -o env > "${RUNNER_TEMP}/sb.env"
           for k in API_URL ANON_KEY JWT_SECRET DB_URL SERVICE_ROLE_KEY; do
             v=$(grep -E "^${k}=" "${RUNNER_TEMP}/sb.env" | head -1 | cut -d= -f2- | tr -d '"')
@@ -180,7 +180,7 @@ jobs:
             supabase/migrations/9999_difetto_di_prova.sql
           # Regola delle migrazioni dopo la 0017: alla fine si riallineano i permessi di anon.
           echo "select private.align_anon_with_authenticated();" >> supabase/migrations/9999_difetto_di_prova.sql
-          supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor,postgres-meta,realtime,mailpit
+          supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor,postgres-meta,mailpit
           supabase status -o env > "${RUNNER_TEMP}/sb.env"
           for k in API_URL ANON_KEY JWT_SECRET DB_URL SERVICE_ROLE_KEY; do
             v=$(grep -E "^${k}=" "${RUNNER_TEMP}/sb.env" | head -1 | cut -d= -f2- | tr -d '"')
