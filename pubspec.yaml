@@ -45,8 +45,8 @@ dependencies:
   just_audio: ^0.10.4
   # Chiamate vocali e video (Fase 4, Blocco 8), licenza MIT.
   flutter_webrtc: ">=0.12.0 <2.0.0"
-  # Suoneria della chiamata in arrivo (rispetta silenzioso e vibrazione), licenza MIT.
-  flutter_ringtone_player: ">=4.0.0 <6.0.0"
+  # Suoneria della chiamata in arrivo sul canale «suoneria» (rispetta il silenzioso), licenza MIT.
+  audio_session: ">=0.1.21 <0.3.0"
   video_player: ^2.10.0
   file_picker: ">=12.0.0-beta.1 <15.0.0"
 

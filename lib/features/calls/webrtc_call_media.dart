@@ -1,26 +1,35 @@
 import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuth, User;
-import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
+import 'package:audio_session/audio_session.dart'
+    show AndroidAudioAttributes, AndroidAudioContentType, AndroidAudioUsage;
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:just_audio/just_audio.dart' show AudioPlayer, AudioSource, LoopMode;
 import 'package:material_ui/material_ui.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show FunctionException, FunctionResponse, SupabaseClient;
 
 import '../chat/chat_models.dart' show ChatFailure;
 import 'call_service.dart';
 
-/// Suoneria del telefono per la chiamata in arrivo: rispetta silenzioso e vibrazione.
+/// Suoneria scelta nel telefono per la chiamata in arrivo. Suona sul canale «suoneria»:
+/// con il telefono in silenzioso o vibrazione resta muta, come le chiamate normali.
 class SystemCallRinger implements CallRinger {
-  @override
-  Future<void> start() => FlutterRingtonePlayer().play(
-    android: AndroidSounds.ringtone,
-    ios: IosSounds.electronic,
-    looping: true,
-    asAlarm: false,
-  );
+  AudioPlayer? _player;
 
   @override
-  Future<void> stop() => FlutterRingtonePlayer().stop();
+  Future<void> start() async {
+    final AudioPlayer p = _player ??= AudioPlayer(handleAudioSessionActivation: false);
+    await p.setAndroidAudioAttributes(const AndroidAudioAttributes(
+      usage: AndroidAudioUsage.notificationRingtone,
+      contentType: AndroidAudioContentType.sonification,
+    ));
+    await p.setAudioSource(AudioSource.uri(Uri.parse('content://settings/system/ringtone')));
+    await p.setLoopMode(LoopMode.one);
+    unawaited(p.play());
+  }
+
+  @override
+  Future<void> stop() async => _player?.stop();
 }
 
 /// Credenziali del ponte dalla funzione `chiamate` (token di Firebase, come per `rubrica`).
