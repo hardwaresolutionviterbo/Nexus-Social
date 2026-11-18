@@ -1237,6 +1237,93 @@ class ChatService extends ChangeNotifier {
     _changed();
   }
 
+  /// Motivi della segnalazione (gli stessi accettati dal server).
+  static const Map<String, String> reportReasons = <String, String>{
+    'spam': 'Spam o pubblicità',
+    'truffa': 'Truffa o richiesta di soldi',
+    'molestie': 'Molestie, insulti o minacce',
+    'contenuti': 'Contenuti inappropriati',
+    'minore': 'Coinvolge un minorenne',
+    'altro': 'Altro',
+  };
+
+  /// Segnala la chat agli amministratori con i soli messaggi scelti; se [block], blocca anche.
+  Future<void> report(
+    String conversationId, {
+    required String reason,
+    String details = '',
+    List<ChatMessage> messages = const <ChatMessage>[],
+    bool block = false,
+  }) async {
+    if (!reportReasons.containsKey(reason)) throw const ChatFailure('Scegli un motivo.');
+    if (messages.length > 50) throw const ChatFailure('Puoi allegare al massimo 50 messaggi.');
+    if (details.length > 1000) throw const ChatFailure('Descrizione troppo lunga (massimo 1.000 caratteri).');
+    final ChatConversation? c = _conversations[conversationId];
+    final List<Map<String, String>> chosen = <Map<String, String>>[
+      for (final ChatMessage m in messages)
+        <String, String>{
+          'a': m.at.toUtc().toIso8601String(),
+          'da': m.mine ? 'io' : (m.senderId.isNotEmpty ? m.senderId : (c?.peerId ?? '')),
+          't': reportText(m),
+        },
+    ];
+    await server.report(conversationId, reason, details, chosen);
+    final String? peer = c == null || c.isGroup ? null : c.peerId;
+    if (block && peer != null && peer.isNotEmpty) {
+      await server.blockUser(peer);
+      await _run(_loadConversations);
+      _changed();
+    }
+  }
+
+  /// Testo di un messaggio allegato a una segnalazione (per gli allegati solo tipo e didascalia).
+  static String reportText(ChatMessage m) {
+    final String kind = switch (m.media?.kind) {
+      MediaKind.image => '[foto]',
+      MediaKind.video => '[video]',
+      MediaKind.audio => '[vocale]',
+      MediaKind.file => '[documento]',
+      null => '',
+    };
+    final String body = m.media == null ? m.body : (m.body.trim().isEmpty ? kind : '$kind ${m.body.trim()}');
+    return body.length > 4000 ? body.substring(0, 4000) : body;
+  }
+
+  /// «Condividi l'incontro» (Blocco 7): luogo e orario vanno, cifrati, alla persona fidata.
+  Future<String> shareMeeting({
+    required String trustedId,
+    required String withName,
+    required String place,
+    required DateTime when,
+    String note = '',
+  }) async {
+    if (place.trim().isEmpty) throw const ChatFailure('Scrivi dove vi incontrate.');
+    final String conv = await openDirect(trustedId);
+    await send(conv, meetingText(withName: withName, place: place, when: when, note: note));
+    return conv;
+  }
+
+  static const List<String> _days = <String>['lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato', 'domenica'];
+
+  /// Testo del messaggio dell'incontro.
+  static String meetingText({
+    required String withName,
+    required String place,
+    required DateTime when,
+    String note = '',
+  }) {
+    final DateTime l = when.toLocal();
+    final String hm = '${l.hour.toString().padLeft(2, '0')}:${l.minute.toString().padLeft(2, '0')}';
+    final StringBuffer b = StringBuffer()
+      ..writeln('📍 Incontro condiviso con te')
+      ..writeln('Vedo: $withName')
+      ..writeln('Quando: ${_days[l.weekday - 1]} ${l.day}/${l.month} alle $hm')
+      ..write('Dove: ${place.trim()}');
+    if (note.trim().isNotEmpty) b.write('\nNota: ${note.trim()}');
+    b.write('\nSe non ti scrivo dopo l\'incontro, contattami.');
+    return b.toString();
+  }
+
   /// Tutta la cronologia del telefono, per il backup.
   Future<Map<String, List<Map<String, Object?>>>> exportHistory() => _run(store.exportAll);
 

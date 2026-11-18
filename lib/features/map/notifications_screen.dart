@@ -17,9 +17,13 @@ class NotificationsScreen extends StatefulWidget {
     this.now = DateTime.now,
     this.openSwaps,
     this.openDeals,
+    this.openId,
   });
 
   final SocialRepository repository;
+
+  /// Notifica da aprire subito (toccata sul telefono con l'app chiusa).
+  final String? openId;
   final DateTime Function() now;
 
   /// Apre le proposte di scambio (Fase 5, Blocco 3); null se Scambia & Vendi non c'è.
@@ -33,10 +37,15 @@ class NotificationsScreen extends StatefulWidget {
     SocialRepository repository, {
     Future<void> Function(BuildContext context)? openSwaps,
     Future<void> Function(BuildContext context)? openDeals,
+    String? openId,
   }) => Navigator.of(context).push<void>(
     MaterialPageRoute<void>(
-      builder: (_) =>
-          NotificationsScreen(repository: repository, openSwaps: openSwaps, openDeals: openDeals),
+      builder: (_) => NotificationsScreen(
+        repository: repository,
+        openSwaps: openSwaps,
+        openDeals: openDeals,
+        openId: openId,
+      ),
     ),
   );
 
@@ -62,7 +71,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         _items = items;
         _error = null;
       });
+      final AppNotification? target = items.where((AppNotification n) => n.id == widget.openId).firstOrNull;
       if (items.any((AppNotification n) => !n.read)) await widget.repository.markAllRead();
+      if (target != null && mounted) await _open(target);
     } on ListingFailure catch (f) {
       if (mounted) setState(() => _error = f.message);
     }

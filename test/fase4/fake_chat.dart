@@ -102,6 +102,10 @@ class FakeChatHub {
   /// owner → persone che ha in rubrica.
   final Map<String, Set<String>> contacts = <String, Set<String>>{};
   final Set<String> blocks = <String>{};
+
+  /// Segnalazioni ricevute (chi, chat, motivo, descrizione, messaggi scelti).
+  final List<(String, String, String, String, List<Map<String, String>>)> reports =
+      <(String, String, String, String, List<Map<String, String>>)>[];
   int _seq = 0;
   int _conv = 0;
 
@@ -623,6 +627,16 @@ class FakeChatServer implements ChatServer {
     if (generation == 0) c.joined[uid] = hub.identities[uid];
     return next;
   }
+
+  @override
+  Future<void> report(String conversationId, String reason, String details, List<Map<String, String>> messages) async {
+    _member(conversationId);
+    if (messages.length > 50) throw const ChatFailure('Al massimo 50 messaggi.');
+    hub.reports.add((uid, conversationId, reason, details, messages));
+  }
+
+  @override
+  Future<void> blockUser(String userId) async => hub.blocks.add('$uid>$userId');
 
   @override
   Future<void> setMute(String conversationId, String? until) async {

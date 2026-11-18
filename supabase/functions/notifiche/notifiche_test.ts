@@ -45,6 +45,14 @@ Deno.test('messaggio FCM: al telefono (FID), raggruppato per chat, senza contenu
   assertEquals(m.message.android.notification.tag, 'chat:00000000-0000-4000-8000-000000000001');
   assertEquals(m.message.data.chat, '00000000-0000-4000-8000-000000000001');
   assertEquals(m.message.token, undefined);
+  assertEquals(m.message.data.notifica, '');
+});
+
+Deno.test('notifica di un commento: porta l\'identificativo per aprire l\'annuncio', () => {
+  const m = buildMessage({ ...row(1), kind: 'comment', conversation_id: null, collapse_key: 'n:abc-123' }) as {
+    message: Record<string, any>;
+  };
+  assertEquals(m.message.data, { tipo: 'comment', chat: '', notifica: 'abc-123' });
 });
 
 Deno.test('risposte di FCM: ok, telefono sparito, errore temporaneo', () => {

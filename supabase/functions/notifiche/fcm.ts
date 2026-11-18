@@ -57,7 +57,12 @@ export function buildMessage(row: QueueRow): Record<string, unknown> {
     message: {
       fid: row.fid,
       notification: { title: row.title, body: row.body },
-      data: { tipo: row.kind, chat: row.conversation_id ?? '' },
+      // Notifiche della campanella: il tocco apre l'annuncio o il commento (n:<id>).
+      data: {
+        tipo: row.kind,
+        chat: row.conversation_id ?? '',
+        notifica: row.collapse_key.startsWith('n:') ? row.collapse_key.slice(2) : '',
+      },
       android: {
         priority: 'HIGH',
         collapse_key: tag,

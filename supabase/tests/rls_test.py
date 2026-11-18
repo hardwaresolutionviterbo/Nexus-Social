@@ -2448,6 +2448,64 @@ def check_backup_phase4() -> None:
           f"{up_b}, {del_b}, {replaced}, {size_after}, {removed}")
 
 
+def check_chat_reports_phase4() -> None:
+    """W · Segnalazione di una chat (Fase 4, Blocco 7): solo i messaggi scelti, solo agli admin."""
+    ta, tb, tc, td = token(UID_A), token(UID_B), token(UID_C), token(UID_D)
+    for t, other in ((ta, UID_B), (tb, UID_A)):
+        rpc("unblock_user", {"p_user_id": other}, t)
+    _, conv = rpc("chat_open_direct", {"p_user": UID_B}, ta)
+    chosen = [{"a": "2026-11-18T18:00:00Z", "da": UID_B, "t": "Mandami prima i soldi con una ricarica"},
+              {"a": "2026-11-18T18:01:00Z", "da": "io", "t": "No, preferisco di persona"}]
+
+    def report(tok, c=conv, reason="truffa", msgs=None, details="Chiede soldi in anticipo"):
+        return rpc("chat_report", {"p_conversation": c, "p_reason": reason, "p_details": details,
+                                   "p_messages": chosen if msgs is None else msgs}, tok)
+
+    ok = report(ta)
+    outsider = report(tc)
+    bad_reason = report(ta, reason="antipatico")
+    too_many = report(ta, msgs=[chosen[0]] * 51)
+    too_long = report(ta, msgs=[{"a": "2026-11-18T18:00:00Z", "da": "io", "t": "x" * 4001}])
+    anon = report(None)
+    check("W1", "Segnala solo chi è nella chat, con un motivo valido e al massimo 50 messaggi scelti",
+          ok[0] == 200 and isinstance(ok[1], str) and outsider[0] >= 400 and bad_reason[0] >= 400
+          and too_many[0] >= 400 and too_long[0] >= 400 and anon[0] >= 400,
+          f"{ok[0]}, {outsider[0]}, {bad_reason[0]}, {too_many[0]}, {too_long[0]}, {anon[0]}")
+
+    reads = [rows(get("/rest/v1/chat_reports?select=*", t)) for t in (ta, tb, tc)]
+    sql(f"insert into public.admin_users (user_id, role) values ('{UID_D}', 'moderator') on conflict do nothing;")
+    seen = rows(get("/rest/v1/chat_reports?select=*", td))
+    sql(f"delete from public.admin_users where user_id = '{UID_D}';")
+    mine = [r for r in seen if r.get("id") == ok[1]]
+    check("W2", "Le segnalazioni le leggono solo gli amministratori: solo i messaggi scelti",
+          reads == [[], [], []] and len(mine) == 1 and mine[0].get("reported_user_id") == UID_B
+          and [m.get("t") for m in mine[0].get("messages") or []] == [m["t"] for m in chosen]
+          and mine[0].get("reason") == "truffa",
+          f"{[len(r) for r in reads]}, {len(mine)}")
+
+    again = report(ta, reason="molestie", msgs=[chosen[0]])
+    count = sql(f"select count(*) from public.chat_reports where reporter_id = '{UID_A}' "
+                f"and conversation_id = '{conv}' and status = 'open';")
+    sql(f"insert into public.chat_reports (reporter_id, conversation_id, reason, status) "
+        f"select '{UID_B}', '{conv}', 'spam', 'closed' from generate_series(1, 10);")
+    limited = report(tb)
+    sql(f"delete from public.chat_reports where reporter_id = '{UID_B}';")
+    check("W3", "Una sola segnalazione aperta per chat (si aggiorna); al massimo 10 al giorno",
+          again[0] == 200 and again[1] == ok[1] and count == "1" and limited[0] >= 400,
+          f"{again[0]}, {count}, {limited[0]}")
+
+    direct = [
+        request("POST", "/rest/v1/chat_reports", jwt=ta,
+                body={"reporter_id": UID_A, "conversation_id": conv, "reason": "spam"}),
+        request("PATCH", f"/rest/v1/chat_reports?id=eq.{ok[1]}", jwt=ta, prefer="return=representation",
+                body={"status": "closed"}),
+        request("DELETE", f"/rest/v1/chat_reports?id=eq.{ok[1]}", jwt=tb, prefer="return=representation"),
+    ]
+    still = sql(f"select status from public.chat_reports where id = '{ok[1]}';")
+    check("W4", "Nessuno scrive, cambia o cancella le segnalazioni direttamente",
+          all(denied(d) for d in direct) and still == "open", f"{[d[0] for d in direct]}, {still}")
+
+
 def check_push_phase4() -> None:
     """U · Notifiche (Fase 4, Blocco 5): coda server, silenzia, non disturbare, mai i Mi piace."""
     ta, tb = token(UID_A), token(UID_B)
@@ -2587,6 +2645,7 @@ def main() -> int:
     check_chat_groups_phase4()
     check_push_phase4()
     check_backup_phase4()
+    check_chat_reports_phase4()
     failed = [r for r in results if not r[2]]
     print(f"{'Caso':6} {'Esito':9} Descrizione")
     for case, desc, ok, detail in results:

@@ -11,6 +11,7 @@ import 'chat_media.dart';
 import 'chat_media_picker.dart';
 import 'chat_media_widgets.dart';
 import 'chat_models.dart';
+import 'chat_safety_screens.dart';
 import 'chat_screen.dart' show TicksIcon, chatPreview, chatTimeLabel;
 import 'chat_service.dart';
 
@@ -343,6 +344,21 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     }
   }
 
+  Future<void> _more(String choice, ChatConversation c) async {
+    if (choice == 'incontro') {
+      await ShareMeetingScreen.open(
+        context,
+        widget.chat,
+        withName: '${c.displayName} (@${c.peerUsername})',
+        excludeId: c.peerId,
+      );
+    } else if (choice == 'segnala') {
+      final bool? done = await ReportChatScreen.open(context, widget.chat, c.id);
+      // Persona bloccata: la chat non c'è più.
+      if (done == true && mounted && widget.chat.conversation(c.id) == null) Navigator.of(context).pop();
+    }
+  }
+
   Future<void> _mute(String choice) async {
     try {
       switch (choice) {
@@ -467,6 +483,33 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                         value: 'riattiva',
                         child: Text('Riattiva le notifiche'),
                       ),
+                  ],
+                ),
+              if (c != null)
+                PopupMenuButton<String>(
+                  key: const ValueKey<String>('chat_altro'),
+                  tooltip: 'Altro',
+                  onSelected: (String v) => _more(v, c),
+                  itemBuilder: (_) => <PopupMenuEntry<String>>[
+                    if (!c.isGroup)
+                      const PopupMenuItem<String>(
+                        key: ValueKey<String>('menu_incontro'),
+                        value: 'incontro',
+                        child: ListTile(
+                          leading: Icon(Icons.shield_outlined),
+                          title: Text('Condividi l\'incontro'),
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      ),
+                    const PopupMenuItem<String>(
+                      key: ValueKey<String>('menu_segnala'),
+                      value: 'segnala',
+                      child: ListTile(
+                        leading: Icon(Icons.flag_outlined),
+                        title: Text('Segnala'),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
                   ],
                 ),
             ],

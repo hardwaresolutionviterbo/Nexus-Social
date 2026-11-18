@@ -71,6 +71,12 @@ abstract class ChatServer {
 
   /// «Silenzia» (Blocco 5): [until] ISO 8601, 'infinity' per sempre, null per riattivare.
   Future<void> setMute(String conversationId, String? until);
+
+  /// Segnalazione (Blocco 7): solo i messaggi scelti da chi segnala, in chiaro.
+  Future<void> report(String conversationId, String reason, String details, List<Map<String, String>> messages);
+
+  /// Blocca una persona (stessa funzione della Privacy, Fase 2).
+  Future<void> blockUser(String userId);
 }
 
 class SupabaseChatServer implements ChatServer {
@@ -292,5 +298,20 @@ class SupabaseChatServer implements ChatServer {
   @override
   Future<void> setMute(String conversationId, String? until) async {
     await _rpc('chat_set_mute', {'p_conversation': conversationId, 'p_until': until});
+  }
+
+  @override
+  Future<void> report(String conversationId, String reason, String details, List<Map<String, String>> messages) async {
+    await _rpc('chat_report', {
+      'p_conversation': conversationId,
+      'p_reason': reason,
+      'p_details': details.trim().isEmpty ? null : details.trim(),
+      'p_messages': messages,
+    });
+  }
+
+  @override
+  Future<void> blockUser(String userId) async {
+    await _rpc('block_user', {'p_user_id': userId});
   }
 }

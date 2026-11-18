@@ -34,6 +34,9 @@ abstract final class PushNotifications {
   /// Chat da aprire perché l'utente ha toccato una notifica (Fase 4, Blocco 5).
   static final ValueNotifier<String?> openChat = ValueNotifier<String?>(null);
 
+  /// Notifica della campanella toccata (commenti, scambi): si apre il suo annuncio.
+  static final ValueNotifier<String?> openNotification = ValueNotifier<String?>(null);
+
   /// Sale di uno quando arriva un messaggio di chat con l'app aperta: la chat si aggiorna
   /// subito invece di aspettare il controllo periodico.
   static final ValueNotifier<int> chatPings = ValueNotifier<int>(0);
@@ -75,6 +78,8 @@ abstract final class PushNotifications {
   static void _opened(RemoteMessage message) {
     final Object? chat = message.data['chat'];
     if (chat is String && chat.isNotEmpty) openChat.value = chat;
+    final Object? notifica = message.data['notifica'];
+    if (notifica is String && notifica.isNotEmpty) openNotification.value = notifica;
   }
 
   static Future<void> _createChannel() async {
