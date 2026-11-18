@@ -47,6 +47,7 @@ class ChatConversation {
     this.members = 2,
     this.pending = 0,
     this.invitedBy,
+    this.mutedUntil,
   });
 
   final String id;
@@ -81,6 +82,11 @@ class ChatConversation {
   /// Modifiche al gruppo cifrato in attesa (persone da aggiungere o togliere).
   final int pending;
   final String? invitedBy;
+
+  /// Notifiche silenziate fino a (anno 9999 = sempre). Null: attive.
+  final DateTime? mutedUntil;
+
+  bool get isMuted => mutedUntil != null && mutedUntil!.isAfter(DateTime.now());
 
   bool get isRequest => status == ChatStatus.request;
 
@@ -128,6 +134,7 @@ class ChatConversation {
     members: members,
     pending: pending ?? this.pending,
     invitedBy: invitedBy,
+    mutedUntil: mutedUntil,
   );
 
   factory ChatConversation.fromRow(Map<String, dynamic> r) {
@@ -159,6 +166,11 @@ class ChatConversation {
       members: r['members'] == null ? 2 : asInt(r['members']),
       pending: asInt(r['pending']),
       invitedBy: r['invited_by'] as String?,
+      mutedUntil: r['muted_until'] == null
+          ? null
+          : ('${r['muted_until']}'.contains('infinity')
+                ? DateTime(9999)
+                : DateTime.tryParse('${r['muted_until']}')?.toLocal()),
     );
   }
 }

@@ -34,6 +34,7 @@ class FakeConv {
   final Map<String, String> mls = <String, String>{};
   final Map<String, int> fromId = <String, int>{};
   final Map<String, String> invitedBy = <String, String>{};
+  final Map<String, DateTime?> muted = <String, DateTime?>{};
   String other(String uid) => uid == a ? b : a;
   bool has(String uid) => group ? status.containsKey(uid) : (uid == a || uid == b);
   Iterable<String> inside() => status.keys.where((u) => status[u] == 'active' && mls[u] == 'in');
@@ -316,6 +317,7 @@ class FakeChatServer implements ChatServer {
                   c.mls[u] == 'to_remove')
               .length,
           invitedBy: c.invitedBy[uid],
+          mutedUntil: c.muted[uid],
         )
       else if (!c.group && c.has(uid) && c.status[uid] != 'declined' && !hub.blocked(c.a, c.b))
         ChatConversation(
@@ -335,6 +337,7 @@ class FakeChatServer implements ChatServer {
           lastMessageId: c.lastId,
           lastMessageAt: c.lastAt,
           createdAt: c.createdAt,
+          mutedUntil: c.muted[uid],
         ),
   ];
 
@@ -617,6 +620,12 @@ class FakeChatServer implements ChatServer {
     }
     if (generation == 0) c.joined[uid] = hub.identities[uid];
     return next;
+  }
+
+  @override
+  Future<void> setMute(String conversationId, String? until) async {
+    final FakeConv c = _member(conversationId);
+    c.muted[uid] = until == null ? null : (until == 'infinity' ? DateTime(9999) : DateTime.parse(until).toLocal());
   }
 
   @override

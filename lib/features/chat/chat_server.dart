@@ -68,6 +68,9 @@ abstract class ChatServer {
   });
 
   Future<void> groupRejoin(String conversationId);
+
+  /// «Silenzia» (Blocco 5): [until] ISO 8601, 'infinity' per sempre, null per riattivare.
+  Future<void> setMute(String conversationId, String? until);
 }
 
 class SupabaseChatServer implements ChatServer {
@@ -284,5 +287,10 @@ class SupabaseChatServer implements ChatServer {
   @override
   Future<void> groupRejoin(String conversationId) async {
     await _rpc('chat_group_rejoin', {'p_conversation': conversationId});
+  }
+
+  @override
+  Future<void> setMute(String conversationId, String? until) async {
+    await _rpc('chat_set_mute', {'p_conversation': conversationId, 'p_until': until});
   }
 }

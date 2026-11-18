@@ -13,6 +13,8 @@ import 'core/config/app_config.dart';
 import 'core/services/auth_gateway.dart';
 import 'core/services/backend_bootstrap.dart';
 import 'core/services/firebase_services.dart';
+import 'core/services/push_device_registry.dart';
+import 'core/services/supabase_push_backend.dart';
 import 'features/chat/chat_crypto.dart';
 import 'features/chat/chat_media.dart';
 import 'features/chat/chat_models.dart';
@@ -24,6 +26,7 @@ import 'features/map/listing_repository.dart';
 import 'features/map/map_screen.dart';
 import 'features/map/social_repository.dart';
 import 'features/market/market_repository.dart';
+import 'features/notifications/notification_settings.dart';
 import 'features/privacy/privacy_repository.dart';
 import 'features/profile/profile_repository.dart';
 import 'features/security/app_lock.dart';
@@ -35,6 +38,10 @@ Future<void> main() async {
 
   if (AppConfig.hasFirebase) {
     FirebaseServices.registerBackgroundHandler();
+    // Con il server collegato il telefono si registra anche su Supabase (notifiche).
+    if (AppConfig.serverLinkEnabled && backend.supabase == ServiceState.connected) {
+      PushDeviceRegistry.useBackend(SupabasePushDeviceBackend(Supabase.instance.client));
+    }
     unawaited(FirebaseServices.warmUp());
   }
 
@@ -70,6 +77,7 @@ Future<void> main() async {
             )
           : null,
       privacy: profilesReady ? SupabasePrivacyRepository(Supabase.instance.client) : null,
+      pushSettings: profilesReady ? SupabasePushSettingsRepository(Supabase.instance.client) : null,
       security: profilesReady ? SupabaseSecurityRepository(Supabase.instance.client) : null,
       biometricLock: profilesReady ? DeviceBiometricLock() : null,
       contacts: profilesReady ? SupabaseContactsRepository(Supabase.instance.client) : null,

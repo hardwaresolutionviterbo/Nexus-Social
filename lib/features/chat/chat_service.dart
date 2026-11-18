@@ -1206,6 +1206,19 @@ class ChatService extends ChangeNotifier {
     await _afterGroupChange();
   }
 
+  /// Silenzia le notifiche di una chat per [duration] (null = sempre) o le riattiva.
+  Future<void> setMute(String conversationId, {Duration? duration, bool unmute = false}) async {
+    final String? until = unmute
+        ? null
+        : (duration == null ? 'infinity' : DateTime.now().add(duration).toUtc().toIso8601String());
+    await server.setMute(conversationId, until);
+    await _run(_loadConversations);
+    _changed();
+  }
+
+  /// Un messaggio è appena arrivato con l'app aperta (notifica): si controlla subito.
+  void ping() => unawaited(refresh());
+
   Future<String> inviteCode(String conversationId, {bool renew = false}) =>
       server.groupInviteCode(conversationId, renew: renew);
 

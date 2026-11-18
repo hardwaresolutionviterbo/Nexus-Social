@@ -16,6 +16,31 @@ import 'chat_service.dart';
 
 /// La chat attiva dell'app (una per accesso): la usano i pulsanti «Contatta» degli annunci,
 /// che si aprono sopra la barra principale.
+/// Testo del menu «Silenzia» quando la chat è già silenziata.
+String mutedLabel(DateTime until, DateTime now) {
+  if (until.year >= 9999) return 'Silenziata per sempre';
+  final DateTime l = until.toLocal();
+  final String hm = '${l.hour.toString().padLeft(2, '0')}:${l.minute.toString().padLeft(2, '0')}';
+  final bool today = l.year == now.year && l.month == now.month && l.day == now.day;
+  return today ? 'Silenziata fino alle $hm' : 'Silenziata fino al ${l.day}/${l.month} alle $hm';
+}
+
+/// Notifica toccata (Blocco 5): si chiude quello che c'era sopra e si apre la chat.
+void openChatFromNotification(
+  BuildContext context, {
+  required ChatService chat,
+  required String conversationId,
+  ProfileRepository? profiles,
+}) {
+  final NavigatorState nav = Navigator.of(context);
+  nav.popUntil((Route<dynamic> r) => r.isFirst);
+  nav.push<void>(
+    MaterialPageRoute<void>(
+      builder: (_) => ChatThreadScreen(chat: chat, conversationId: conversationId, profiles: profiles),
+    ),
+  );
+}
+
 abstract final class ChatRegistry {
   static ChatService? current;
   static ProfileRepository? profiles;
@@ -318,6 +343,30 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     }
   }
 
+  Future<void> _mute(String choice) async {
+    try {
+      switch (choice) {
+        case '8h':
+          await widget.chat.setMute(widget.conversationId, duration: const Duration(hours: 8));
+        case '1w':
+          await widget.chat.setMute(widget.conversationId, duration: const Duration(days: 7));
+        case 'sempre':
+          await widget.chat.setMute(widget.conversationId);
+        default:
+          await widget.chat.setMute(widget.conversationId, unmute: true);
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(choice == 'riattiva' ? 'Notifiche riattivate' : 'Chat silenziata')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Non riuscito. Controlla la connessione.')),
+      );
+    }
+  }
+
   Future<void> _delete(ChatMessage m) async {
     final bool forEveryone = m.canDeleteForEveryone(widget.now());
     final String? how = await showDialog<String>(
@@ -394,6 +443,31 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                 ],
               ),
             ),
+            actions: [
+              if (c != null && !c.isRequest)
+                PopupMenuButton<String>(
+                  key: const ValueKey<String>('silenzia_chat'),
+                  tooltip: c.isMuted ? 'Notifiche silenziate' : 'Silenzia',
+                  icon: Icon(c.isMuted ? Icons.notifications_off_outlined : Icons.notifications_none_rounded),
+                  onSelected: _mute,
+                  itemBuilder: (_) => <PopupMenuEntry<String>>[
+                    if (c.isMuted)
+                      PopupMenuItem<String>(
+                        enabled: false,
+                        child: Text(mutedLabel(c.mutedUntil!, now)),
+                      ),
+                    const PopupMenuItem<String>(value: '8h', child: Text('Silenzia per 8 ore')),
+                    const PopupMenuItem<String>(value: '1w', child: Text('Silenzia per 1 settimana')),
+                    const PopupMenuItem<String>(value: 'sempre', child: Text('Silenzia sempre')),
+                    if (c.isMuted)
+                      const PopupMenuItem<String>(
+                        key: ValueKey<String>('riattiva_notifiche'),
+                        value: 'riattiva',
+                        child: Text('Riattiva le notifiche'),
+                      ),
+                  ],
+                ),
+            ],
           ),
           body: Column(
             children: [

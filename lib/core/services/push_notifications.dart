@@ -31,6 +31,13 @@ abstract final class PushNotifications {
   static final ValueNotifier<String?> lastForegroundTitle =
       ValueNotifier<String?>(null);
 
+  /// Chat da aprire perché l'utente ha toccato una notifica (Fase 4, Blocco 5).
+  static final ValueNotifier<String?> openChat = ValueNotifier<String?>(null);
+
+  /// Sale di uno quando arriva un messaggio di chat con l'app aperta: la chat si aggiorna
+  /// subito invece di aspettare il controllo periodico.
+  static final ValueNotifier<int> chatPings = ValueNotifier<int>(0);
+
   static final FlutterLocalNotificationsPlugin _local =
       FlutterLocalNotificationsPlugin();
   static StreamSubscription<RemoteMessage>? _foregroundSubscription;
@@ -53,8 +60,21 @@ abstract final class PushNotifications {
     _foregroundSubscription ??= FirebaseMessaging.onMessage.listen(
       _showForeground,
     );
+    FirebaseMessaging.onMessageOpenedApp.listen(_opened);
+    try {
+      final RemoteMessage? first = await FirebaseMessaging.instance.getInitialMessage();
+      if (first != null) _opened(first);
+    } catch (_) {
+      // Nessuna notifica di avvio.
+    }
 
     await _registerInstallation();
+  }
+
+  /// Notifica toccata: se è di una chat, l'app la apre.
+  static void _opened(RemoteMessage message) {
+    final Object? chat = message.data['chat'];
+    if (chat is String && chat.isNotEmpty) openChat.value = chat;
   }
 
   static Future<void> _createChannel() async {
@@ -178,6 +198,11 @@ abstract final class PushNotifications {
   /// In foreground FCM non mostra la notifica da solo: la pubblichiamo noi
   /// sullo stesso canale usato dai messaggi in background.
   static Future<void> _showForeground(RemoteMessage message) async {
+    // Messaggio di chat con l'app aperta: niente notifica, la chat si aggiorna da sola.
+    if (message.data['tipo'] == 'chat') {
+      chatPings.value += 1;
+      return;
+    }
     final RemoteNotification? notification = message.notification;
     final String title = _clean(notification?.title) ?? 'Piazly';
     final String body =

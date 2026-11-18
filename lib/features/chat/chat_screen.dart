@@ -355,7 +355,22 @@ class ChatThreadTile extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 4),
-          if (unread) _Count(thread.unread) else const SizedBox(height: 20),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (c.isMuted)
+                Padding(
+                  padding: EdgeInsets.only(right: unread ? 4 : 0),
+                  child: Icon(
+                    Icons.notifications_off_outlined,
+                    key: ValueKey<String>('silenziata_${c.id}'),
+                    size: 17,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              if (unread) _Count(thread.unread) else if (!c.isMuted) const SizedBox(height: 20),
+            ],
+          ),
         ],
       ),
       onTap: () => ChatThreadScreen.open(context, chat: chat, conversationId: c.id, profiles: profiles),

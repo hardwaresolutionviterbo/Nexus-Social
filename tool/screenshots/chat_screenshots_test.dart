@@ -15,6 +15,7 @@ import 'package:nexus_social/features/chat/chat_models.dart';
 import 'package:nexus_social/features/chat/chat_screen.dart';
 import 'package:nexus_social/features/chat/chat_service.dart';
 import 'package:nexus_social/features/chat/chat_thread_screen.dart';
+import 'package:nexus_social/features/notifications/notification_settings.dart';
 import 'package:nexus_social/features/shell/app_shell.dart';
 
 import '../../test/fase4/fake_chat.dart';
@@ -457,4 +458,33 @@ void main() {
       o.dispose();
     }
   });
+
+  testWidgets('chat 16 · Silenzia una chat', (tester) async {
+    final (ChatService me, Map<String, ChatService> others, Map<String, String> conv) =
+        (await tester.runAsync(_scene))!;
+    await tester.runAsync(() => me.setMute(conv[bruno]!));
+    await shoot(tester, 'chat_16_silenzia',
+        ChatThreadScreen(chat: me, conversationId: conv[bruno]!, now: () => now), before: () async {
+      await tester.tap(find.byKey(const ValueKey<String>('silenzia_chat')));
+      await tester.pumpAndSettle();
+    });
+    await shoot(tester, 'chat_17_lista_silenziata', AppShell(chat: me));
+    me.dispose();
+    for (final ChatService o in others.values) {
+      o.dispose();
+    }
+  });
+
+  testWidgets('chat 18 · Profilo → Notifiche', (tester) async {
+    await shoot(tester, 'chat_18_notifiche',
+        NotificationSettingsScreen(repository: _Prefs()));
+  });
+}
+
+class _Prefs implements PushSettingsRepository {
+  @override
+  Future<PushSettings> load() async => const PushSettings(dndEnabled: true, comments: false);
+
+  @override
+  Future<void> save(PushSettings settings) async {}
 }
