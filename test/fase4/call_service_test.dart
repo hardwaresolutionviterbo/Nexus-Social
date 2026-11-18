@@ -36,10 +36,15 @@ void main() {
     final String conv = await a.openDirect(bruno);
     await a.send(conv, 'Ciao');
     await b.refresh();
+    await settle();
     await b.send(conv, 'Ciao Anna');
     await a.refresh();
+    await settle();
     return (a, b, conv);
   }
+
+  /// I passaggi della chiamata arrivano un attimo dopo la sincronizzazione.
+  Future<void> settle() => Future<void>.delayed(const Duration(milliseconds: 30));
 
   List<String> notices(ChatService s, String conv) =>
       s.messages(conv).where((ChatMessage m) => m.kind == MessageKind.notice).map((ChatMessage m) => m.body).toList();
@@ -51,22 +56,27 @@ void main() {
     expect(hub.rings, <(String, String, bool)>[(io, conv, false)]);
 
     await b.refresh();
+    await settle();
     expect(b.calls!.state!.phase, CallPhase.incoming);
     expect(b.calls!.state!.peerName, 'Anna R.');
     await b.calls!.accept();
+    await settle();
     await Future<void>.delayed(Duration.zero);
     expect(b.calls!.state!.phase, CallPhase.active);
     expect(hub.rings, hasLength(1), reason: 'la risposta non fa squillare');
 
     await a.refresh();
+    await settle();
     await Future<void>.delayed(Duration.zero);
     expect(a.calls!.state!.phase, CallPhase.active);
 
     await a.calls!.toggleMic();
     expect(a.calls!.state!.micOn, isFalse);
     await a.calls!.hangUp();
+    await settle();
     expect(a.calls!.state!.phase, CallPhase.ended);
     await b.refresh();
+    await settle();
     expect(b.calls!.state!.phase, CallPhase.ended);
     expect(b.calls!.state!.endReason, 'Chiamata terminata');
     expect(notices(a, conv).single, startsWith('Chiamata vocale · '));
@@ -82,9 +92,12 @@ void main() {
     await a.calls!.start(conv, video: true);
     expect(hub.rings.single.$3, isTrue);
     await b.refresh();
+    await settle();
     expect(b.calls!.state!.video, isTrue);
     await b.calls!.reject();
+    await settle();
     await a.refresh();
+    await settle();
     expect(a.calls!.state!.endReason, 'Chiamata rifiutata');
     expect(notices(b, conv).single, 'Videochiamata rifiutata');
     a.calls!.dismiss();
@@ -95,16 +108,22 @@ void main() {
     final String gb = await g.openDirect(bruno);
     await g.send(gb, 'Ehi');
     await b.refresh();
+    await settle();
     await b.send(gb, 'Dimmi');
     await g.refresh();
+    await settle();
     await a.calls!.start(conv, video: false);
     await b.refresh();
+    await settle();
     await b.calls!.accept();
+    await settle();
     await g.calls!.start(gb, video: false);
     await b.refresh();
+    await settle();
     expect(b.calls!.state!.conversationId, conv, reason: 'resta la chiamata con Anna');
     expect(notices(b, gb).single, 'Chiamata persa');
     await g.refresh();
+    await settle();
     expect(g.calls!.state!.endReason, 'Occupato');
     a.dispose();
     b.dispose();
@@ -116,6 +135,7 @@ void main() {
     await a.calls!.start(conv, video: false);
     hub.clock = hub.clock.add(const Duration(minutes: 3));
     await b.refresh();
+    await settle();
     expect(b.calls!.state, isNull);
     expect(notices(b, conv).single, 'Chiamata persa');
     a.dispose();
@@ -139,6 +159,7 @@ void main() {
     final String conv = await d.openDirect(io);
     await d.send(conv, 'Ciao');
     await d.refresh();
+    await settle();
     await expectLater(d.calls!.start(conv, video: false), throwsA(isA<ChatFailure>()));
     expect(hub.rings, isEmpty);
     a.dispose();
@@ -163,7 +184,10 @@ void main() {
     expect(find.byKey(const ValueKey<String>('chiama_voce')), findsOneWidget);
     expect(find.byKey(const ValueKey<String>('chiama_video')), findsOneWidget);
     await tester.runAsync(() => a.calls!.start(conv, video: false));
-    await tester.runAsync(b.refresh);
+    await tester.runAsync(() async {
+      await b.refresh();
+      await settle();
+    });
 
     await tester.pumpWidget(MaterialApp(theme: AppTheme.light, home: CallScreen(calls: b.calls!)));
     await tester.pump();
