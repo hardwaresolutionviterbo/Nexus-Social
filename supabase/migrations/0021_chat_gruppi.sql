@@ -975,7 +975,8 @@ begin
         select 1 from public.chat_members o
         where o.conversation_id = p_conversation
           and o.status = 'active' and o.mls_state = 'in'
-          and o.user_id <> m.sender_id
+          -- Gli avvisi servono anche a chi li ha causati.
+          and (o.user_id <> m.sender_id or m.kind = 'event')
           and o.from_id < m.id
           and o.delivered_upto < m.id
       );

@@ -359,7 +359,8 @@ class FakeChatServer implements ChatServer {
         m.conv == c.id &&
         m.welcomeFor == null &&
         m.id <= d &&
-        !c.inside().any((u) => u != m.sender && (c.fromId[u] ?? 0) < m.id && (c.delivered[u] ?? 0) < m.id));
+        !c.inside().any((u) =>
+            (u != m.sender || m.kind == 'event') && (c.fromId[u] ?? 0) < m.id && (c.delivered[u] ?? 0) < m.id));
   }
 
   @override
