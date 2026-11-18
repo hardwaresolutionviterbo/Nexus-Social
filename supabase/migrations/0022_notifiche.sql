@@ -17,7 +17,7 @@ create extension if not exists pg_net with schema extensions;
 
 -- ------------------------------------------------------------ tabelle
 create table public.push_devices (
-  fid text primary key check (fid ~ '^[A-Za-z0-9_:-]{10,300}$'),
+  fid text primary key check (length(fid) between 10 and 300 and fid ~ '^[A-Za-z0-9_:-]+$'),
   user_id text not null,
   platform text not null check (platform in ('android', 'ios')),
   updated_at timestamptz not null default now()
@@ -295,7 +295,7 @@ begin
   if v_uid is null then
     raise exception 'Autenticazione richiesta' using errcode = '42501';
   end if;
-  if p_fid is null or p_fid !~ '^[A-Za-z0-9_:-]{10,300}$' or p_platform not in ('android', 'ios') then
+  if p_fid is null or length(p_fid) not between 10 and 300 or p_fid !~ '^[A-Za-z0-9_:-]+$' or p_platform not in ('android', 'ios') then
     raise exception 'Dispositivo non valido' using errcode = '22023';
   end if;
   -- Un telefono appartiene a un solo account: l'ultimo che ci entra.
