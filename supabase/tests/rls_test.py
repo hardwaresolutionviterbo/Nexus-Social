@@ -2506,6 +2506,78 @@ def check_chat_reports_phase4() -> None:
           all(denied(d) for d in direct) and still == "open", f"{[d[0] for d in direct]}, {still}")
 
 
+def check_calls_phase4() -> None:
+    """X · Chiamate (Fase 4, Blocco 8): solo nelle chat a due accettate, squillo solo per l'offerta."""
+    ta, tb, tc, td = token(UID_A), token(UID_B), token(UID_C), token(UID_D)
+    for t, other in ((ta, UID_B), (tb, UID_A)):
+        rpc("unblock_user", {"p_user_id": other}, t)
+    _, conv = rpc("chat_open_direct", {"p_user": UID_A}, tb)
+    sql(f"update public.chat_members set status = 'active', muted_until = null where conversation_id = '{conv}';")
+    gen = int(sql(f"select generation from public.chat_conversations where id = '{conv}';") or 0)
+    if gen == 0:
+        sql(f"update public.chat_conversations set generation = 1 where id = '{conv}';")
+        gen = 1
+    rpc("push_set_settings", {"p_messages": True, "p_comments": True, "p_market": True, "p_preview": True,
+                              "p_dnd_enabled": False, "p_dnd_from": "22:00", "p_dnd_to": "07:00",
+                              "p_time_zone": "Europe/Rome"}, ta)
+    fid = "fidTelefonoChiamateA_" + "x" * 12
+    rpc("push_register", {"p_fid": fid, "p_platform": "android"}, ta)
+
+    def queue() -> list:
+        out = sql(f"select kind || '|' || body from private.push_queue where user_id = '{UID_A}' order by id;")
+        return [line for line in out.splitlines() if line]
+
+    def signal(tok, c=conv, ring=False, video=False):
+        payload = base64.b64encode(bytes([9]) * 60).decode()
+        return rpc("call_signal", {"p_conversation": c, "p_generation": gen, "p_payload": payload,
+                                   "p_ring": ring, "p_video": video}, tok)
+
+    sql("delete from private.push_queue;")
+    sql(f"delete from private.call_rings where user_id = '{UID_B}';")
+    offer = signal(tb, ring=True)
+    after_offer = queue()
+    sql("delete from private.push_queue;")
+    quiet = [signal(tb)[0], signal(tb)[0]]
+    after_quiet = queue()
+    video = signal(tb, ring=True, video=True)
+    after_video = queue()
+    check("X1", "L'offerta fa squillare («Chiamata in arrivo»); risposta e chiusura non mandano notifiche",
+          offer[0] == 200 and after_offer == ["call|Chiamata in arrivo"] and quiet == [200, 200]
+          and after_quiet == [] and video[0] == 200 and after_video == ["call|Videochiamata in arrivo"],
+          f"{offer[0]}, {after_offer}, {quiet}, {after_quiet}, {video[0]}, {after_video}")
+
+    _, req = rpc("chat_open_direct", {"p_user": UID_A}, td)
+    sql(f"update public.chat_conversations set generation = greatest(generation, 1) where id = '{req}';")
+    stranger = rpc("call_signal", {"p_conversation": req, "p_generation": 1,
+                                   "p_payload": base64.b64encode(bytes([9]) * 60).decode(),
+                                   "p_ring": True, "p_video": False}, td)
+    outsider = signal(tc, ring=True)
+    rpc("block_user", {"p_user_id": UID_B}, ta)
+    blocked = signal(tb, ring=True)
+    rpc("unblock_user", {"p_user_id": UID_B}, ta)
+    anon = signal(None, ring=True)
+    check("X2", "Non si chiama da una richiesta di messaggio, da fuori, con un blocco o senza accesso",
+          stranger[0] >= 400 and outsider[0] >= 400 and blocked[0] >= 400 and anon[0] >= 400,
+          f"{stranger[0]}, {outsider[0]}, {blocked[0]}, {anon[0]}")
+
+    sql(f"insert into private.call_rings (user_id) select '{UID_B}' from generate_series(1, 30);")
+    limited = signal(tb, ring=True)
+    still_quiet = signal(tb)
+    sql(f"delete from private.call_rings where user_id = '{UID_B}';")
+    check("X3", "Al massimo 30 squilli l'ora (le chiusure passano comunque)",
+          limited[0] >= 400 and still_quiet[0] == 200, f"{limited[0]}, {still_quiet[0]}")
+
+    sql("delete from private.push_queue;")
+    sql(f"update public.chat_members set muted_until = 'infinity' where conversation_id = '{conv}' and user_id = '{UID_A}';")
+    muted = signal(tb, ring=True)
+    muted_queue = queue()
+    sql(f"update public.chat_members set muted_until = null where conversation_id = '{conv}';")
+    direct = request("POST", "/rest/v1/rpc/push_enqueue", jwt=tb, body={})
+    check("X4", "Chat silenziata: la chiamata arriva ma non squilla; la coda non si tocca da fuori",
+          muted[0] == 200 and muted_queue == [] and direct[0] >= 400, f"{muted[0]}, {muted_queue}, {direct[0]}")
+    rpc("push_unregister", {"p_fid": fid}, ta)
+
+
 def check_push_phase4() -> None:
     """U · Notifiche (Fase 4, Blocco 5): coda server, silenzia, non disturbare, mai i Mi piace."""
     ta, tb = token(UID_A), token(UID_B)
@@ -2646,6 +2718,7 @@ def main() -> int:
     check_push_phase4()
     check_backup_phase4()
     check_chat_reports_phase4()
+    check_calls_phase4()
     failed = [r for r in results if not r[2]]
     print(f"{'Caso':6} {'Esito':9} Descrizione")
     for case, desc, ok, detail in results:

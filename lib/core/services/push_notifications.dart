@@ -204,7 +204,7 @@ abstract final class PushNotifications {
   /// sullo stesso canale usato dai messaggi in background.
   static Future<void> _showForeground(RemoteMessage message) async {
     // Messaggio di chat con l'app aperta: niente notifica, la chat si aggiorna da sola.
-    if (message.data['tipo'] == 'chat') {
+    if (message.data['tipo'] == 'chat' || message.data['tipo'] == 'call') {
       chatPings.value += 1;
       return;
     }

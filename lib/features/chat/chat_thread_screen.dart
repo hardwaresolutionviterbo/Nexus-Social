@@ -344,6 +344,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     }
   }
 
+  Future<void> _call(ChatConversation c, {required bool video}) async {
+    try {
+      await widget.chat.calls!.start(c.id, video: video);
+    } on ChatFailure catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    }
+  }
+
   Future<void> _more(String choice, ChatConversation c) async {
     if (choice == 'incontro') {
       await ShareMeetingScreen.open(
@@ -462,6 +474,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
               ),
             ),
             actions: [
+              if (c != null && !c.isGroup && !c.isRequest && widget.chat.calls != null) ...[
+                IconButton(
+                  key: const ValueKey<String>('chiama_voce'),
+                  tooltip: 'Chiamata vocale',
+                  icon: const Icon(Icons.call_outlined),
+                  onPressed: () => _call(c, video: false),
+                ),
+                IconButton(
+                  key: const ValueKey<String>('chiama_video'),
+                  tooltip: 'Videochiamata',
+                  icon: const Icon(Icons.videocam_outlined),
+                  onPressed: () => _call(c, video: true),
+                ),
+              ],
               if (c != null && !c.isRequest)
                 PopupMenuButton<String>(
                   key: const ValueKey<String>('silenzia_chat'),

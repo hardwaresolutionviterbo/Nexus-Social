@@ -1,9 +1,12 @@
 // Server della chat in memoria, con le stesse regole delle migrazioni 0019–0021, e una
 // «cifratura» finta per i test di interfaccia (i test del motore usano MLS vero).
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:material_ui/material_ui.dart' show Widget;
+import 'package:nexus_social/features/calls/call_service.dart';
 import 'package:nexus_social/features/chat/chat_backup.dart';
 import 'package:nexus_social/features/chat/chat_crypto.dart';
 import 'package:nexus_social/features/chat/chat_media.dart';
@@ -102,6 +105,9 @@ class FakeChatHub {
   /// owner → persone che ha in rubrica.
   final Map<String, Set<String>> contacts = <String, Set<String>>{};
   final Set<String> blocks = <String>{};
+
+  /// Squilli (chi chiama, chat, video): sul server vero fanno partire la notifica.
+  final List<(String, String, bool)> rings = <(String, String, bool)>[];
 
   /// Segnalazioni ricevute (chi, chat, motivo, descrizione, messaggi scelti).
   final List<(String, String, String, String, List<Map<String, String>>)> reports =
@@ -254,6 +260,17 @@ class FakeChatServer implements ChatServer {
     c.lastId = id;
     c.lastAt = hub.clock;
     return (id, hub.clock);
+  }
+
+  @override
+  Future<(int, DateTime)> callSignal(String conversationId, int generation, String payload,
+      {required bool ring, required bool video}) async {
+    final FakeConv c = _member(conversationId);
+    if (c.group || c.status[uid] != 'active' || c.status[c.other(uid)] != 'active' || hub.blocked(uid, c.other(uid))) {
+      throw const ChatFailure('Chiamata non possibile in questa chat.');
+    }
+    if (ring) hub.rings.add((uid, conversationId, video));
+    return send(conversationId, generation, payload);
   }
 
   bool _visible(FakeMsg m, FakeConv c) {
@@ -733,8 +750,10 @@ Future<ChatService> fakePhone(
   Directory? files,
   BackupServer? backup,
   BackupKeyStore? backupKeys,
+  CallService Function(ChatService chat)? calls,
 }) async {
   final ChatService s = ChatService(
+    calls: calls,
     clock: () => hub.clock,
     backupServer: backup,
     backupKeys: backup == null ? null : (backupKeys ?? MemoryBackupKeyStore()),
@@ -794,3 +813,71 @@ class FakeBackupServer implements BackupServer {
     at = null;
   }
 }
+
+
+/// Audio e video finti (Blocco 8): si «collega» quando arriva la risposta.
+class FakeCallMedia implements CallMedia {
+  static int opened = 0;
+  final StreamController<bool> _up = StreamController<bool>.broadcast();
+  bool video = false;
+  bool mic = true;
+  bool camera = true;
+  bool speaker = false;
+  bool closed = false;
+
+  @override
+  Stream<bool> get connected => _up.stream;
+
+  @override
+  Future<void> open({required List<IceServer> ice, required bool video}) async {
+    opened++;
+    this.video = video;
+  }
+
+  @override
+  Future<String> createOffer() async => 'v=0 offerta';
+
+  @override
+  Future<String> answer(String offer) async {
+    scheduleMicrotask(() => _up.isClosed ? null : _up.add(true));
+    return 'v=0 risposta a ($offer)';
+  }
+
+  @override
+  Future<void> acceptAnswer(String answer) async => scheduleMicrotask(() => _up.isClosed ? null : _up.add(true));
+
+  void drop() => _up.add(false);
+
+  @override
+  Future<void> setMicrophone(bool on) async => mic = on;
+
+  @override
+  Future<void> setCamera(bool on) async => camera = on;
+
+  @override
+  Future<void> setSpeaker(bool on) async => speaker = on;
+
+  @override
+  Future<void> switchCamera() async {}
+
+  @override
+  Widget? remoteView() => null;
+
+  @override
+  Widget? localView() => null;
+
+  @override
+  Future<void> close() async {
+    closed = true;
+    await _up.close();
+  }
+}
+
+class FakeIce implements IceProvider {
+  @override
+  Future<List<IceServer>> servers() async => const <IceServer>[IceServer(urls: <String>['stun:stun.example.org'])];
+}
+
+/// Telefono finto con le chiamate.
+CallService Function(ChatService) fakeCalls({Duration ring = const Duration(seconds: 45)}) =>
+    (ChatService chat) => CallService(chat: chat, ice: FakeIce(), media: FakeCallMedia.new, ringTimeout: ring);

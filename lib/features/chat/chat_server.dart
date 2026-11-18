@@ -23,6 +23,11 @@ abstract class ChatServer {
 
   Future<(int, DateTime)> send(String conversationId, int generation, String payload);
 
+  /// Messaggio di una chiamata (Blocco 8): come [send], ma [ring] fa squillare il telefono
+  /// dell'altra persona e gli altri passaggi non mandano notifiche.
+  Future<(int, DateTime)> callSignal(String conversationId, int generation, String payload,
+      {required bool ring, required bool video});
+
   Future<List<ChatEnvelope>> sync(int after);
 
   Future<List<ChatConversation>> conversations();
@@ -168,6 +173,23 @@ class SupabaseChatServer implements ChatServer {
       'p_payload': payload,
     }));
     if (rows.isEmpty) throw const ChatFailure('Messaggio non inviato. Riprova.');
+    return (
+      (rows.first['id'] as num).toInt(),
+      DateTime.tryParse('${rows.first['created_at']}')?.toLocal() ?? DateTime.now(),
+    );
+  }
+
+  @override
+  Future<(int, DateTime)> callSignal(String conversationId, int generation, String payload,
+      {required bool ring, required bool video}) async {
+    final rows = _rows(await _rpc('call_signal', {
+      'p_conversation': conversationId,
+      'p_generation': generation,
+      'p_payload': payload,
+      'p_ring': ring,
+      'p_video': video,
+    }));
+    if (rows.isEmpty) throw const ChatFailure('Chiamata non riuscita. Riprova.');
     return (
       (rows.first['id'] as num).toInt(),
       DateTime.tryParse('${rows.first['created_at']}')?.toLocal() ?? DateTime.now(),

@@ -52,3 +52,23 @@ jobs:
           set -euo pipefail
           deno check index.ts handler.ts fcm.ts notifiche_test.ts
           deno test -A notifiche_test.ts
+
+  chiamate:
+    name: Funzione chiamate · test Deno
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Controllo dei tipi e test
+        working-directory: supabase/functions/chiamate
+        run: |
+          set -euo pipefail
+          deno check index.ts handler.ts firebase_token.ts chiamate_test.ts
+          deno test -A chiamate_test.ts

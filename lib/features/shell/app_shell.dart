@@ -5,6 +5,8 @@ import '../../core/services/backend_bootstrap.dart';
 import '../../core/services/push_notifications.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/nexus_ui.dart';
+import '../calls/call_screen.dart';
+import '../calls/call_service.dart';
 import '../chat/chat_screen.dart';
 import '../chat/chat_service.dart';
 import '../chat/chat_thread_screen.dart' show ChatRegistry, openChatFromNotification;
@@ -194,6 +196,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     super.didUpdateWidget(old);
     if (old.chat != widget.chat) {
       old.chat?.removeListener(_onChat);
+      old.chat?.calls?.removeListener(_onCall);
       _attachChat();
     }
   }
@@ -205,6 +208,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     PushNotifications.chatPings.removeListener(_ping);
     PushNotifications.openNotification.removeListener(_openNotificationFromPush);
     widget.chat?.removeListener(_onChat);
+    widget.chat?.calls?.removeListener(_onCall);
     if (ChatRegistry.current == widget.chat) {
       ChatRegistry.current = null;
       ChatRegistry.profiles = null;
@@ -219,7 +223,18 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     ChatRegistry.profiles = widget.profiles;
     if (chat == null) return;
     chat.addListener(_onChat);
+    chat.calls?.addListener(_onCall);
     chat.start();
+  }
+
+  /// C'è una chiamata (in arrivo o appena partita): si apre la schermata a tutto schermo.
+  bool _callOpen = false;
+
+  void _onCall() {
+    final CallService? calls = widget.chat?.calls;
+    if (calls == null || !calls.showing || _callOpen || !mounted) return;
+    _callOpen = true;
+    CallScreen.open(context, calls).whenComplete(() => _callOpen = false);
   }
 
   void _onChat() {

@@ -5,6 +5,7 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 
+import '../calls/call_service.dart';
 import 'chat_backup.dart';
 import 'chat_backup_service.dart';
 import 'chat_crypto.dart';
@@ -32,12 +33,32 @@ class ChatService extends ChangeNotifier {
     BackupKeyStore? backupKeys,
     BackupKdf backupKdf = const BackupKdf(),
     DateTime Function()? clock,
+    CallService Function(ChatService chat)? calls,
   }) : _openCrypto = crypto,
        _clock = clock ?? DateTime.now {
     backup = backupServer != null && backupKeys != null
         ? ChatBackup(chat: this, server: backupServer, keys: backupKeys, kdf: backupKdf)
         : null;
+    this.calls = calls?.call(this);
   }
+
+  /// Chiamate vocali e video (Blocco 8); null senza server.
+  late final CallService? calls;
+
+  /// Passaggi delle chiamate arrivati (offerta, risposta, chiusura), decifrati.
+  final StreamController<CallEnvelope> _callSignals = StreamController<CallEnvelope>.broadcast();
+  Stream<CallEnvelope> get callSignals => _callSignals.stream;
+
+  /// Durante una chiamata si controlla il server ogni secondo.
+  bool _inCall = false;
+  set inCall(bool value) {
+    if (_inCall == value) return;
+    _inCall = value;
+    _schedule();
+    if (value) unawaited(refresh());
+  }
+
+  DateTime now() => _clock();
 
   /// Backup cifrato con password (Blocco 6); null senza server.
   late final ChatBackup? backup;
@@ -161,7 +182,10 @@ class ChatService extends ChangeNotifier {
     _timer?.cancel();
     _timer = null;
     if (!_ready || !_foreground || _disposed) return;
-    _timer = Timer.periodic(_open == null ? slowPoll : fastPoll, (_) => unawaited(refresh()));
+    _timer = Timer.periodic(
+      _inCall ? const Duration(seconds: 1) : (_open == null ? slowPoll : fastPoll),
+      (_) => unawaited(refresh()),
+    );
   }
 
   @override
@@ -169,6 +193,8 @@ class ChatService extends ChangeNotifier {
     _disposed = true;
     _timer?.cancel();
     backup?.dispose();
+    calls?.dispose();
+    unawaited(_callSignals.close());
     super.dispose();
   }
 
@@ -404,6 +430,18 @@ class ChatService extends ChangeNotifier {
     if (s != null && s.generation == e.generation) {
       final List<int>? plain = await crypto.decrypt(s.groupId, e.payload);
       if (plain != null) content = ChatContent.decode(plain);
+    }
+    if (content != null && content.type == 'call') {
+      final CallSignal? signal = CallSignal.decode(content.body);
+      if (signal != null && !_callSignals.isClosed) {
+        _callSignals.add(CallEnvelope(
+          conversationId: e.conversationId,
+          senderId: e.senderId,
+          at: e.createdAt,
+          signal: signal,
+        ));
+      }
+      return;
     }
     if (content != null && (content.type == 'del' || content.type == 'react')) {
       await _appendEvent(ChatEvent(
@@ -802,13 +840,36 @@ class ChatService extends ChangeNotifier {
     }
   }
 
+  /// Manda un passaggio di una chiamata, cifrato come i messaggi.
+  Future<void> sendCallSignal(String conversationId, CallSignal signal) async {
+    await _run(() => _transmit(
+      conversationId,
+      ChatContent.call(signal.encode(), localId: _localId()),
+      call: (ring: signal.action == CallAction.offer, video: signal.video),
+    ));
+  }
+
+  /// Riga «Chiamata persa», «Chiamata vocale · 2:31»… nella conversazione (solo su questo telefono).
+  Future<void> logCall(String conversationId, String text) async {
+    await _run(() => _append(ChatMessage(
+      localId: 'call-${_localId()}',
+      conversationId: conversationId,
+      mine: false,
+      kind: MessageKind.notice,
+      body: text,
+      at: _noticeTime(conversationId).isAfter(_clock()) ? _noticeTime(conversationId) : _clock(),
+    )));
+    _changed();
+  }
+
   /// Cifra e invia [content]; se la chat è cambiata nel frattempo si ricarica e si riprova.
   /// Da chiamare dentro [_run].
-  Future<(int, DateTime)> _transmit(String conversationId, ChatContent content) async {
+  Future<(int, DateTime)> _transmit(String conversationId, ChatContent content, {({bool ring, bool video})? call}) async {
     Future<(int, DateTime)> attempt() async {
       final ChatConversation c = await _fresh(conversationId);
       final LocalSession s = await _ensureSession(c);
       final String payload = await _crypto!.encrypt(s.groupId, content.encode());
+      if (call != null) return server.callSignal(c.id, s.generation, payload, ring: call.ring, video: call.video);
       return server.send(c.id, s.generation, payload);
     }
 

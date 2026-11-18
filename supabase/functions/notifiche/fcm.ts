@@ -43,7 +43,7 @@ export interface QueueRow {
   queue_id: number;
   fid: string;
   platform: string;
-  kind: 'chat' | 'comment' | 'market';
+  kind: 'chat' | 'comment' | 'market' | 'call';
   conversation_id: string | null;
   collapse_key: string;
   title: string;
@@ -65,6 +65,8 @@ export function buildMessage(row: QueueRow): Record<string, unknown> {
       },
       android: {
         priority: 'HIGH',
+        // Una chiamata non risposta non deve squillare dopo: la notifica scade in 45 secondi.
+        ...(row.kind === 'call' ? { ttl: '45s' } : {}),
         collapse_key: tag,
         notification: { channel_id: 'nexus_social_default', tag, icon: 'ic_stat_nexus' },
       },

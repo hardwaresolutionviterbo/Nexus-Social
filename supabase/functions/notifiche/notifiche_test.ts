@@ -113,3 +113,12 @@ Deno.test('manda tutta la coda e toglie i telefoni non più registrati', async (
   assertEquals(sent.length, 3);
   assertEquals(dropped, ['fidSparitoxxxxxxxxxxxx']);
 });
+
+Deno.test('chiamata in arrivo: la notifica scade dopo 45 secondi', () => {
+  const m = buildMessage({ ...row(1), kind: 'call', collapse_key: 'call:00000000-0000-4000-8000-000000000001' }) as {
+    message: Record<string, any>;
+  };
+  assertEquals(m.message.android.ttl, '45s');
+  assertEquals(m.message.data.tipo, 'call');
+  assertEquals((buildMessage(row(2)) as { message: Record<string, any> }).message.android.ttl, undefined);
+});
