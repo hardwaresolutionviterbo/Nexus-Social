@@ -4,6 +4,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/widgets/nexus_ui.dart';
 import '../profile/avatar_view.dart';
 import '../profile/profile_repository.dart';
+import 'chat_group_screens.dart';
 import 'chat_media.dart';
 import 'chat_models.dart';
 import 'chat_service.dart';
@@ -311,9 +312,11 @@ class ChatThreadTile extends StatelessWidget {
     return ListTile(
       key: ValueKey<String>('chat_${c.id}'),
       contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
-      leading: AvatarView(name: c.peerName, repository: profiles, path: c.peerAvatarPath, size: 48),
+      leading: c.isGroup
+          ? GroupAvatar(chat: chat, conversation: c)
+          : AvatarView(name: c.peerName, repository: profiles, path: c.peerAvatarPath, size: 48),
       title: Text(
-        c.peerName.isEmpty ? '@${c.peerUsername}' : c.peerName,
+        c.displayName,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
@@ -326,7 +329,11 @@ class ChatThreadTile extends StatelessWidget {
           ],
           Expanded(
             child: Text(
-              chatPreview(last),
+              c.isGroup && c.isRequest
+                  ? 'Invito al gruppo · ${c.members} membri'
+                  : (c.isGroup && last != null && last.kind == MessageKind.text && !last.mine
+                        ? '${chat.memberName(c.id, last.senderId)}: ${chatPreview(last)}'
+                        : chatPreview(last)),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: unread
@@ -428,6 +435,16 @@ class _NewChatScreenState extends State<NewChatScreen> {
     }
   }
 
+  Future<void> _joinCode() async {
+    final String? id = await joinGroupWithCode(context, widget.chat);
+    if (id == null || !mounted) return;
+    await Navigator.of(context).pushReplacement<void, void>(
+      MaterialPageRoute<void>(
+        builder: (_) => ChatThreadScreen(chat: widget.chat, conversationId: id, profiles: widget.profiles),
+      ),
+    );
+  }
+
   Future<void> _open(ChatContact c) async {
     if (_opening) return;
     setState(() => _opening = true);
@@ -455,26 +472,66 @@ class _NewChatScreenState extends State<NewChatScreen> {
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     final List<ChatContact>? contacts = _contacts;
+    final List<Widget> top = <Widget>[
+      ListTile(
+        key: const ValueKey<String>('nuovo_gruppo'),
+        leading: const CircleAvatar(
+          backgroundColor: AppColors.brandBlue,
+          child: Icon(Icons.group_add_rounded, color: Colors.white),
+        ),
+        title: const Text('Nuovo gruppo'),
+        onTap: _opening
+            ? null
+            : () => Navigator.of(context).pushReplacement<void, void>(
+                MaterialPageRoute<void>(
+                  builder: (_) => NewGroupScreen(
+                    chat: widget.chat,
+                    profiles: widget.profiles,
+                    onCreated: (BuildContext ctx, String id) => Navigator.of(ctx).pushReplacement<void, void>(
+                      MaterialPageRoute<void>(
+                        builder: (_) => ChatThreadScreen(chat: widget.chat, conversationId: id, profiles: widget.profiles),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+      ),
+      ListTile(
+        key: const ValueKey<String>('entra_codice'),
+        leading: const CircleAvatar(
+          backgroundColor: AppColors.brandOrange,
+          child: Icon(Icons.vpn_key_rounded, color: Colors.white),
+        ),
+        title: const Text('Entra con un codice'),
+        subtitle: const Text('Il codice d\'invito di un gruppo'),
+        onTap: _opening ? null : _joinCode,
+      ),
+      const Divider(height: 8),
+    ];
     Widget body;
     if (_error != null) {
-      body = Center(child: Text(_error!));
+      body = ListView(children: [...top, Padding(padding: const EdgeInsets.all(24), child: Text(_error!))]);
     } else if (contacts == null) {
-      body = const Center(child: CircularProgressIndicator());
+      body = ListView(children: [...top, const Padding(padding: EdgeInsets.all(32), child: Center(child: CircularProgressIndicator()))]);
     } else if (contacts.isEmpty) {
-      body = Center(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.xl),
-          child: Text(
-            'Nessun contatto su Piazly. Attiva la rubrica in Profilo → Privacy, oppure scrivi '
-            'con «Contatta» su un annuncio.',
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium,
+      body = ListView(
+        children: [
+          ...top,
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.xl),
+            child: Text(
+              'Nessun contatto su Piazly. Attiva la rubrica in Profilo → Privacy, oppure scrivi '
+              'con «Contatta» su un annuncio.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium,
+            ),
           ),
-        ),
+        ],
       );
     } else {
       body = ListView(
         children: [
+          ...top,
           Padding(
             padding: const EdgeInsets.fromLTRB(18, 12, 18, 4),
             child: Text('Contatti su Piazly', style: theme.textTheme.labelLarge),

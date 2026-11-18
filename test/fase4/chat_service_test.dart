@@ -300,4 +300,105 @@ void main() {
     b.dispose();
     d.dispose();
   });
+
+  test('Blocco 4 · gruppo cifrato: creazione, invito, aggiunta, uscita, telefono nuovo, codice', () async {
+    const String elena = 'utenteElena00000000000000006';
+    hub.addPerson(elena, 'elena.p', 'Elena P.');
+    final ChatService a = await phone(hub, anna);
+    final ChatService b = await phone(hub, bruno);
+    final ChatService d = await phone(hub, dario);
+    final ChatService e = await phone(hub, elena);
+
+    // Anna crea il gruppo: Bruno (ha Anna in rubrica) entra, Dario riceve un invito.
+    final String g = await a.createGroup('Gita al lago', <String>[bruno, dario]);
+    expect(a.conversation(g)!.isGroup, isTrue);
+    expect(a.conversation(g)!.generation, 1);
+    await b.refresh();
+    expect(b.conversation(g)!.title, 'Gita al lago');
+    expect(b.messages(g).single.body, 'Anna R. ha creato il gruppo con te · Anna R. ha invitato Dario V.');
+    await a.refresh();
+    expect(a.messages(g).single.body, 'Hai creato il gruppo con Bruno B. · Hai invitato Dario V.');
+    await d.refresh();
+    expect(d.requests.single.conversation.id, g, reason: 'l\'invito compare tra le richieste');
+    expect(d.messages(g), isEmpty, reason: 'nessun contenuto prima di accettare');
+
+    // Messaggi cifrati tra Anna e Bruno, con il mittente.
+    await a.send(g, 'Partenza alle 9');
+    await b.refresh();
+    expect(b.messages(g).last.body, 'Partenza alle 9');
+    expect(b.messages(g).last.senderId, anna);
+    expect(b.memberName(g, anna), 'Anna R.');
+    for (final String p in hub.payloads) {
+      expect(utf8.decode(base64Decode(p), allowMalformed: true).contains('Partenza'), isFalse);
+    }
+    await b.send(g, 'Ci sono!');
+    await a.refresh();
+    expect(a.messages(g).last.body, 'Ci sono!');
+
+    // Dario accetta: Anna (amministratrice) lo aggiunge al gruppo cifrato da sola.
+    await d.respondRequest(g, true);
+    await a.refresh();
+    await b.refresh();
+    await d.refresh();
+    expect(d.conversation(g)!.myMlsState, 'in');
+    expect(d.messages(g).where((m) => m.body == 'Partenza alle 9'), isEmpty, reason: 'niente messaggi di prima');
+    await d.send(g, 'Eccomi anche io');
+    await a.refresh();
+    await b.refresh();
+    expect(a.messages(g).last.body, 'Eccomi anche io');
+    expect(b.messages(g).last.body, 'Eccomi anche io');
+
+    // Letto da tutti → spunte blu per Anna.
+    await a.send(g, 'Portate il pranzo');
+    await b.refresh();
+    await d.refresh();
+    await b.markRead(g);
+    await a.refresh();
+    expect(a.messages(g).last.ticksFor(a.conversation(g)), MessageTicks.delivered, reason: 'Dario non l\'ha letto');
+    await d.markRead(g);
+    await a.refresh();
+    expect(a.messages(g).last.ticksFor(a.conversation(g)), MessageTicks.read);
+
+    // Bruno esce: viene tolto dal gruppo cifrato e non riceve più nulla.
+    await b.leaveGroup(g);
+    expect(b.conversation(g), isNull);
+    await a.refresh();
+    await d.refresh();
+    await a.send(g, 'Bruno è uscito');
+    await d.refresh();
+    expect(d.messages(g).last.body, 'Bruno è uscito');
+    await b.refresh();
+    expect(b.messages(g), isEmpty);
+
+    // Dario cambia telefono: Anna lo riaggiunge e la chat continua.
+    d.dispose();
+    final ChatService d2 = await phone(hub, dario);
+    await a.refresh();
+    await d2.refresh();
+    expect(d2.conversation(g)!.myMlsState, 'in');
+    await d2.send(g, 'Telefono nuovo, tutto ok');
+    await a.refresh();
+    expect(a.messages(g).last.body, 'Telefono nuovo, tutto ok');
+
+    // Elena entra con il codice d'invito.
+    final String code = await a.inviteCode(g);
+    expect((await e.inviteInfo(code)).title, 'Gita al lago');
+    await e.joinWithCode(code);
+    await a.refresh();
+    await e.refresh();
+    await a.send(g, 'Benvenuta Elena');
+    await e.refresh();
+    await d2.refresh();
+    expect(e.messages(g).last.body, 'Benvenuta Elena');
+    expect(d2.messages(g).last.body, 'Benvenuta Elena');
+
+    // Un membro non amministratore non può aggiungere né nominare.
+    await expectLater(e.addToGroup(g, <String>[bruno]), throwsA(isA<ChatFailure>()));
+    await a.setGroupAdmin(g, elena, true);
+    await e.refresh();
+    expect(e.conversation(g)!.isAdmin, isTrue);
+    for (final ChatService p in <ChatService>[a, b, d2, e]) {
+      p.dispose();
+    }
+  });
 }

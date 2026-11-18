@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/theme/app_theme.dart';
 import '../profile/avatar_view.dart';
 import '../profile/profile_repository.dart';
+import 'chat_group_screens.dart';
 import 'chat_media.dart';
 import 'chat_media_picker.dart';
 import 'chat_media_widgets.dart';
@@ -259,8 +260,22 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     await _sendPicked(voice);
   }
 
-  String _authorName(ChatConversation? c, String authorId) =>
-      authorId == widget.chat.myId ? 'Tu' : (c?.peerName.isNotEmpty ?? false ? c!.peerName : widget.fallbackName);
+  String _authorName(ChatConversation? c, String authorId) {
+    if (authorId == widget.chat.myId) return 'Tu';
+    if (c != null && c.isGroup) return widget.chat.memberName(c.id, authorId);
+    return c?.peerName.isNotEmpty ?? false ? c!.peerName : widget.fallbackName;
+  }
+
+  void _openInfo() => Navigator.of(context).push<void>(
+    MaterialPageRoute<void>(
+      builder: (_) => GroupInfoScreen(
+        chat: widget.chat,
+        conversationId: widget.conversationId,
+        profiles: widget.profiles,
+        device: widget.device,
+      ),
+    ),
+  );
 
   /// Tieni premuto un messaggio: reazioni, Rispondi, Copia, Inoltra, Elimina.
   Future<void> _actions(ChatMessage m) async {
@@ -337,37 +352,55 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       listenable: widget.chat,
       builder: (BuildContext context, _) {
         final ChatConversation? c = widget.chat.conversation(widget.conversationId);
-        final String name = c == null
-            ? widget.fallbackName
-            : (c.peerName.isEmpty ? '@${c.peerUsername}' : c.peerName);
+        final String name = c == null ? widget.fallbackName : c.displayName;
+        final bool group = c?.isGroup ?? false;
         final List<ChatMessage> messages = widget.chat.messages(widget.conversationId);
         final DateTime now = widget.now();
         return Scaffold(
           appBar: AppBar(
             titleSpacing: 0,
-            title: Row(
-              children: [
-                AvatarView(name: name, repository: widget.profiles, path: c?.peerAvatarPath, size: 38),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(name, maxLines: 1, overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-                      if (c != null)
-                        Text('@${c.peerUsername}', style: theme.textTheme.bodySmall),
-                    ],
+            title: InkWell(
+              key: const ValueKey<String>('chat_intestazione'),
+              onTap: group && c != null && !c.isRequest ? _openInfo : null,
+              child: Row(
+                children: [
+                  if (group && c != null)
+                    GroupAvatar(chat: widget.chat, conversation: c, size: 38)
+                  else
+                    AvatarView(name: name, repository: widget.profiles, path: c?.peerAvatarPath, size: 38),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                        if (c != null)
+                          Text(
+                            group ? '${c.members} ${c.members == 1 ? 'membro' : 'membri'} · tocca per le info'
+                                : '@${c.peerUsername}',
+                            style: theme.textTheme.bodySmall,
+                          ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
           body: Column(
             children: [
               if (c != null && c.isRequest)
-                _RequestBanner(name: name, busy: _answering, onAnswer: _answer),
+                _RequestBanner(
+                  name: name,
+                  busy: _answering,
+                  onAnswer: _answer,
+                  group: group,
+                  invitedBy: group && c.invitedBy != null ? widget.chat.memberName(c.id, c.invitedBy!) : null,
+                )
+              else if (c != null && group && c.myMlsState != 'in')
+                const _WaitingBanner(),
               Expanded(
                 child: ListView.builder(
                   reverse: true,
@@ -382,6 +415,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                       ticks: m.ticksFor(c),
                       now: now,
                       quoteAuthor: m.quote == null ? null : _authorName(c, m.quote!.authorId),
+                      senderName: group && !m.mine && m.kind != MessageKind.notice
+                          ? widget.chat.memberName(widget.conversationId, m.senderId)
+                          : null,
                       onRetry: m.ticks == MessageTicks.failed ? () => widget.chat.retry(m) : null,
                       onLongPress: m.kind == MessageKind.notice || m.ticks == MessageTicks.sending
                           ? null
@@ -452,11 +488,19 @@ class _E2eNote extends StatelessWidget {
 }
 
 class _RequestBanner extends StatelessWidget {
-  const _RequestBanner({required this.name, required this.busy, required this.onAnswer});
+  const _RequestBanner({
+    required this.name,
+    required this.busy,
+    required this.onAnswer,
+    this.group = false,
+    this.invitedBy,
+  });
 
   final String name;
   final bool busy;
   final Future<void> Function(bool accept) onAnswer;
+  final bool group;
+  final String? invitedBy;
 
   @override
   Widget build(BuildContext context) {
@@ -474,11 +518,18 @@ class _RequestBanner extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('$name vuole scriverti', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+          Text(
+            group ? 'Invito al gruppo «$name»' : '$name vuole scriverti',
+            style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 4),
           Text(
-            'Non è nella tua rubrica. Non vede il tuo numero e non sa se hai letto finché non '
-            'accetti. Se rifiuti, la chat sparisce e non ricevi altro.',
+            group
+                ? '${invitedBy == null || invitedBy == 'Un membro' ? 'Qualcuno che non hai in rubrica' : invitedBy} '
+                      'ti ha aggiunto. Entrando, i membri vedranno il tuo nome e la tua foto, mai il '
+                      'numero. Se rifiuti, l\'invito sparisce.'
+                : 'Non è nella tua rubrica. Non vede il tuo numero e non sa se hai letto finché non '
+                      'accetti. Se rifiuti, la chat sparisce e non ricevi altro.',
             style: theme.textTheme.bodySmall,
           ),
           const SizedBox(height: 10),
@@ -497,7 +548,7 @@ class _RequestBanner extends StatelessWidget {
                 child: FilledButton(
                   key: const ValueKey<String>('richiesta_accetta'),
                   onPressed: busy ? null : () => onAnswer(true),
-                  child: const Text('Accetta'),
+                  child: Text(group ? 'Entra' : 'Accetta'),
                 ),
               ),
             ],
@@ -515,9 +566,13 @@ class _Bubble extends StatelessWidget {
     required this.ticks,
     required this.now,
     this.quoteAuthor,
+    this.senderName,
     this.onRetry,
     this.onLongPress,
   });
+
+  /// Nome di chi scrive (solo nei gruppi, per i messaggi degli altri).
+  final String? senderName;
 
   final ChatService chat;
   final ChatMessage message;
@@ -578,6 +633,17 @@ class _Bubble extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (senderName != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 2),
+              child: Text(
+                senderName!,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: senderColor(message.senderId),
+                ),
+              ),
+            ),
           if (message.forwarded)
             Padding(
               padding: const EdgeInsets.only(bottom: 2),
@@ -656,8 +722,7 @@ class _Bubble extends StatelessWidget {
             ],
           ),
         ),
-            if (message.myReaction.isNotEmpty || message.peerReaction.isNotEmpty)
-              _Reactions(mine: message.myReaction, peer: message.peerReaction),
+            if (message.allReactions.isNotEmpty) _Reactions(list: message.allReactions),
           ],
         ),
       ),
@@ -770,18 +835,20 @@ class _QuoteBox extends StatelessWidget {
   }
 }
 
-/// Reazioni sotto il fumetto.
+/// Reazioni sotto il fumetto: ogni emoji con quante persone l'hanno messa.
 class _Reactions extends StatelessWidget {
-  const _Reactions({required this.mine, required this.peer});
+  const _Reactions({required this.list});
 
-  final String mine;
-  final String peer;
+  final List<String> list;
 
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
-    final String shown = mine == peer ? mine : '$peer$mine';
-    final bool both = mine.isNotEmpty && peer.isNotEmpty;
+    final Map<String, int> count = <String, int>{};
+    for (final String e in list) {
+      count[e] = (count[e] ?? 0) + 1;
+    }
+    final String shown = count.entries.map((e) => e.value > 1 ? '${e.key} ${e.value}' : e.key).join(' ');
     return Transform.translate(
       offset: const Offset(0, -6),
       child: Container(
@@ -792,7 +859,7 @@ class _Reactions extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: theme.colorScheme.outlineVariant),
         ),
-        child: Text(both && mine == peer ? '$shown 2' : shown, style: const TextStyle(fontSize: 14)),
+        child: Text(shown, style: const TextStyle(fontSize: 14)),
       ),
     );
   }
@@ -964,16 +1031,18 @@ class _ForwardScreenState extends State<ForwardScreen> {
                         _chosen.remove(t.conversation.id);
                       }
                     }),
-              secondary: AvatarView(
-                name: t.conversation.peerName,
-                repository: widget.profiles,
-                path: t.conversation.peerAvatarPath,
-                size: 40,
-              ),
-              title: Text(t.conversation.peerName.isEmpty
-                  ? '@${t.conversation.peerUsername}'
-                  : t.conversation.peerName),
-              subtitle: Text('@${t.conversation.peerUsername}'),
+              secondary: t.conversation.isGroup
+                  ? GroupAvatar(chat: widget.chat, conversation: t.conversation, size: 40)
+                  : AvatarView(
+                      name: t.conversation.peerName,
+                      repository: widget.profiles,
+                      path: t.conversation.peerAvatarPath,
+                      size: 40,
+                    ),
+              title: Text(t.conversation.displayName),
+              subtitle: Text(t.conversation.isGroup
+                  ? 'Gruppo · ${t.conversation.members} membri'
+                  : '@${t.conversation.peerUsername}'),
             ),
           if (threads.isEmpty)
             const Padding(
@@ -1100,6 +1169,51 @@ class _RecordingBar extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Colore del nome di chi scrive nel gruppo (sempre lo stesso per la stessa persona).
+Color senderColor(String userId) {
+  const List<Color> palette = <Color>[
+    Color(0xFF1E88E5), Color(0xFF8E24AA), Color(0xFF43A047), Color(0xFFE53935),
+    Color(0xFFFB8C00), Color(0xFF00897B), Color(0xFF6D4C41), Color(0xFF3949AB),
+  ];
+  int h = 0;
+  for (final int c in userId.codeUnits) {
+    h = (h * 31 + c) & 0x7fffffff;
+  }
+  return palette[h % palette.length];
+}
+
+/// Nel gruppo ma non ancora nel gruppo cifrato: un amministratore lo farà da solo.
+class _WaitingBanner extends StatelessWidget {
+  const _WaitingBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    return Container(
+      key: const ValueKey<String>('gruppo_attesa'),
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.brandBlue.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Stai entrando nel gruppo cifrato: succede da solo appena un amministratore apre l\'app.',
+              style: theme.textTheme.bodySmall,
+            ),
+          ),
+        ],
       ),
     );
   }

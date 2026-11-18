@@ -38,6 +38,15 @@ class ChatConversation {
     this.lastMessageId,
     this.lastMessageAt,
     required this.createdAt,
+    this.isGroup = false,
+    this.title = '',
+    this.description = '',
+    this.photoVersion = 0,
+    this.myRole = 'member',
+    this.myMlsState = 'in',
+    this.members = 2,
+    this.pending = 0,
+    this.invitedBy,
   });
 
   final String id;
@@ -58,11 +67,68 @@ class ChatConversation {
   final DateTime? lastMessageAt;
   final DateTime createdAt;
 
+  /// Gruppo (Blocco 4): niente «altra persona», ma titolo, membri e ruoli.
+  final bool isGroup;
+  final String title;
+  final String description;
+  final int photoVersion;
+  final String myRole;
+
+  /// Stato nel gruppo cifrato: in, to_add, to_remove, to_readd.
+  final String myMlsState;
+  final int members;
+
+  /// Modifiche al gruppo cifrato in attesa (persone da aggiungere o togliere).
+  final int pending;
+  final String? invitedBy;
+
   bool get isRequest => status == ChatStatus.request;
+
+  bool get isAdmin => myRole == 'admin';
+
+  /// Nome da mostrare: titolo del gruppo o nome dell'altra persona.
+  String get displayName => isGroup ? title : (peerName.isEmpty ? '@$peerUsername' : peerName);
 
   /// L'altra persona ha cambiato telefono dopo l'ultima apertura cifrata.
   bool get peerChangedPhone =>
-      generation > 0 && peerSignatureKey != null && peerJoinedKey != peerSignatureKey;
+      !isGroup && generation > 0 && peerSignatureKey != null && peerJoinedKey != peerSignatureKey;
+
+  ChatConversation copyWith({
+    int? generation,
+    String? groupId,
+    String? peerSignatureKey,
+    String? peerJoinedKey,
+    String? myJoinedKey,
+    String? myMlsState,
+    int? pending,
+  }) => ChatConversation(
+    id: id,
+    status: status,
+    generation: generation ?? this.generation,
+    groupId: groupId ?? this.groupId,
+    peerId: peerId,
+    peerUsername: peerUsername,
+    peerName: peerName,
+    peerAvatarPath: peerAvatarPath,
+    peerSignatureKey: peerSignatureKey ?? this.peerSignatureKey,
+    peerJoinedKey: peerJoinedKey ?? this.peerJoinedKey,
+    myJoinedKey: myJoinedKey ?? this.myJoinedKey,
+    peerDeliveredUpto: peerDeliveredUpto,
+    peerReadUpto: peerReadUpto,
+    myReadUpto: myReadUpto,
+    lastMessageId: lastMessageId,
+    lastMessageAt: lastMessageAt,
+    createdAt: createdAt,
+    isGroup: isGroup,
+    title: title,
+    description: description,
+    photoVersion: photoVersion,
+    myRole: myRole,
+    myMlsState: myMlsState ?? this.myMlsState,
+    members: members,
+    pending: pending ?? this.pending,
+    invitedBy: invitedBy,
+  );
 
   factory ChatConversation.fromRow(Map<String, dynamic> r) {
     int asInt(Object? v) => v is int ? v : (v is num ? v.toInt() : int.tryParse('$v') ?? 0);
@@ -71,7 +137,7 @@ class ChatConversation {
       status: r['status'] == 'request' ? ChatStatus.request : ChatStatus.active,
       generation: asInt(r['generation']),
       groupId: r['mls_group_id'] as String?,
-      peerId: r['peer_id'] as String,
+      peerId: (r['peer_id'] as String?) ?? '',
       peerUsername: (r['peer_username'] as String?) ?? '',
       peerName: (r['peer_public_name'] as String?) ?? '',
       peerAvatarPath: r['peer_avatar_thumb_path'] as String?,
@@ -84,8 +150,74 @@ class ChatConversation {
       lastMessageId: r['last_message_id'] == null ? null : asInt(r['last_message_id']),
       lastMessageAt: DateTime.tryParse('${r['last_message_at']}')?.toLocal(),
       createdAt: DateTime.tryParse('${r['created_at']}')?.toLocal() ?? DateTime.now(),
+      isGroup: r['kind'] == 'group',
+      title: (r['title'] as String?) ?? '',
+      description: (r['description'] as String?) ?? '',
+      photoVersion: asInt(r['photo_version']),
+      myRole: (r['my_role'] as String?) ?? 'member',
+      myMlsState: (r['my_mls_state'] as String?) ?? 'in',
+      members: r['members'] == null ? 2 : asInt(r['members']),
+      pending: asInt(r['pending']),
+      invitedBy: r['invited_by'] as String?,
     );
   }
+}
+
+/// Membro di un gruppo (`chat_group_members`). Mai il numero di telefono.
+class GroupMember {
+  const GroupMember({
+    required this.userId,
+    required this.username,
+    required this.name,
+    this.avatarPath,
+    required this.role,
+    required this.status,
+    required this.mlsState,
+    this.signatureKey,
+    this.joinedKey,
+  });
+
+  final String userId;
+  final String username;
+  final String name;
+  final String? avatarPath;
+  final String role;
+  final String status;
+  final String mlsState;
+  final String? signatureKey;
+  final String? joinedKey;
+
+  bool get isAdmin => role == 'admin';
+  bool get isActive => status == 'active';
+  bool get isInvited => status == 'request';
+  String get displayName => name.isEmpty ? '@$username' : name;
+
+  factory GroupMember.fromRow(Map<String, dynamic> r) => GroupMember(
+    userId: r['user_id'] as String,
+    username: (r['username'] as String?) ?? '',
+    name: (r['public_name'] as String?) ?? '',
+    avatarPath: r['avatar_thumb_path'] as String?,
+    role: (r['role'] as String?) ?? 'member',
+    status: (r['status'] as String?) ?? 'active',
+    mlsState: (r['mls_state'] as String?) ?? 'in',
+    signatureKey: r['signature_key'] as String?,
+    joinedKey: r['joined_key'] as String?,
+  );
+}
+
+/// Anteprima di un gruppo dal codice d'invito.
+class GroupInviteInfo {
+  const GroupInviteInfo({
+    required this.conversationId,
+    required this.title,
+    required this.members,
+    required this.alreadyMember,
+  });
+
+  final String conversationId;
+  final String title;
+  final int members;
+  final bool alreadyMember;
 }
 
 /// Messaggio cifrato in arrivo (`chat_sync`).
@@ -95,7 +227,7 @@ class ChatEnvelope {
     required this.conversationId,
     required this.generation,
     required this.senderId,
-    required this.isWelcome,
+    required this.kind,
     required this.payload,
     required this.createdAt,
   });
@@ -104,8 +236,13 @@ class ChatEnvelope {
   final String conversationId;
   final int generation;
   final String senderId;
-  final bool isWelcome;
+
+  /// welcome (invito cifrato), app (messaggio), commit (modifica del gruppo cifrato),
+  /// event (avviso del gruppo generato dal server).
+  final String kind;
   final String payload;
+
+  bool get isWelcome => kind == 'welcome';
   final DateTime createdAt;
 
   factory ChatEnvelope.fromRow(Map<String, dynamic> r) => ChatEnvelope(
@@ -113,7 +250,7 @@ class ChatEnvelope {
     conversationId: r['conversation_id'] as String,
     generation: (r['generation'] as num).toInt(),
     senderId: r['sender_id'] as String,
-    isWelcome: r['kind'] == 'welcome',
+    kind: (r['kind'] as String?) ?? 'app',
     payload: r['payload'] as String,
     createdAt: DateTime.tryParse('${r['created_at']}')?.toLocal() ?? DateTime.now(),
   );
@@ -300,6 +437,7 @@ class ChatEvent {
     this.emoji = '',
     this.serverId,
     this.value = '',
+    this.by = '',
   });
 
   final String conversationId;
@@ -313,8 +451,12 @@ class ChatEvent {
   final int? serverId;
   final String value;
 
+  /// Chi l'ha fatto (per gli eventi altrui; nei gruppi distingue i membri).
+  final String by;
+
   Map<String, Object?> toJson() => <String, Object?>{
     'ev': kind.name,
+    if (by.isNotEmpty) 'u': by,
     if (value.isNotEmpty) 'v': value,
     't': target,
     'm': byMe,
@@ -336,6 +478,7 @@ class ChatEvent {
       emoji: (j['x'] as String?) ?? '',
       serverId: (j['s'] as num?)?.toInt(),
       value: (j['v'] as String?) ?? '',
+      by: (j['u'] as String?) ?? '',
     );
   }
 }
@@ -358,6 +501,8 @@ class ChatMessage {
     this.peerReaction = '',
     this.media,
     this.localFile = '',
+    this.senderId = '',
+    this.reactions = const <String, String>{},
   });
 
   final String localId;
@@ -385,6 +530,20 @@ class ChatMessage {
   /// Nome del file in chiaro sul telefono, se già scaricato (o inviato da qui).
   final String localFile;
 
+  /// Chi l'ha scritto (vuoto per i miei; nei gruppi serve per il nome nel fumetto).
+  final String senderId;
+
+  /// Reazioni degli altri membri del gruppo (chi → emoji). Nelle chat a due c'è solo
+  /// [peerReaction].
+  final Map<String, String> reactions;
+
+  /// Tutte le reazioni da mostrare: le mie e quelle degli altri.
+  List<String> get allReactions => <String>[
+    if (myReaction.isNotEmpty) myReaction,
+    if (reactions.isEmpty && peerReaction.isNotEmpty) peerReaction,
+    ...reactions.values.where((e) => e.isNotEmpty),
+  ];
+
   /// Messaggio normale non eliminato (testo o allegato).
   bool get isText => kind == MessageKind.text && !deleted;
 
@@ -401,6 +560,7 @@ class ChatMessage {
     String? myReaction,
     String? peerReaction,
     String? localFile,
+    Map<String, String>? reactions,
   }) => ChatMessage(
     localId: localId,
     conversationId: conversationId,
@@ -417,12 +577,15 @@ class ChatMessage {
     peerReaction: peerReaction ?? this.peerReaction,
     media: (deleted ?? this.deleted) ? null : media,
     localFile: (deleted ?? this.deleted) ? '' : (localFile ?? this.localFile),
+    senderId: senderId,
+    reactions: reactions ?? this.reactions,
   );
 
   Map<String, Object?> toJson() => <String, Object?>{
     'l': localId,
     if (media != null) 'md': media!.toJson(),
     if (localFile.isNotEmpty) 'lf': localFile,
+    if (senderId.isNotEmpty) 'sd': senderId,
     's': serverId,
     'm': mine,
     'k': kind.name,
@@ -451,6 +614,7 @@ class ChatMessage {
       forwarded: j['f'] == true,
       media: ChatMedia.fromJson(j['md']),
       localFile: (j['lf'] as String?) ?? '',
+      senderId: (j['sd'] as String?) ?? '',
     );
   }
 
@@ -482,11 +646,21 @@ List<ChatMessage> foldChatEvents(List<ChatMessage> messages, List<ChatEvent> eve
       case ChatEventKind.hide:
         out[i] = null;
       case ChatEventKind.delete:
-        // Solo chi l'ha scritto può eliminarlo per tutti.
-        if (e.byMe == m.mine && m.kind == MessageKind.text) out[i] = m.copyWith(deleted: true);
+        // Solo chi l'ha scritto può eliminarlo per tutti (nei gruppi: lo stesso membro).
+        final bool author = e.byMe ? m.mine : (!m.mine && (m.senderId.isEmpty || e.by.isEmpty || e.by == m.senderId));
+        if (author && m.kind == MessageKind.text) out[i] = m.copyWith(deleted: true);
       case ChatEventKind.react:
         if (m.deleted || m.kind != MessageKind.text) continue;
-        out[i] = e.byMe ? m.copyWith(myReaction: e.emoji) : m.copyWith(peerReaction: e.emoji);
+        if (e.byMe) {
+          out[i] = m.copyWith(myReaction: e.emoji);
+        } else if (e.by.isEmpty) {
+          out[i] = m.copyWith(peerReaction: e.emoji);
+        } else {
+          out[i] = m.copyWith(
+            peerReaction: e.emoji,
+            reactions: <String, String>{...m.reactions, e.by: e.emoji}..removeWhere((_, v) => v.isEmpty),
+          );
+        }
       case ChatEventKind.saved:
         if (m.media != null && !m.deleted) out[i] = m.copyWith(localFile: e.value);
     }

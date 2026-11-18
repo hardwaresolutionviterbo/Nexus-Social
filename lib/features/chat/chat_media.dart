@@ -172,6 +172,11 @@ abstract class ChatMediaServer {
 
   /// Cancella il file dal server (chi riceve, dopo averlo scaricato).
   Future<void> remove(String path);
+
+  /// Foto del gruppo (Blocco 4): la cambiano gli amministratori, la vedono i membri.
+  Future<void> uploadGroupPhoto(String conversationId, Uint8List jpeg);
+
+  Future<Uint8List?> downloadGroupPhoto(String conversationId);
 }
 
 class SupabaseChatMediaServer implements ChatMediaServer {
@@ -209,6 +214,30 @@ class SupabaseChatMediaServer implements ChatMediaServer {
       await _client.storage.from(bucket).remove(<String>[path]);
     } catch (_) {
       // Resta sul server: si riprova alla prossima apertura.
+    }
+  }
+
+  static const String groupBucket = 'chat-group-photos';
+
+  @override
+  Future<void> uploadGroupPhoto(String conversationId, Uint8List jpeg) async {
+    try {
+      await _client.storage.from(groupBucket).uploadBinary(
+        '$conversationId/foto.jpg',
+        jpeg,
+        fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: true),
+      );
+    } catch (_) {
+      throw const ChatFailure('Foto non caricata. Riprova.');
+    }
+  }
+
+  @override
+  Future<Uint8List?> downloadGroupPhoto(String conversationId) async {
+    try {
+      return await _client.storage.from(groupBucket).download('$conversationId/foto.jpg');
+    } catch (_) {
+      return null;
     }
   }
 }

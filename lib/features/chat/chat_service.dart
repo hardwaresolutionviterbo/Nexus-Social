@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
@@ -156,8 +157,8 @@ class ChatService extends ChangeNotifier {
   List<ChatThread> _threads(bool requests) {
     final List<ChatThread> list = <ChatThread>[
       for (final ChatConversation c in _conversations.values)
-        // Come WhatsApp: una chat compare nella lista dal primo messaggio.
-        if (c.isRequest == requests && _visible(c.id).isNotEmpty)
+        // Come WhatsApp: una chat a due compare dal primo messaggio, un gruppo subito.
+        if (c.isRequest == requests && (c.isGroup || _visible(c.id).isNotEmpty))
             ChatThread(
               conversation: c,
               last: _visible(c.id).lastOrNull,
@@ -204,6 +205,7 @@ class ChatService extends ChangeNotifier {
       await _run(() async {
         await _syncInbox();
         await _loadConversations();
+        await _maintainGroups();
       });
     } catch (_) {
       // Rete assente: si riprova al prossimo giro.
@@ -248,10 +250,16 @@ class ChatService extends ChangeNotifier {
       for (final ChatEnvelope e in batch) {
         await _stored(e.conversationId);
         if (!await store.hasServerId(e.conversationId, e.id)) {
-          if (e.isWelcome) {
-            await _accept(crypto, e);
-          } else {
-            await _receive(crypto, e);
+          if (!_conversations.containsKey(e.conversationId)) await _loadConversations();
+          switch (e.kind) {
+            case 'welcome':
+              await _accept(crypto, e);
+            case 'commit':
+              await _applyCommit(crypto, e);
+            case 'event':
+              await _groupEvent(e);
+            default:
+              await _receive(crypto, e);
           }
         }
         cursor = e.id;
@@ -267,20 +275,99 @@ class ChatService extends ChangeNotifier {
         // Si riprova al prossimo messaggio.
       }
     }
+    // Gruppi rimasti indietro (telefono spento troppo a lungo, commit perso): un
+    // amministratore ci riaggiunge.
+    for (final String id in _lost.toList()) {
+      try {
+        await server.groupRejoin(id);
+        _lost.remove(id);
+      } catch (_) {
+        // Si riprova.
+      }
+    }
+  }
+
+  /// Gruppi in cui questo telefono ha perso il filo del gruppo cifrato.
+  final Set<String> _lost = <String>{};
+
+  Future<void> _applyCommit(ChatCrypto crypto, ChatEnvelope e) async {
+    final LocalSession? s = await store.session(e.conversationId);
+    if (s != null && s.generation > e.generation) return; // già applicato
+    if (s == null || s.generation < e.generation || !await crypto.applyCommit(s.groupId, e.payload)) {
+      _lost.add(e.conversationId);
+      return;
+    }
+    await store.setSession(e.conversationId, LocalSession(e.generation + 1, s.groupId));
+  }
+
+  // ---------------------------------------------------------------- avvisi del gruppo
+
+  final Map<String, Map<String, String>> _names = <String, Map<String, String>>{};
+
+  /// Nome di un membro del gruppo («Tu» per sé stessi).
+  String memberName(String conversationId, String userId) {
+    if (userId == myId) return 'Tu';
+    return _names[conversationId]?[userId] ?? 'Un membro';
+  }
+
+  Future<void> _loadNames(String conversationId) async {
+    try {
+      final List<GroupMember> list = await server.groupMembers(conversationId);
+      _names[conversationId] = <String, String>{
+        ...?_names[conversationId],
+        for (final GroupMember m in list) m.userId: m.displayName,
+      };
+    } catch (_) {
+      // Nomi non disponibili: si mostra «Un membro».
+    }
+  }
+
+  Future<void> _groupEvent(ChatEnvelope e) async {
+    Map<String, dynamic> ev;
+    try {
+      ev = Map<String, dynamic>.from(jsonDecode(utf8.decode(base64Decode(e.payload))) as Map);
+    } catch (_) {
+      return;
+    }
+    final List<String> ids = <String>[
+      if (ev['by'] is String) ev['by'] as String,
+      if (ev['who'] is String) ev['who'] as String,
+      ...((ev['added'] as List?) ?? const <Object>[]).whereType<String>(),
+      ...((ev['invited'] as List?) ?? const <Object>[]).whereType<String>(),
+    ];
+    final Map<String, String> known = _names[e.conversationId] ?? const <String, String>{};
+    if (ids.any((id) => id != myId && !known.containsKey(id))) await _loadNames(e.conversationId);
+    final String text = groupEventText(ev, (String id) => memberName(e.conversationId, id));
+    if (text.isEmpty) return;
+    await _append(ChatMessage(
+      localId: 'ev-${e.id}',
+      conversationId: e.conversationId,
+      serverId: e.id,
+      mine: false,
+      kind: MessageKind.notice,
+      body: text,
+      at: e.createdAt,
+      senderId: e.senderId,
+    ));
   }
 
   Future<void> _accept(ChatCrypto crypto, ChatEnvelope e) async {
+    final bool group = _conversations[e.conversationId]?.isGroup ?? false;
+    final LocalSession? old = await store.session(e.conversationId);
+    // Nel gruppo il vecchio stato cifrato (stesso identificativo) va tolto prima.
+    if (group && old != null) await crypto.dropGroup(old.groupId);
     final String groupId;
     try {
-      groupId = await crypto.joinGroup(e.payload, peerId: e.senderId);
+      groupId = await crypto.joinGroup(e.payload, peerId: group ? '' : e.senderId);
     } catch (_) {
       // Invito per un telefono precedente: chi scrive per primo riaprirà la chat.
+      if (group) _lost.add(e.conversationId);
       return;
     }
-    final LocalSession? old = await store.session(e.conversationId);
-    if (old != null && old.groupId != groupId) await crypto.dropGroup(old.groupId);
+    if (!group && old != null && old.groupId != groupId) await crypto.dropGroup(old.groupId);
     await store.setSession(e.conversationId, LocalSession(e.generation, groupId));
-    if (old != null) await _notice(e.conversationId, e.createdAt, renewed: true);
+    _lost.remove(e.conversationId);
+    if (old != null && !group) await _notice(e.conversationId, e.createdAt, renewed: true);
   }
 
   Future<void> _receive(ChatCrypto crypto, ChatEnvelope e) async {
@@ -299,6 +386,7 @@ class ChatService extends ChangeNotifier {
         at: e.createdAt,
         emoji: content.emoji ?? '',
         serverId: e.id,
+        by: e.senderId,
       ));
       return;
     }
@@ -314,6 +402,7 @@ class ChatService extends ChangeNotifier {
       quote: ok ? content.quote : null,
       forwarded: ok && content.forwarded,
       media: ok ? content.media : null,
+      senderId: e.senderId,
     );
     await _append(m);
     final ChatMedia? md = m.media;
@@ -345,16 +434,17 @@ class ChatService extends ChangeNotifier {
     }
   }
 
-  Future<void> _notice(String conversationId, DateTime at, {required bool renewed}) => _append(
-    ChatMessage(
-      localId: 'avviso-${at.microsecondsSinceEpoch}',
-      conversationId: conversationId,
-      mine: false,
-      kind: MessageKind.notice,
-      body: renewed ? 'Chat cifrata rinnovata: uno dei due ha cambiato telefono.' : '',
-      at: at,
-    ),
-  );
+  Future<void> _notice(String conversationId, DateTime at, {required bool renewed, String text = ''}) =>
+      _append(
+        ChatMessage(
+          localId: 'avviso-${at.microsecondsSinceEpoch}',
+          conversationId: conversationId,
+          mine: false,
+          kind: MessageKind.notice,
+          body: renewed ? 'Chat cifrata rinnovata: uno dei due ha cambiato telefono.' : text,
+          at: at,
+        ),
+      );
 
   // ---------------------------------------------------------------- azioni
 
@@ -549,7 +639,7 @@ class ChatService extends ChangeNotifier {
       ? null
       : ChatQuote(
           localId: replyTo.localId,
-          authorId: replyTo.mine ? myId : (c?.peerId ?? ''),
+          authorId: replyTo.mine ? myId : (replyTo.senderId.isNotEmpty ? replyTo.senderId : (c?.peerId ?? '')),
           text: _quoteText(replyTo),
         );
 
@@ -816,6 +906,7 @@ class ChatService extends ChangeNotifier {
   /// La chat cifrata pronta per scrivere: se manca o è vecchia (telefono cambiato da una
   /// delle due parti) si riapre con un nuovo pacchetto chiave dell'altra persona.
   Future<LocalSession> _ensureSession(ChatConversation c) async {
+    if (c.isGroup) return _ensureGroupSession(c);
     LocalSession? s = await store.session(c.id);
     if (_valid(c, s)) return s!;
     // Forse è appena arrivato l'invito della generazione attuale.
@@ -841,25 +932,329 @@ class ChatService extends ChangeNotifier {
     final LocalSession fresh = LocalSession(generation, started.groupId);
     await store.setSession(c.id, fresh);
     if (c.generation > 0) await _notice(c.id, DateTime.now(), renewed: true);
-    _conversations[c.id] = ChatConversation(
-      id: c.id,
-      status: c.status,
+    _conversations[c.id] = c.copyWith(
       generation: generation,
       groupId: started.groupId,
-      peerId: c.peerId,
-      peerUsername: c.peerUsername,
-      peerName: c.peerName,
-      peerAvatarPath: c.peerAvatarPath,
       peerSignatureKey: kp.signatureKey,
       peerJoinedKey: kp.signatureKey,
       myJoinedKey: _myKey,
-      peerDeliveredUpto: c.peerDeliveredUpto,
-      peerReadUpto: c.peerReadUpto,
-      myReadUpto: c.myReadUpto,
-      lastMessageId: c.lastMessageId,
-      lastMessageAt: c.lastMessageAt,
-      createdAt: c.createdAt,
     );
     return fresh;
+  }
+
+  // ---------------------------------------------------------------- gruppi (Blocco 4)
+
+  Future<LocalSession> _ensureGroupSession(ChatConversation c) async {
+    LocalSession? s = await store.session(c.id);
+    bool ok(ChatConversation c, LocalSession? s) =>
+        s != null && c.myMlsState == 'in' && c.generation > 0 && s.generation == c.generation;
+    if (ok(c, s)) return s!;
+    await _syncInbox();
+    await _loadConversations();
+    final ChatConversation now = _conversations[c.id] ?? c;
+    s = await store.session(c.id);
+    if (ok(now, s)) return s!;
+    // Il creatore può far nascere il gruppo cifrato da sé.
+    if (now.isAdmin && now.generation == 0) {
+      await _maintainGroup(now);
+      s = await store.session(c.id);
+      final ChatConversation after = _conversations[c.id] ?? now;
+      if (ok(after, s)) return s!;
+    }
+    if (now.myMlsState == 'in' && (s == null || s.generation < now.generation)) {
+      _lost.add(c.id);
+      try {
+        await server.groupRejoin(c.id);
+        _lost.remove(c.id);
+      } catch (_) {
+        // Si riprova al prossimo giro.
+      }
+    }
+    throw const ChatFailure(
+      'Un amministratore deve ancora aggiungerti al gruppo cifrato: succede da solo appena '
+      'apre l\'app. Riprova tra poco.',
+    );
+  }
+
+  /// Gli amministratori tengono allineato il gruppo cifrato: aggiungono chi è entrato,
+  /// tolgono chi è uscito, riaggiungono chi ha cambiato telefono.
+  Future<void> _maintainGroups() async {
+    for (final ChatConversation c in _conversations.values.toList()) {
+      if (!c.isGroup || !c.isAdmin || c.myMlsState != 'in' || c.isRequest) continue;
+      if (c.generation > 0 && c.pending == 0) continue;
+      try {
+        await _maintainGroup(c);
+      } catch (_) {
+        // Un altro amministratore è stato più veloce, o manca un pacchetto: al prossimo giro.
+      }
+    }
+  }
+
+  Future<void> _maintainGroup(ChatConversation c) async {
+    final ChatCrypto crypto = _crypto!;
+    final List<GroupMember> members = await server.groupMembers(c.id);
+    _names[c.id] = <String, String>{
+      ...?_names[c.id],
+      for (final GroupMember m in members) m.userId: m.displayName,
+    };
+    LocalSession? s = await store.session(c.id);
+    int generation = c.generation;
+    String groupId;
+    if (generation == 0) {
+      if (s != null) await crypto.dropGroup(s.groupId);
+      groupId = await crypto.createGroupAlone();
+    } else {
+      if (s == null || s.generation != generation) return;
+      groupId = s.groupId;
+      // 1) Togliere chi è uscito e i telefoni vecchi.
+      final List<GroupMember> leaving = <GroupMember>[
+        for (final GroupMember m in members)
+          if (m.mlsState == 'to_remove' || m.mlsState == 'to_readd') m,
+      ];
+      if (leaving.isNotEmpty) {
+        final String? commit = await crypto.removeFromGroup(groupId, <GroupLeaver>[
+          for (final GroupMember m in leaving)
+            GroupLeaver(m.userId, keepKey: m.mlsState == 'to_readd' ? m.signatureKey : null),
+        ]);
+        if (commit != null) {
+          generation = await _commit(c, generation, groupId, commit: commit,
+              removed: <String>[for (final GroupMember m in leaving) m.userId]);
+        }
+      }
+    }
+    // 2) Aggiungere chi è entrato (e chi ha un telefono nuovo).
+    final List<GroupJoiner> joiners = <GroupJoiner>[];
+    for (final GroupMember m in members) {
+      if (!m.isActive || (m.mlsState != 'to_add' && m.mlsState != 'to_readd')) continue;
+      try {
+        final ClaimedKeyPackage kp = await server.groupClaimKeyPackage(c.id, m.userId);
+        joiners.add(GroupJoiner(m.userId, kp.package, kp.signatureKey));
+      } catch (_) {
+        // Non ha ancora attivato la chat su questo telefono: al prossimo giro.
+      }
+    }
+    if (generation == 0) {
+      String? welcome;
+      if (joiners.isNotEmpty) {
+        final (_, String w) = await crypto.addToGroup(groupId, joiners);
+        await crypto.confirmCommit(groupId);
+        welcome = w;
+      }
+      try {
+        generation = await server.groupCommit(c.id, 0, groupId: groupId, welcome: welcome,
+            added: <String>[for (final GroupJoiner j in joiners) j.userId]);
+      } catch (_) {
+        await crypto.dropGroup(groupId);
+        rethrow;
+      }
+      await store.setSession(c.id, LocalSession(generation, groupId));
+    } else if (joiners.isNotEmpty) {
+      final (String commit, String welcome) = await crypto.addToGroup(groupId, joiners);
+      generation = await _commit(c, generation, groupId, commit: commit, welcome: welcome,
+          added: <String>[for (final GroupJoiner j in joiners) j.userId]);
+    }
+    await _verifyRoster(c.id, groupId, members, joiners);
+    _conversations[c.id] = c.copyWith(generation: generation, groupId: groupId, pending: 0);
+  }
+
+  /// Invia il commit; se il server lo accetta diventa effettivo, altrimenti si annulla.
+  Future<int> _commit(
+    ChatConversation c,
+    int generation,
+    String groupId, {
+    required String commit,
+    String? welcome,
+    List<String> added = const <String>[],
+    List<String> removed = const <String>[],
+  }) async {
+    final ChatCrypto crypto = _crypto!;
+    final int next;
+    try {
+      next = await server.groupCommit(c.id, generation, groupId: groupId, commit: commit,
+          welcome: welcome, added: added, removed: removed);
+    } catch (_) {
+      await crypto.discardCommit(groupId);
+      rethrow;
+    }
+    await crypto.confirmCommit(groupId);
+    await store.setSession(c.id, LocalSession(next, groupId));
+    return next;
+  }
+
+  /// Dopo un'aggiunta: dentro il gruppo cifrato ci sono solo membri con la chiave giusta.
+  Future<void> _verifyRoster(
+    String conversationId,
+    String groupId,
+    List<GroupMember> members,
+    List<GroupJoiner> joiners,
+  ) async {
+    if (joiners.isEmpty) return;
+    final Map<String, Set<String>> roster = await _crypto!.roster(groupId);
+    final bool fine = joiners.every((j) => roster[j.userId]?.contains(j.signatureKey) ?? false);
+    if (!fine) {
+      await _notice(conversationId, DateTime.now(), renewed: false,
+          text: 'Attenzione: la chiave di un membro non corrisponde. Verifica con lui di persona.');
+    }
+  }
+
+  /// Nuovo gruppo con i contatti scelti (chi non ti ha in rubrica riceve un invito).
+  Future<String> createGroup(String title, List<String> members) async {
+    if (!_ready) await start();
+    final String id = await server.createGroup(title.trim(), members);
+    await _run(() async {
+      await _loadConversations();
+      final ChatConversation? c = _conversations[id];
+      if (c != null) {
+        try {
+          await _maintainGroup(c);
+        } catch (_) {
+          // Ci si riprova al prossimo aggiornamento.
+        }
+        await _loadConversations();
+      }
+    });
+    _changed();
+    return id;
+  }
+
+  Future<List<GroupMember>> groupMembers(String conversationId) async {
+    final List<GroupMember> list = await server.groupMembers(conversationId);
+    _names[conversationId] = <String, String>{
+      ...?_names[conversationId],
+      for (final GroupMember m in list) m.userId: m.displayName,
+    };
+    return list;
+  }
+
+  Future<void> _afterGroupChange() async {
+    await _run(() async {
+      await _loadConversations();
+      await _maintainGroups();
+    });
+    _changed();
+    unawaited(refresh());
+  }
+
+  Future<int> addToGroup(String conversationId, List<String> members) async {
+    final int n = await server.groupAdd(conversationId, members);
+    await _afterGroupChange();
+    return n;
+  }
+
+  Future<void> removeFromGroup(String conversationId, String userId) async {
+    await server.groupRemove(conversationId, userId);
+    await _afterGroupChange();
+  }
+
+  /// Esce dal gruppo: sparisce dalla lista e dal telefono.
+  Future<void> leaveGroup(String conversationId) async {
+    await server.groupRemove(conversationId, myId);
+    await _run(() async {
+      final LocalSession? s = await store.session(conversationId);
+      if (s != null) await _crypto?.dropGroup(s.groupId);
+      await store.deleteConversation(conversationId);
+      _messages.remove(conversationId);
+      await _loadConversations();
+    });
+    _changed();
+  }
+
+  Future<void> setGroupAdmin(String conversationId, String userId, bool admin) async {
+    await server.groupSetAdmin(conversationId, userId, admin);
+    await _afterGroupChange();
+  }
+
+  Future<void> updateGroup(String conversationId, {required String title, required String description}) async {
+    await server.groupUpdate(conversationId, title.trim(), description.trim());
+    await _afterGroupChange();
+  }
+
+  final Map<String, Uint8List?> _photos = <String, Uint8List?>{};
+
+  /// Foto del gruppo (null se non c'è). Tenuta in memoria per versione.
+  Future<Uint8List?> groupPhoto(ChatConversation c) async {
+    if (!c.isGroup || c.photoVersion == 0 || media == null) return null;
+    final String key = '${c.id}:${c.photoVersion}';
+    if (_photos.containsKey(key)) return _photos[key];
+    try {
+      return _photos[key] = await media!.downloadGroupPhoto(c.id);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> setGroupPhoto(String conversationId, Uint8List jpeg) async {
+    final ChatConversation? c = _conversations[conversationId];
+    if (c == null || media == null) throw const ChatFailure('Foto non disponibile.');
+    await media!.uploadGroupPhoto(conversationId, jpeg);
+    await server.groupUpdate(conversationId, c.title, c.description, photoChanged: true);
+    await _afterGroupChange();
+  }
+
+  Future<String> inviteCode(String conversationId, {bool renew = false}) =>
+      server.groupInviteCode(conversationId, renew: renew);
+
+  Future<void> revokeInvite(String conversationId) => server.groupInviteRevoke(conversationId);
+
+  Future<GroupInviteInfo> inviteInfo(String code) => server.groupInviteInfo(code.trim().toUpperCase());
+
+  /// Entra con un codice: un amministratore ti aggiunge al gruppo cifrato appena apre l'app.
+  Future<String> joinWithCode(String code) async {
+    if (!_ready) await start();
+    final String id = await server.groupJoin(code.trim().toUpperCase());
+    await _run(_loadConversations);
+    _changed();
+    return id;
+  }
+}
+
+/// Testo dell'avviso di gruppo («Anna ha aggiunto Bruno»). [name] dà «Tu» per sé stessi.
+String groupEventText(Map<String, dynamic> ev, String Function(String id) name) {
+  final String by = ev['by'] is String ? ev['by'] as String : '';
+  final String who = ev['who'] is String ? ev['who'] as String : '';
+  final bool me = name(by) == 'Tu';
+  String list(Object? ids) {
+    final List<String> names = <String>[
+      for (final Object? id in (ids as List?) ?? const <Object>[])
+        if (id is String) name(id) == 'Tu' ? 'te' : name(id),
+    ];
+    if (names.isEmpty) return '';
+    if (names.length == 1) return names.first;
+    return '${names.sublist(0, names.length - 1).join(', ')} e ${names.last}';
+  }
+
+  final String added = list(ev['added']);
+  final String invited = list(ev['invited']);
+  String withInvites(String base) {
+    if (invited.isEmpty) return base;
+    final String inv = me ? 'Hai invitato $invited' : '${name(by)} ha invitato $invited';
+    return base.isEmpty ? inv : '$base · $inv';
+  }
+
+  switch (ev['t']) {
+    case 'created':
+      final String base = me ? 'Hai creato il gruppo' : '${name(by)} ha creato il gruppo';
+      return withInvites(added.isEmpty ? base : '$base con $added');
+    case 'added':
+      final String base = added.isEmpty ? '' : (me ? 'Hai aggiunto $added' : '${name(by)} ha aggiunto $added');
+      return withInvites(base);
+    case 'removed':
+      final String target = name(who) == 'Tu' ? 'te' : name(who);
+      return me ? 'Hai rimosso $target' : '${name(by)} ha rimosso $target';
+    case 'left':
+      return name(who) == 'Tu' ? 'Sei uscito dal gruppo' : '${name(who)} è uscito dal gruppo';
+    case 'joined':
+      return me ? 'Sei entrato nel gruppo' : '${name(by)} è entrato nel gruppo';
+    case 'admin':
+      return name(who) == 'Tu' ? 'Ora sei amministratore' : '${name(who)} ora è amministratore';
+    case 'not_admin':
+      return name(who) == 'Tu' ? 'Non sei più amministratore' : '${name(who)} non è più amministratore';
+    case 'title':
+      final String title = ev['title'] is String ? ev['title'] as String : '';
+      return me ? 'Hai cambiato il nome in «$title»' : '${name(by)} ha cambiato il nome in «$title»';
+    case 'photo':
+      return me ? 'Hai cambiato la foto del gruppo' : '${name(by)} ha cambiato la foto del gruppo';
+    default:
+      return '';
   }
 }

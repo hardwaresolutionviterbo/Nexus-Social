@@ -30,6 +30,44 @@ abstract class ChatServer {
   Future<void> mark(String conversationId, {required int delivered, required int read});
 
   Future<void> respondRequest(String conversationId, bool accept);
+
+  // ---- Gruppi (Blocco 4)
+
+  Future<String> createGroup(String title, List<String> members);
+
+  Future<int> groupAdd(String conversationId, List<String> members);
+
+  /// Toglie [userId] (amministratori) o esce dal gruppo (se è chi chiama).
+  Future<void> groupRemove(String conversationId, String userId);
+
+  Future<void> groupSetAdmin(String conversationId, String userId, bool admin);
+
+  Future<void> groupUpdate(String conversationId, String title, String description, {bool photoChanged = false});
+
+  Future<String> groupInviteCode(String conversationId, {bool renew = false});
+
+  Future<void> groupInviteRevoke(String conversationId);
+
+  Future<GroupInviteInfo> groupInviteInfo(String code);
+
+  Future<String> groupJoin(String code);
+
+  Future<List<GroupMember>> groupMembers(String conversationId);
+
+  Future<ClaimedKeyPackage> groupClaimKeyPackage(String conversationId, String userId);
+
+  /// Modifica del gruppo cifrato. [ChatFailure.conflict] se la generazione è cambiata.
+  Future<int> groupCommit(
+    String conversationId,
+    int generation, {
+    required String groupId,
+    String? commit,
+    String? welcome,
+    List<String> added = const <String>[],
+    List<String> removed = const <String>[],
+  });
+
+  Future<void> groupRejoin(String conversationId);
 }
 
 class SupabaseChatServer implements ChatServer {
@@ -60,6 +98,12 @@ class SupabaseChatServer implements ChatServer {
           return const ChatFailure('Il tuo account è sospeso: non puoi scrivere.');
         }
         if (message.contains('profilo')) return const ChatFailure('Completa prima il profilo.');
+        if (message.contains('amministratori')) {
+          return const ChatFailure('Solo gli amministratori del gruppo possono farlo.');
+        }
+        if (message.toLowerCase().contains('gruppo')) {
+          return const ChatFailure('Non fai più parte di questo gruppo.');
+        }
         return const ChatFailure('Questa chat non è disponibile.');
       default:
         return const ChatFailure('Qualcosa non ha funzionato. Riprova.');
@@ -143,5 +187,102 @@ class SupabaseChatServer implements ChatServer {
   @override
   Future<void> respondRequest(String conversationId, bool accept) async {
     await _rpc('chat_respond_request', {'p_conversation': conversationId, 'p_accept': accept});
+  }
+
+  @override
+  Future<String> createGroup(String title, List<String> members) async =>
+      (await _rpc('chat_create_group', {'p_title': title, 'p_members': members})) as String;
+
+  @override
+  Future<int> groupAdd(String conversationId, List<String> members) async =>
+      ((await _rpc('chat_group_add', {'p_conversation': conversationId, 'p_members': members})) as num?)
+          ?.toInt() ??
+      0;
+
+  @override
+  Future<void> groupRemove(String conversationId, String userId) async {
+    await _rpc('chat_group_remove', {'p_conversation': conversationId, 'p_user': userId});
+  }
+
+  @override
+  Future<void> groupSetAdmin(String conversationId, String userId, bool admin) async {
+    await _rpc('chat_group_set_admin', {'p_conversation': conversationId, 'p_user': userId, 'p_admin': admin});
+  }
+
+  @override
+  Future<void> groupUpdate(String conversationId, String title, String description,
+      {bool photoChanged = false}) async {
+    await _rpc('chat_group_update', {
+      'p_conversation': conversationId,
+      'p_title': title,
+      'p_description': description,
+      'p_photo_changed': photoChanged,
+    });
+  }
+
+  @override
+  Future<String> groupInviteCode(String conversationId, {bool renew = false}) async =>
+      (await _rpc('chat_group_invite_code', {'p_conversation': conversationId, 'p_renew': renew})) as String;
+
+  @override
+  Future<void> groupInviteRevoke(String conversationId) async {
+    await _rpc('chat_group_invite_revoke', {'p_conversation': conversationId});
+  }
+
+  @override
+  Future<GroupInviteInfo> groupInviteInfo(String code) async {
+    final rows = _rows(await _rpc('chat_group_invite_info', {'p_code': code}));
+    if (rows.isEmpty) throw const ChatFailure('Codice non valido o scaduto.');
+    final r = rows.first;
+    return GroupInviteInfo(
+      conversationId: r['conversation_id'] as String,
+      title: (r['title'] as String?) ?? '',
+      members: (r['members'] as num?)?.toInt() ?? 0,
+      alreadyMember: r['already_member'] == true,
+    );
+  }
+
+  @override
+  Future<String> groupJoin(String code) async =>
+      (await _rpc('chat_group_join', {'p_code': code})) as String;
+
+  @override
+  Future<List<GroupMember>> groupMembers(String conversationId) async =>
+      _rows(await _rpc('chat_group_members', {'p_conversation': conversationId}))
+          .map(GroupMember.fromRow)
+          .toList();
+
+  @override
+  Future<ClaimedKeyPackage> groupClaimKeyPackage(String conversationId, String userId) async {
+    final rows = _rows(await _rpc('chat_group_claim_key_package', {
+      'p_conversation': conversationId,
+      'p_user': userId,
+    }));
+    if (rows.isEmpty) throw const ChatFailure('Un membro deve aprire l\'app per attivare la chat.');
+    return ClaimedKeyPackage(rows.first['package'] as String, rows.first['signature_key'] as String);
+  }
+
+  @override
+  Future<int> groupCommit(
+    String conversationId,
+    int generation, {
+    required String groupId,
+    String? commit,
+    String? welcome,
+    List<String> added = const <String>[],
+    List<String> removed = const <String>[],
+  }) async => ((await _rpc('chat_group_commit', {
+    'p_conversation': conversationId,
+    'p_generation': generation,
+    'p_group_id': groupId,
+    'p_commit': commit,
+    'p_welcome': welcome,
+    'p_added': added,
+    'p_removed': removed,
+  })) as num).toInt();
+
+  @override
+  Future<void> groupRejoin(String conversationId) async {
+    await _rpc('chat_group_rejoin', {'p_conversation': conversationId});
   }
 }
