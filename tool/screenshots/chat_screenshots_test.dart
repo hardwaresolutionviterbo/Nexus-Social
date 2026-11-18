@@ -8,6 +8,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:material_ui/material_ui.dart';
 import 'package:nexus_social/core/theme/app_theme.dart';
+import 'package:nexus_social/features/chat/chat_backup.dart';
+import 'package:nexus_social/features/chat/chat_backup_screen.dart';
+import 'package:nexus_social/features/chat/chat_backup_service.dart';
 import 'package:nexus_social/features/chat/chat_group_screens.dart';
 import 'package:nexus_social/features/chat/chat_media.dart';
 import 'package:nexus_social/features/chat/chat_media_picker.dart';
@@ -93,7 +96,7 @@ const String marco = 'utenteMarco00000000000000005';
 const String dario = 'utenteDario00000000000000004';
 
 /// Dati di prova: tre chat (una letta, una con messaggi nuovi, una di ieri) e una richiesta.
-Future<(ChatService, Map<String, ChatService>, Map<String, String>)> _scene() async {
+Future<(ChatService, Map<String, ChatService>, Map<String, String>)> _scene({BackupServer? backup}) async {
   final FakeChatHub hub = FakeChatHub()
     ..addPerson(io, 'anna.r', 'Anna R.')
     ..addPerson(bruno, 'bruno_b', 'Bruno B.')
@@ -104,7 +107,7 @@ Future<(ChatService, Map<String, ChatService>, Map<String, String>)> _scene() as
     ..contacts[bruno] = <String>{io}
     ..contacts[giulia] = <String>{io}
     ..contacts[marco] = <String>{io};
-  final ChatService me = await fakePhone(hub, io);
+  final ChatService me = await fakePhone(hub, io, backup: backup);
   final Map<String, ChatService> others = <String, ChatService>{
     for (final String id in <String>[bruno, giulia, marco, dario]) id: await fakePhone(hub, id),
   };
@@ -470,6 +473,31 @@ void main() {
     });
     await tester.pumpWidget(const SizedBox());
     await shoot(tester, 'chat_17_lista_silenziata', AppShell(chat: me));
+    me.dispose();
+    for (final ChatService o in others.values) {
+      o.dispose();
+    }
+  });
+
+  testWidgets('chat 19-22 · backup delle chat', (tester) async {
+    final FakeBackupServer cloud = FakeBackupServer(now: () => DateTime(2026, 11, 17, 23, 5));
+    final (ChatService me, Map<String, ChatService> others, _) =
+        (await tester.runAsync(() => _scene(backup: cloud)))!;
+    final ChatBackup fresh = me.backup!;
+    await tester.runAsync(() => fresh.load(auto: false));
+    await shoot(tester, 'chat_19_backup_attiva', ChatBackupScreen(backup: fresh, now: () => now));
+
+    // Backup fatto dal vecchio telefono: quello nuovo propone di ripristinarlo.
+    final ChatBackup old = ChatBackup(chat: me, server: cloud, keys: MemoryBackupKeyStore(), kdf: fastKdfForTests());
+    await tester.runAsync(() => old.enable('Bici2026!'));
+    await tester.runAsync(() => fresh.load(auto: false));
+    await tester.pumpWidget(const SizedBox());
+    await shoot(tester, 'chat_20_ripristina_lista', AppShell(chat: me));
+    await tester.pumpWidget(const SizedBox());
+    await shoot(tester, 'chat_21_ripristino', ChatBackupScreen(backup: fresh, now: () => now));
+    await tester.pumpWidget(const SizedBox());
+    await shoot(tester, 'chat_22_backup_attivo', ChatBackupScreen(backup: old, now: () => now));
+    old.dispose();
     me.dispose();
     for (final ChatService o in others.values) {
       o.dispose();
