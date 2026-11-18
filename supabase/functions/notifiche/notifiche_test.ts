@@ -48,6 +48,18 @@ Deno.test('messaggio FCM: al telefono (FID), raggruppato per chat, senza contenu
   assertEquals(m.message.data.notifica, '');
 });
 
+Deno.test('messaggio con anteprima cifrata: passa così com\'è, la notifica generica resta', () => {
+  const m = buildMessage({ ...row(1), preview: 'QUJDREVG', sender_id: 'utenteB', count: 2 }) as {
+    message: Record<string, any>;
+  };
+  assertEquals(m.message.notification, { title: 'Anna R.', body: 'Nuovo messaggio' });
+  assertEquals(m.message.data.anteprima, 'QUJDREVG');
+  assertEquals(m.message.data.mittente, 'utenteB');
+  assertEquals(m.message.data.conteggio, '2');
+  const plain = buildMessage(row(2)) as { message: Record<string, any> };
+  assertEquals(plain.message.data.anteprima, undefined);
+});
+
 Deno.test('notifica di un commento: porta l\'identificativo per aprire l\'annuncio', () => {
   const m = buildMessage({ ...row(1), kind: 'comment', conversation_id: null, collapse_key: 'n:abc-123' }) as {
     message: Record<string, any>;

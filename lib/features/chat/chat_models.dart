@@ -332,6 +332,15 @@ class ChatContent {
       forwarded = false,
       media = null;
 
+  /// Chiave delle anteprime nelle notifiche (Blocco 10): [body] in base64, non si mostra.
+  const ChatContent.previewKey(this.body, {required this.localId})
+    : type = 'pk',
+      quote = null,
+      forwarded = false,
+      target = null,
+      emoji = null,
+      media = null;
+
   /// Passaggio di una chiamata (offerta, risposta, chiusura): [body] è il JSON del segnale.
   const ChatContent.call(this.body, {required this.localId})
     : type = 'call',

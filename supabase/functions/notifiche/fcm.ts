@@ -48,6 +48,10 @@ export interface QueueRow {
   collapse_key: string;
   title: string;
   body: string;
+  /** Anteprima cifrata da chi scrive (Blocco 10): il server non la legge. */
+  preview?: string | null;
+  sender_id?: string | null;
+  count?: number | null;
 }
 
 /** Messaggio FCM per un telefono. Solo titolo e testo generici: mai contenuti dei messaggi. */
@@ -74,6 +78,16 @@ export function buildMessage(row: QueueRow): Record<string, unknown> {
         tipo: row.kind,
         chat: row.conversation_id ?? '',
         notifica: row.collapse_key.startsWith('n:') ? row.collapse_key.slice(2) : '',
+        // Il telefono di chi riceve decifra l'anteprima e sostituisce la notifica generica.
+        ...(row.kind === 'chat' && row.preview && row.sender_id
+          ? {
+            anteprima: row.preview,
+            mittente: row.sender_id,
+            conteggio: String(row.count ?? 1),
+            titolo: row.title,
+            testo: row.body,
+          }
+          : {}),
       },
       android: {
         priority: 'HIGH',

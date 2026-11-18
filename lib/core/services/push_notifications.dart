@@ -5,6 +5,8 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
+import '../../features/chat/chat_preview.dart';
+
 /// Stato della registrazione FCM mostrato nella diagnostica di debug.
 enum PushRegistrationState { idle, registering, registered, failed }
 
@@ -96,6 +98,7 @@ abstract final class PushNotifications {
   static void _tapped(NotificationResponse? r) {
     final String payload = r?.payload ?? '';
     if (payload.startsWith('chiamata:') && payload.length > 9) openChat.value = payload.substring(9);
+    if (payload.startsWith('chat:') && payload.length > 5) openChat.value = payload.substring(5);
   }
 
   static Future<void> _createChannel() async {
@@ -348,6 +351,48 @@ abstract final class PushNotifications {
     );
   }
 
+  /// Messaggio con l'app chiusa (Blocco 10): se c'è l'anteprima cifrata e la chiave di chi
+  /// scrive, la notifica «Nuovo messaggio» viene sostituita da quella con il testo.
+  static Future<void> showDecryptedMessage(Map<String, dynamic> data) async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    final String conv = '${data['chat'] ?? ''}';
+    final String sealed = '${data['anteprima'] ?? ''}';
+    final String sender = '${data['mittente'] ?? ''}';
+    if (conv.isEmpty || sealed.isEmpty || sender.isEmpty) return;
+    final String? text = await PreviewKeys(const SecurePreviewKeyStore()).open(conv, sender, sealed);
+    if (text == null || text.isEmpty) return;
+    final String generic = '${data['testo'] ?? ''}';
+    // Nei gruppi il testo del server è «Nome: nuovo messaggio».
+    final String body = generic.endsWith(': nuovo messaggio')
+        ? '${generic.substring(0, generic.length - ': nuovo messaggio'.length)}: $text'
+        : text;
+    final int count = int.tryParse('${data['conteggio'] ?? '1'}') ?? 1;
+    await _local.initialize(
+      settings: const InitializationSettings(android: AndroidInitializationSettings('ic_stat_nexus')),
+      onDidReceiveNotificationResponse: _tapped,
+    );
+    await _local.show(
+      // Stesso numero e stessa etichetta della notifica del sistema: la sostituisce.
+      id: 0,
+      title: '${data['titolo'] ?? 'Piazly'}',
+      body: body,
+      payload: 'chat:$conv',
+      notificationDetails: NotificationDetails(
+        android: AndroidNotificationDetails(
+          channelId,
+          channelName,
+          channelDescription: channelDescription,
+          importance: Importance.high,
+          priority: Priority.high,
+          icon: 'ic_stat_nexus',
+          tag: 'chat:$conv',
+          subText: count > 1 ? '$count nuovi messaggi' : null,
+          onlyAlertOnce: true,
+        ),
+      ),
+    );
+  }
+
   /// La chiamata è stata vista nell'app (o è finita): via la notifica a tutto schermo.
   static Future<void> cancelIncomingCall(String conversationId) async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
@@ -374,6 +419,14 @@ abstract final class PushNotifications {
 Future<void> _onBackgroundMessage(RemoteMessage message) async {
   // I messaggi con payload "notification" li mostra il sistema. Le chiamate arrivano solo
   // come dati (Fase 4, Blocco 10): qui si mostra la chiamata a tutto schermo.
+  if (message.data['tipo'] == 'chat') {
+    try {
+      await PushNotifications.showDecryptedMessage(message.data);
+    } catch (error) {
+      debugPrint('NEXUS_PUSH preview=failed (${error.runtimeType})');
+    }
+    return;
+  }
   if (message.data['tipo'] != 'call') return;
   try {
     await PushNotifications.showIncomingCall(

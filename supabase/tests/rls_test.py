@@ -2635,6 +2635,61 @@ def check_realtime_phase4() -> None:
           f"regole={count}, {own}, {other}, {anon}")
 
 
+def check_preview_phase4() -> None:
+    """AP · Anteprima cifrata nella notifica (Fase 4, Blocco 10): passa solo con il consenso."""
+    ta, tb, tc = token(UID_A), token(UID_B), token(UID_C)
+    for t, other in ((ta, UID_B), (tb, UID_A)):
+        rpc("unblock_user", {"p_user_id": other}, t)
+    _, conv = rpc("chat_open_direct", {"p_user": UID_A}, tb)
+    sql(f"update public.chat_members set status = 'active', muted_until = null where conversation_id = '{conv}';")
+    gen = int(sql(f"select generation from public.chat_conversations where id = '{conv}';") or 0)
+    if gen == 0:
+        sql(f"update public.chat_conversations set generation = 1 where id = '{conv}';")
+        gen = 1
+    fid = "fidTelefonoAnteprimaA_" + "x" * 12
+    rpc("push_register", {"p_fid": fid, "p_platform": "android"}, ta)
+
+    def settings(preview: bool):
+        rpc("push_set_settings", {"p_messages": True, "p_comments": True, "p_market": True, "p_preview": preview,
+                                  "p_dnd_enabled": False, "p_dnd_from": "22:00", "p_dnd_to": "07:00",
+                                  "p_time_zone": "Europe/Rome"}, ta)
+
+    def send(tok, preview, c=conv):
+        return rpc("chat_send_preview", {"p_conversation": c, "p_generation": gen,
+                                         "p_payload": base64.b64encode(bytes([6]) * 60).decode(),
+                                         "p_preview": preview}, tok)
+
+    def queued() -> list:
+        out = sql(f"select coalesce(preview, '-') || '|' || coalesce(sender_id, '-') from private.push_queue "
+                  f"where user_id = '{UID_A}' and kind = 'chat';")
+        return [line for line in out.splitlines() if line]
+
+    sealed = base64.b64encode(bytes(range(60))).decode()
+    settings(True)
+    sql("delete from private.push_queue;")
+    ok = send(tb, sealed)
+    with_consent = queued()
+    bad = [send(tb, "non è base64!")[0], send(tb, "A" * 601)[0]]
+    outsider = send(tc, sealed)[0]
+    check("AP1", "Anteprima cifrata in coda così com'è, con chi l'ha scritta; formati strani e estranei rifiutati",
+          ok[0] == 200 and with_consent == [f"{sealed}|{UID_B}"] and all(b >= 400 for b in bad) and outsider >= 400,
+          f"{ok[0]}, {with_consent}, {bad}, {outsider}")
+
+    settings(False)
+    sql("delete from private.push_queue;")
+    send(tb, sealed)
+    without = queued()
+    settings(True)
+    check("AP2", "Con «Mostra chi scrive» spento l'anteprima non parte", without == ["-|-"], f"{without}")
+
+    sql("delete from private.push_queue;")
+    plain = rpc("chat_send", {"p_conversation": conv, "p_generation": gen,
+                              "p_payload": base64.b64encode(bytes([6]) * 60).decode()}, tb)
+    check("AP3", "Senza anteprima (app vecchia) la notifica resta generica",
+          plain[0] == 200 and queued() == ["-|-"], f"{plain[0]}, {queued()}")
+    rpc("push_unregister", {"p_fid": fid}, ta)
+
+
 def check_push_phase4() -> None:
     """U · Notifiche (Fase 4, Blocco 5): coda server, silenzia, non disturbare, mai i Mi piace."""
     ta, tb = token(UID_A), token(UID_B)
@@ -2777,6 +2832,7 @@ def main() -> int:
     check_chat_reports_phase4()
     check_calls_phase4()
     check_realtime_phase4()
+    check_preview_phase4()
     failed = [r for r in results if not r[2]]
     print(f"{'Caso':6} {'Esito':9} Descrizione")
     for case, desc, ok, detail in results:

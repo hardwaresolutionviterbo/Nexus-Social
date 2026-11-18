@@ -20,6 +20,7 @@ import 'features/calls/webrtc_call_media.dart';
 import 'features/chat/chat_backup.dart';
 import 'features/chat/chat_crypto.dart';
 import 'features/chat/chat_media.dart';
+import 'features/chat/chat_preview.dart';
 import 'features/chat/chat_models.dart';
 import 'features/chat/chat_server.dart';
 import 'features/chat/chat_service.dart';
@@ -114,6 +115,8 @@ ChatService _chatFor(String uid) {
     media: SupabaseChatMediaServer(Supabase.instance.client),
     files: ChatMediaFiles(folder.then((Directory d) => Directory('${d.path}/allegati'))),
     myId: uid,
+    // Testo nelle notifiche, cifrato per chi riceve (Blocco 10).
+    previews: const SecurePreviewKeyStore(),
     // Chiamate vocali e video (Blocco 8): ponte TURN dalla funzione `chiamate`.
     calls: (ChatService chat) => CallService(
       chat: chat,

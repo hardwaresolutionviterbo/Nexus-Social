@@ -24,7 +24,8 @@ abstract class ChatServer {
   /// Nuova generazione della chat cifrata. [ChatFailure.conflict] se è già cambiata.
   Future<int> start(String conversationId, int generation, String groupId, String welcome);
 
-  Future<(int, DateTime)> send(String conversationId, int generation, String payload);
+  /// [preview]: anteprima cifrata per la notifica (Blocco 10), che il server non legge.
+  Future<(int, DateTime)> send(String conversationId, int generation, String payload, {String? preview});
 
   /// Tocchi in tempo reale sul canale privato (Blocco 9): «c'è qualcosa di nuovo».
   Stream<void> wakeUps(String uid);
@@ -175,11 +176,12 @@ class SupabaseChatServer implements ChatServer {
       })) as num).toInt();
 
   @override
-  Future<(int, DateTime)> send(String conversationId, int generation, String payload) async {
-    final rows = _rows(await _rpc('chat_send', {
+  Future<(int, DateTime)> send(String conversationId, int generation, String payload, {String? preview}) async {
+    final rows = _rows(await _rpc(preview == null ? 'chat_send' : 'chat_send_preview', {
       'p_conversation': conversationId,
       'p_generation': generation,
       'p_payload': payload,
+      'p_preview': ?preview,
     }));
     if (rows.isEmpty) throw const ChatFailure('Messaggio non inviato. Riprova.');
     return (

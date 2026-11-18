@@ -11,6 +11,7 @@ import 'chat_backup_service.dart';
 import 'chat_crypto.dart';
 import 'chat_media.dart';
 import 'chat_models.dart';
+import 'chat_preview.dart';
 import 'chat_server.dart';
 import 'chat_store.dart';
 
@@ -34,13 +35,18 @@ class ChatService extends ChangeNotifier {
     BackupKdf backupKdf = const BackupKdf(),
     DateTime Function()? clock,
     CallService Function(ChatService chat)? calls,
-  }) : _openCrypto = crypto,
+    PreviewKeyStore? previews,
+  }) : _previews = previews == null ? null : PreviewKeys(previews),
+       _openCrypto = crypto,
        _clock = clock ?? DateTime.now {
     backup = backupServer != null && backupKeys != null
         ? ChatBackup(chat: this, server: backupServer, keys: backupKeys, kdf: backupKdf)
         : null;
     this.calls = calls?.call(this);
   }
+
+  /// Chiavi delle anteprime nelle notifiche (Blocco 10); null nei test che non le usano.
+  final PreviewKeys? _previews;
 
   /// Chiamate vocali e video (Blocco 8); null senza server.
   late final CallService? calls;
@@ -454,6 +460,14 @@ class ChatService extends ChangeNotifier {
     if (s != null && s.generation == e.generation) {
       final List<int>? plain = await crypto.decrypt(s.groupId, e.payload);
       if (plain != null) content = ChatContent.decode(plain);
+    }
+    if (content != null && content.type == 'pk') {
+      try {
+        await _previews?.savePeer(e.conversationId, e.senderId, base64Decode(content.body));
+      } catch (_) {
+        // Chiave rovinata: le notifiche di questa persona resteranno senza testo.
+      }
+      return;
     }
     if (content != null && content.type == 'call') {
       final CallSignal? signal = CallSignal.decode(content.body);
@@ -888,13 +902,39 @@ class ChatService extends ChangeNotifier {
 
   /// Cifra e invia [content]; se la chat è cambiata nel frattempo si ricarica e si riprova.
   /// Da chiamare dentro [_run].
-  Future<(int, DateTime)> _transmit(String conversationId, ChatContent content, {({bool ring, bool video})? call}) async {
+  Future<(int, DateTime)> _transmit(
+    String conversationId,
+    ChatContent content, {
+    ({bool ring, bool video})? call,
+    String? preview,
+  }) async {
     Future<(int, DateTime)> attempt() async {
       final ChatConversation c = await _fresh(conversationId);
       final LocalSession s = await _ensureSession(c);
+      String? sealed;
+      final PreviewKeys? keys = _previews;
+      if (preview != null && keys != null) {
+        try {
+          final List<int> mine = await keys.mine(c.id);
+          // La prima volta in questa generazione della chat la chiave va agli altri membri.
+          if (!await keys.sent(c.id, s.generation)) {
+            final String pk = await _crypto!.encrypt(
+              s.groupId,
+              ChatContent.previewKey(base64Encode(mine), localId: _localId()).encode(),
+            );
+            await server.send(c.id, s.generation, pk);
+            await keys.markSent(c.id, s.generation);
+          }
+          sealed = await PreviewCipher.seal(mine, preview);
+        } on ChatFailure {
+          rethrow;
+        } catch (_) {
+          sealed = null;
+        }
+      }
       final String payload = await _crypto!.encrypt(s.groupId, content.encode());
       if (call != null) return server.callSignal(c.id, s.generation, payload, ring: call.ring, video: call.video);
-      return server.send(c.id, s.generation, payload);
+      return server.send(c.id, s.generation, payload, preview: sealed);
     }
 
     try {
@@ -956,6 +996,7 @@ class ChatService extends ChangeNotifier {
         final ChatMedia? md = ready.media;
         final (int, DateTime) sent = await _transmit(
           ready.conversationId,
+          preview: previewOf(body: ready.body, media: md?.kind),
           md == null
               ? ChatContent.text(
                   ready.body,

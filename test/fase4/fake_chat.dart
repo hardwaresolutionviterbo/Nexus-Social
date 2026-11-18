@@ -11,6 +11,7 @@ import 'package:nexus_social/features/chat/chat_backup.dart';
 import 'package:nexus_social/features/chat/chat_crypto.dart';
 import 'package:nexus_social/features/chat/chat_media.dart';
 import 'package:nexus_social/features/chat/chat_models.dart';
+import 'package:nexus_social/features/chat/chat_preview.dart';
 import 'package:nexus_social/features/chat/chat_server.dart';
 import 'package:nexus_social/features/chat/chat_service.dart';
 import 'package:nexus_social/features/chat/chat_store.dart';
@@ -116,6 +117,9 @@ class FakeChatHub {
   void poke(String uid) {
     if (live) _pokes[uid]?.add(null);
   }
+
+  /// Anteprime cifrate arrivate con i messaggi (chi, chat, anteprima): vanno nella notifica.
+  final List<(String, String, String)> previews = <(String, String, String)>[];
 
   /// Squilli (chi chiama, chat, video): sul server vero fanno partire la notifica.
   final List<(String, String, bool)> rings = <(String, String, bool)>[];
@@ -253,8 +257,9 @@ class FakeChatServer implements ChatServer {
   }
 
   @override
-  Future<(int, DateTime)> send(String conversationId, int generation, String payload) async {
+  Future<(int, DateTime)> send(String conversationId, int generation, String payload, {String? preview}) async {
     final FakeConv c = _member(conversationId);
+    if (preview != null) hub.previews.add((uid, conversationId, preview));
     if (c.group) {
       if (c.status[uid] != 'active' || c.mls[uid] != 'in') {
         throw const ChatFailure('Non fai più parte di questo gruppo.');
@@ -771,8 +776,10 @@ Future<ChatService> fakePhone(
   BackupServer? backup,
   BackupKeyStore? backupKeys,
   CallService Function(ChatService chat)? calls,
+  PreviewKeyStore? previews,
 }) async {
   final ChatService s = ChatService(
+    previews: previews,
     calls: calls,
     clock: () => hub.clock,
     backupServer: backup,
