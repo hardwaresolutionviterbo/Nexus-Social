@@ -2429,7 +2429,8 @@ def check_push_phase4() -> None:
     check("U1", "Telefono registrato per le notifiche (uno per account); tabelle e funzioni del server chiuse",
           reg[0] in (200, 204) and bad[0] >= 400 and steal[0] in (200, 204) and owner_b == UID_B
           and owner_a == UID_A and all(denied(d) for d in direct) and all(x >= 400 for x in server_fns),
-          f"{reg[0]}, {bad[0]}, {owner_b == UID_B}, {owner_a == UID_A}, {[d[0] for d in direct]}, {server_fns}")
+          f"{reg[0]}, {bad[0]}, {owner_b == UID_B}, {owner_a == UID_A}, {[d[0] for d in direct]}, {server_fns}"
+          + ("" if reg[0] in (200, 204) else f" · {str(reg[1])[:300]}"))
 
     _, conv = rpc("chat_open_direct", {"p_user": UID_A}, tb)
     gen = int(sql(f"select generation from public.chat_conversations where id = '{conv}';") or 0)
