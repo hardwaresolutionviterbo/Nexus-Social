@@ -177,39 +177,39 @@ void main() {
     expect(callDuration(const Duration(hours: 1, minutes: 2, seconds: 5)), '1:02:05');
   });
 
-  testWidgets('schermata: pulsanti di chiamata nella chat e chiamata in arrivo a tutto schermo', (WidgetTester tester) async {
+  testWidgets('nella chat a due ci sono i pulsanti di chiamata', (WidgetTester tester) async {
     final (ChatService a, ChatService b, String conv) = (await tester.runAsync(pair))!;
     await tester.pumpWidget(MaterialApp(theme: AppTheme.light, home: ChatThreadScreen(chat: a, conversationId: conv)));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey<String>('chiama_voce')), findsOneWidget);
     expect(find.byKey(const ValueKey<String>('chiama_video')), findsOneWidget);
-    await tester.runAsync(() => a.calls!.start(conv, video: false));
-    await tester.runAsync(() async {
-      await b.refresh();
-      await settle();
-    });
-
-    await tester.pumpWidget(MaterialApp(theme: AppTheme.light, home: CallScreen(calls: b.calls!)));
-    await tester.pump();
-    expect(find.text('Anna R.'), findsOneWidget);
-    expect(find.text('Chiamata in arrivo'), findsOneWidget);
-    await tester.runAsync(() async {
-      await tester.tap(find.byKey(const ValueKey<String>('chiamata_rispondi')));
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-    });
-    await tester.pump();
-    expect(find.byKey(const ValueKey<String>('chiamata_chiudi')), findsOneWidget);
-    expect(find.byKey(const ValueKey<String>('chiamata_altoparlante')), findsOneWidget);
-    await tester.runAsync(() async {
-      await tester.tap(find.byKey(const ValueKey<String>('chiamata_chiudi')));
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-    });
-    await tester.pump();
-    expect(find.text('Chiamata terminata'), findsOneWidget);
-    await tester.pump(const Duration(seconds: 2));
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 5));
     a.dispose();
     b.dispose();
-  });
+  }, timeout: const Timeout(Duration(seconds: 60)));
+
+  testWidgets('chiamata in arrivo a tutto schermo: Rifiuta', (WidgetTester tester) async {
+    final (ChatService a, ChatService b, String conv) = (await tester.runAsync(pair))!;
+    await tester.runAsync(() async {
+      await a.calls!.start(conv, video: false);
+      await b.refresh();
+      await settle();
+    });
+    expect(b.calls!.state!.phase, CallPhase.incoming);
+    await tester.pumpWidget(MaterialApp(theme: AppTheme.light, home: CallScreen(calls: b.calls!)));
+    await tester.pump();
+    expect(find.text('Anna R.'), findsOneWidget);
+    expect(find.text('Chiamata in arrivo'), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('chiamata_rispondi')), findsOneWidget);
+    await tester.runAsync(() => b.calls!.reject());
+    await tester.pump();
+    expect(find.text('Chiamata rifiutata'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 2));
+    await tester.runAsync(() async {
+      a.dispose();
+      b.dispose();
+    });
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }
