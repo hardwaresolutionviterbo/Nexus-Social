@@ -111,6 +111,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     super.initState();
     widget.chat.setOpenConversation(widget.conversationId);
     widget.chat.addListener(_onChange);
+    // Nei gruppi servono i nomi dei membri (fumetti, citazioni, invito).
+    if (widget.chat.conversation(widget.conversationId)?.isGroup ?? false) {
+      widget.chat.groupMembers(widget.conversationId).then((_) {
+        if (mounted) setState(() {});
+      }, onError: (Object _) {});
+    }
     _text.addListener(() => setState(() {}));
   }
 

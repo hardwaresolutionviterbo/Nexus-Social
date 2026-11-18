@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:nexus_social/core/theme/app_theme.dart';
+import 'package:nexus_social/features/chat/chat_group_screens.dart';
 import 'package:nexus_social/features/chat/chat_media.dart';
 import 'package:nexus_social/features/chat/chat_media_picker.dart';
 import 'package:nexus_social/features/chat/chat_models.dart';
@@ -371,6 +372,95 @@ void main() {
     expect(find.textContaining('permesso del microfono'), findsOneWidget);
     expect(find.byKey(const ValueKey<String>('registrazione')), findsNothing);
     await finish(tester, <ChatService>[me, b]);
+  });
+
+  testWidgets('Blocco 4 · nuovo gruppo, nomi nei fumetti, info e codice d\'invito', (WidgetTester tester) async {
+    tall(tester);
+    final ChatService me = await fakePhone(hub, io);
+    final ChatService b = await fakePhone(hub, bruno);
+    final ChatService d = await fakePhone(hub, dario);
+    await tester.pumpWidget(app(Scaffold(body: ChatScreen(service: me, now: () => now))));
+    await tester.pumpAndSettle();
+
+    // Nuova chat → Nuovo gruppo → nome e persone → Crea.
+    await tester.tap(find.byKey(const ValueKey<String>('chat_nuova')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey<String>('entra_codice')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey<String>('nuovo_gruppo')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey<String>('gruppo_nome')), 'Calcetto giovedì');
+    await tester.tap(find.byKey(const ValueKey<String>('scegli_$bruno')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey<String>('gruppo_crea')));
+    await tester.pumpAndSettle();
+    expect(find.text('Calcetto giovedì'), findsOneWidget);
+    expect(find.textContaining('2 membri'), findsOneWidget);
+    final String g = me.threads.single.conversation.id;
+
+    // Bruno scrive: nel fumetto c'è il suo nome.
+    await b.refresh();
+    await b.send(g, 'Porto io il pallone');
+    await me.refresh();
+    await tester.pumpAndSettle();
+    expect(find.text('Porto io il pallone'), findsOneWidget);
+    expect(find.text('Bruno B.'), findsOneWidget, reason: 'nome di chi scrive nel gruppo');
+
+    // Info gruppo: membri, amministratore, codice d'invito.
+    await tester.tap(find.byKey(const ValueKey<String>('chat_intestazione')));
+    await tester.pumpAndSettle();
+    expect(find.text('Info gruppo'), findsOneWidget);
+    expect(find.text('Amministratore'), findsOneWidget);
+    expect(find.byKey(ValueKey<String>('membro_$bruno')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey<String>('gruppo_codice')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey<String>('codice_mostrato')), findsOneWidget);
+    final String code = hub.invites.keys.single;
+    Navigator.of(tester.element(find.byKey(const ValueKey<String>('codice_mostrato')))).pop();
+    await tester.pumpAndSettle();
+
+    // Dario entra con il codice dalla sua app.
+    await tester.pumpWidget(app(Scaffold(
+      body: Builder(
+        builder: (BuildContext context) => TextButton(
+          onPressed: () => joinGroupWithCode(context, d),
+          child: const Text('codice'),
+        ),
+      ),
+    )));
+    await tester.tap(find.text('codice'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey<String>('codice_invito')), code);
+    await tester.tap(find.byKey(const ValueKey<String>('codice_verifica')));
+    await tester.pumpAndSettle();
+    expect(find.text('Calcetto giovedì'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey<String>('codice_entra')));
+    await tester.pumpAndSettle();
+    expect(d.conversation(g)?.myMlsState, 'to_add');
+    await me.refresh();
+    await d.refresh();
+    expect(d.conversation(g)?.myMlsState, 'in', reason: 'l\'amministratore lo ha aggiunto da solo');
+    await finish(tester, <ChatService>[me, b, d]);
+  });
+
+  testWidgets('Blocco 4 · invito a un gruppo da chi non è in rubrica: Entra', (WidgetTester tester) async {
+    tall(tester);
+    final ChatService me = await fakePhone(hub, io);
+    final ChatService d = await fakePhone(hub, dario);
+    final String g = await d.createGroup('Mercatino', <String>[io]);
+    await me.refresh();
+    expect(me.requests.single.conversation.title, 'Mercatino');
+    await tester.pumpWidget(app(ChatThreadScreen(chat: me, conversationId: g)));
+    await tester.pumpAndSettle();
+    expect(find.text('Invito al gruppo «Mercatino»'), findsOneWidget);
+    expect(find.textContaining('Dario V. ti ha aggiunto'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey<String>('richiesta_accetta')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey<String>('gruppo_attesa')), findsOneWidget);
+    await d.refresh();
+    await me.refresh();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey<String>('gruppo_attesa')), findsNothing);
+    await finish(tester, <ChatService>[me, d]);
   });
 
   test('etichette dell\'ora come WhatsApp', () {

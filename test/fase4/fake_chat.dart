@@ -33,6 +33,7 @@ class FakeConv {
   final Map<String, String> role = <String, String>{};
   final Map<String, String> mls = <String, String>{};
   final Map<String, int> fromId = <String, int>{};
+  final Map<String, String> invitedBy = <String, String>{};
   String other(String uid) => uid == a ? b : a;
   bool has(String uid) => group ? status.containsKey(uid) : (uid == a || uid == b);
   Iterable<String> inside() => status.keys.where((u) => status[u] == 'active' && mls[u] == 'in');
@@ -314,6 +315,7 @@ class FakeChatServer implements ChatServer {
                   (c.status[u] == 'active' && (c.mls[u] == 'to_add' || c.mls[u] == 'to_readd')) ||
                   c.mls[u] == 'to_remove')
               .length,
+          invitedBy: c.invitedBy[uid],
         )
       else if (!c.group && c.has(uid) && c.status[uid] != 'declined' && !hub.blocked(c.a, c.b))
         ChatConversation(
@@ -392,6 +394,7 @@ class FakeChatServer implements ChatServer {
     c.status[user] = status;
     c.role[user] = 'member';
     c.mls[user] = before == 'to_remove' || before == 'to_readd' ? 'to_readd' : 'to_add';
+    c.invitedBy[user] = uid;
     c.delivered[user] = 0;
     c.read[user] = 0;
     return status;
