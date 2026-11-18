@@ -721,6 +721,7 @@ Future<ChatService> fakePhone(
   BackupKeyStore? backupKeys,
 }) async {
   final ChatService s = ChatService(
+    clock: () => hub.clock,
     backupServer: backup,
     backupKeys: backup == null ? null : (backupKeys ?? MemoryBackupKeyStore()),
     backupKdf: fastKdfForTests(),

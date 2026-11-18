@@ -31,7 +31,9 @@ class ChatService extends ChangeNotifier {
     BackupServer? backupServer,
     BackupKeyStore? backupKeys,
     BackupKdf backupKdf = const BackupKdf(),
-  }) : _openCrypto = crypto {
+    DateTime Function()? clock,
+  }) : _openCrypto = crypto,
+       _clock = clock ?? DateTime.now {
     backup = backupServer != null && backupKeys != null
         ? ChatBackup(chat: this, server: backupServer, keys: backupKeys, kdf: backupKdf)
         : null;
@@ -52,6 +54,9 @@ class ChatService extends ChangeNotifier {
   final Duration slowPoll;
 
   final Future<ChatCrypto> Function() _openCrypto;
+
+  /// Ora per il limite di «elimina per tutti» (nei test e nelle anteprime: quella del server finto).
+  final DateTime Function() _clock;
   ChatCrypto? _crypto;
   String? _myKey;
 
@@ -742,7 +747,7 @@ class ChatService extends ChangeNotifier {
 
   /// «Elimina per tutti»: solo i propri messaggi, entro 48 ore.
   Future<void> deleteForEveryone(ChatMessage message) async {
-    if (!message.canDeleteForEveryone(DateTime.now())) {
+    if (!message.canDeleteForEveryone(_clock())) {
       throw const ChatFailure('Questo messaggio non si può più eliminare per tutti.');
     }
     await _event(
