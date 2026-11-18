@@ -1,4 +1,4 @@
-# Fase 4 · Blocco 10 · Chiudere la Fase 4 — esito (in corso)
+# Fase 4 · Blocco 10 · Chiudere la Fase 4 — esito
 
 Ramo `fase4/blocco10`, nato da `fase4/blocco9b`. Tre cose da fare, scelte dal titolare il
 18/11/2026:
@@ -46,4 +46,33 @@ Ramo `fase4/blocco10`, nato da `fase4/blocco9b`. Tre cose da fare, scelte dal ti
 - **Nota:** le versioni dell'app precedenti alla 30101 mostrano la chiave come «messaggio
   non leggibile». Vanno aggiornati tutti e due i telefoni.
 
-## 3 · Chiamate di gruppo — da fare
+## 3 · Chiamate di gruppo — fatto (ramo `fase4/blocco10b`)
+- **Pulsanti:** nei gruppi fino a 8 membri ci sono i pulsanti di chiamata vocale e di
+  videochiamata, per chi è già dentro il gruppo cifrato.
+- **Squillo:** squilla a tutti i membri, con la notifica «Calcetto · Anna R. · Videochiamata
+  di gruppo». Valgono «Silenzia» e «Non disturbare».
+- **Chi entra:**
+  - entra chi risponde, fino a 4 persone insieme;
+  - ognuno è collegato direttamente agli altri (WebRTC, ponte TURN se serve);
+  - chi entra chiama chi c'è già.
+- **Chi esce:** gli altri restano. L'ultimo rimasto chiude la chiamata.
+- **Rifiuta:** vale solo per sé.
+- **Nessuna risposta in 45 secondi:** la chiamata si chiude, e per gli altri è «persa».
+- **Schermata:**
+  - con il video: una, due o quattro finestre;
+  - senza video: i nomi di chi è in chiamata;
+  - durata e numero di persone.
+- **Server** (migrazione `0028_chiamate_di_gruppo.sql`): `call_signal` accetta i gruppi solo
+  per chi è dentro la cifratura e in gruppi fino a 8; la notifica dice «Chiamata di gruppo».
+- **Controlli:**
+  - app: 320 test, tra cui una chiamata a tre in cui ognuno è collegato a tutti, l'uscita,
+    l'ultimo che chiude e nessuna risposta;
+  - database: 201/201, con GC1–GC2.
+- **Server reale (19/11/2026, autorizzato):** migrazione 0028 applicata dal commit `38a109a`,
+  con impronta verificata.
+
+## Limiti noti
+- Oltre 4 persone in chiamata serve un collegamento centrale (SFU), che costa: non previsto
+  per ora.
+- **Sull'iPhone (fase delle build iOS):** chiamata a tutto schermo e testo nelle notifiche
+  sono da rifare con gli strumenti di Apple (CallKit, Notification Service Extension).
