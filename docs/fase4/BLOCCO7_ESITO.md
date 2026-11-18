@@ -1,8 +1,7 @@
 # Fase 4 · Blocco 7 · Segnala, Condividi l'incontro, notifiche dei commenti — esito
 
 Ramo `fase4/blocco7`, nato da `fase4/blocco6`.
-Stato: **pronto. Per la migrazione 0024 e il nuovo invio della funzione `notifiche` serve
-l'autorizzazione del titolare.**
+Stato: **server attivo (autorizzato il 18/11/2026), da provare sul telefono**.
 
 ## Cosa fa
 - **Segnala** (chat ⋮ → Segnala), come chiede il piano: «chi segnala sceglie quali messaggi
@@ -36,3 +35,9 @@ l'autorizzazione del titolare.**
 - Database: 189/189, compresi i nuovi W1–W4 e la controprova `segnalazioni_visibili` (W2).
 - Funzione: test Deno aggiornati.
 - Anteprime: chat_23 (Segnala), chat_24 (Condividi l'incontro).
+
+## Server reale (18/11/2026, autorizzato)
+- Migrazione 0024 applicata dal file del commit `2800355`, con impronta verificata:
+  - RLS attiva, nessuna scrittura diretta;
+  - permessi di anon allineati, come per tutte le funzioni dal Blocco 0017.
+- Funzione `notifiche` pubblicata di nuovo (versione 2). Chiamata di prova: 200.
