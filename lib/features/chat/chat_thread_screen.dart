@@ -1211,7 +1211,7 @@ class _WaitingBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+          const Icon(Icons.hourglass_top_rounded, size: 20, color: AppColors.brandBlue),
           const SizedBox(width: 10),
           Expanded(
             child: Text(

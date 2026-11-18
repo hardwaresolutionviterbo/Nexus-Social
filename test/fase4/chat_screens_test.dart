@@ -419,6 +419,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Dario entra con il codice dalla sua app.
+    await tester.pumpWidget(const SizedBox());
     await tester.pumpWidget(app(Scaffold(
       body: Builder(
         builder: (BuildContext context) => TextButton(
