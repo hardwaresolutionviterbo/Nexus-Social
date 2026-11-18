@@ -12,6 +12,10 @@
 	<string>Per centrare la mappa su di te mentre usi Piazly. La tua posizione esatta non è mai mostrata agli altri.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Per sbloccare Piazly con il volto, se lo attivi.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Piazly usa il microfono solo per registrare i messaggi vocali che decidi di inviare.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Piazly usa la fotocamera solo per scattare le foto che decidi di inviare in chat o negli annunci.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Per scegliere la foto del tuo profilo.</string>
 	<key>CFBundleDisplayName</key>

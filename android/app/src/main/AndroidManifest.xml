@@ -7,6 +7,8 @@
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <!-- Fase 2, Blocco 5: rubrica, solo in lettura e solo dopo il consenso esplicito. -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <!-- Fase 4, Blocco 3: messaggi vocali in chat (chiesto solo quando si registra). -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Fase 3, Blocco 1: posizione solo con l'app aperta, chiesta dopo la spiegazione.
          Chi sceglie «approssimativa» concede solo la prima. Nessun accesso in background. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />

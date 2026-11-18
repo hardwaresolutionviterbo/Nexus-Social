@@ -38,6 +38,13 @@ dependencies:
   # Fase 4: cifratura delle chat con MLS (RFC 9420), licenza MIT.
   openmls: 4.0.0
   path_provider: ^2.1.5
+  # Fase 4, Blocco 3: allegati cifrati (AES-256-GCM), vocali, video, documenti.
+  cryptography: ^2.7.0
+  cryptography_flutter: ^2.3.2
+  record: ^6.0.0
+  just_audio: ^0.10.4
+  video_player: ^2.10.0
+  file_picker: ^10.3.0
 
 dev_dependencies:
   flutter_test:
