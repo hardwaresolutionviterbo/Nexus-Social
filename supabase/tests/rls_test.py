@@ -376,9 +376,9 @@ def run(ids: dict) -> None:
 
 
 def storage(method: str, path: str, jwt: str | None, data: bytes | None = None,
-            device: str | None = None) -> int:
+            device: str | None = None, content_type: str = "image/jpeg") -> int:
     """Chiamata allo Storage temporaneo; restituisce solo lo stato HTTP."""
-    headers = {"apikey": ANON, "Content-Type": "image/jpeg"}
+    headers = {"apikey": ANON, "Content-Type": content_type}
     if device is not None:
         headers["x-device-id"] = device
     if jwt is not None:
@@ -2178,6 +2178,64 @@ def check_chat_phase4() -> None:
           f"{changed.get('peer_signature_key') == key(3)}, {s}, {st}, {old}")
 
 
+def check_chat_media_phase4() -> None:
+    """S · Allegati cifrati della chat (Fase 4, Blocco 3): solo chi è nella chat."""
+    ta, tb, td = token(UID_A), token(UID_B), token(UID_D)
+    blob = bytes(range(256)) * 8  # byte illeggibili, come un allegato cifrato
+    bin_type = "application/octet-stream"
+    _, conv = rpc("chat_open_direct", {"p_user": UID_B}, ta)
+    _, req = rpc("chat_open_direct", {"p_user": UID_A}, td)  # rifiutata da A nei casi R
+
+    def up(tok, path, kind=bin_type, data=blob):
+        return storage("POST", f"chat-media/{path}", tok, data, content_type=kind)
+
+    def down(tok, path):
+        return storage("GET", f"authenticated/chat-media/{path}", tok)
+
+    own = f"{conv}/{UID_A}/allegatoProvaA000001.bin"
+    s_own = up(ta, own)
+    s_foreign_folder = up(ta, f"{conv}/{UID_B}/allegatoIntruso00001.bin")
+    s_outsider = up(td, f"{conv}/{UID_D}/allegatoEstraneo0001.bin")
+    s_jpeg = up(ta, f"{conv}/{UID_A}/allegatoInChiaro0001.bin", "image/jpeg")
+    s_name = up(ta, f"{conv}/{UID_A}/nome con spazi.bin")
+    s_big = up(ta, f"{conv}/{UID_A}/allegatoTroppoGrande1.bin", data=b"x" * (52428800 + 1))
+    check("S1", "Allegato caricato solo da chi è nella chat, nella propria cartella, cifrato, ≤ 50 MB",
+          s_own == 200 and s_foreign_folder >= 400 and s_outsider >= 400 and s_jpeg >= 400
+          and s_name >= 400 and s_big >= 400,
+          f"{s_own}, {s_foreign_folder}, {s_outsider}, {s_jpeg}, {s_name}, {s_big}")
+
+    g_b, g_d, g_anon = down(tb, own), down(td, own), down(None, own)
+    g_public = storage("GET", f"public/chat-media/{own}", None)
+    listed = storage("POST", "list/chat-media", td, json.dumps({"prefix": f"{conv}/"}).encode(),
+                     content_type="application/json")
+    check("S2", "Lo scarica solo l'altra persona della chat; estranei, anonimi e link pubblici no",
+          g_b == 200 and g_d >= 400 and g_anon >= 400 and g_public >= 400,
+          f"{g_b}, {g_d}, {g_anon}, {g_public}, elenco={listed}")
+
+    in_req = f"{req}/{UID_D}/allegatoRichiesta0001.bin"
+    s_req = up(td, in_req)
+    check("S3", "Richiesta rifiutata: chi l'ha rifiutata non riceve allegati",
+          s_req == 200 and down(ta, in_req) >= 400 and down(td, in_req) == 200,
+          f"{s_req}, {down(ta, in_req)}")
+
+    rpc("block_user", {"p_user_id": UID_B}, ta)
+    blocked = down(tb, own)
+    up_blocked = up(tb, f"{conv}/{UID_B}/allegatoBloccato001.bin")
+    rpc("unblock_user", {"p_user_id": UID_B}, ta)
+    check("S4", "Con un blocco l'allegato non si scarica e non si carica",
+          blocked >= 400 and up_blocked >= 400 and down(tb, own) == 200,
+          f"{blocked}, {up_blocked}")
+
+    overwrite = storage("PUT", f"chat-media/{own}", ta, b"altro", content_type=bin_type)
+    storage("DELETE", f"chat-media/{own}", td)
+    still = down(tb, own)
+    removed = storage("DELETE", f"chat-media/{own}", tb)
+    gone = down(tb, own)
+    check("S5", "Nessuna modifica; l'estraneo non cancella; chi riceve cancella dopo lo scaricamento",
+          overwrite >= 400 and still == 200 and removed == 200 and gone >= 400,
+          f"{overwrite}, {still}, {removed}, {gone}")
+
+
 def main() -> int:
     try:
         ids = setup()
@@ -2200,6 +2258,7 @@ def main() -> int:
     check_claimless_access()
     check_rubrica_server()
     check_chat_phase4()
+    check_chat_media_phase4()
     failed = [r for r in results if not r[2]]
     print(f"{'Caso':6} {'Esito':9} Descrizione")
     for case, desc, ok, detail in results:
