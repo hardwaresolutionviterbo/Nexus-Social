@@ -356,9 +356,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
           await widget.chat.setMute(widget.conversationId, unmute: true);
       }
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
         SnackBar(content: Text(choice == 'riattiva' ? 'Notifiche riattivate' : 'Chat silenziata')),
-      );
+        );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
