@@ -5,7 +5,6 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show SupabaseClient, FileOptions, StorageException;
 
@@ -321,5 +320,5 @@ class MemoryBackupKeyStore implements BackupKeyStore {
 /// Ogni quanto si rifà il backup da solo (all'apertura dell'app).
 const Duration autoBackupEvery = Duration(hours: 24);
 
-@visibleForTesting
+/// Costo minimo, solo per test e anteprime (sul telefono si usa [BackupKdf] predefinito).
 BackupKdf fastKdfForTests() => const BackupKdf(memory: 1024, iterations: 1);
