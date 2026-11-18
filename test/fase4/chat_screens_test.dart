@@ -341,9 +341,12 @@ void main() {
     await tester.pumpAndSettle();
     // In questo test il telefono finto non ha la cartella degli allegati.
     expect(find.text('Allegati non disponibili.'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
 
     // Vocale: barra di registrazione, annulla.
     await tester.tap(find.byKey(const ValueKey<String>('chat_vocale')));
+    await tester.pump();
     await tester.pump();
     expect(find.byKey(const ValueKey<String>('registrazione')), findsOneWidget);
     await tester.pump(const Duration(seconds: 1));
