@@ -16,6 +16,7 @@ import 'package:nexus_social/features/chat/chat_preview.dart';
 import 'package:nexus_social/features/chat/chat_server.dart';
 import 'package:nexus_social/features/chat/chat_service.dart';
 import 'package:nexus_social/features/chat/chat_store.dart';
+import 'package:nexus_social/features/status/status_service.dart';
 
 class FakeConv {
   FakeConv(this.id, this.a, this.b, this.createdAt, {this.group = false, this.title = ''});

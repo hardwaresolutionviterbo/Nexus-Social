@@ -719,7 +719,7 @@ class _StatusMediaComposerState extends State<StatusMediaComposer> {
 
 /// Video da memoria: si scrive in un file temporaneo e si riproduce.
 class _MemoryVideo extends StatefulWidget {
-  const _MemoryVideo({required this.bytes, this.autoplay = false, this.onReady, this.paused = false});
+  const _MemoryVideo({super.key, required this.bytes, this.autoplay = false, this.onReady, this.paused = false});
 
   final Uint8List bytes;
   final bool autoplay;
