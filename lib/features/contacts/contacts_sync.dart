@@ -64,6 +64,9 @@ abstract class ContactsReader {
 
   Future<List<String>> phoneNumbers();
 
+  /// Nome scritto in rubrica e numeri di ogni contatto (restano sul telefono).
+  Future<List<(String, List<String>)>> entries();
+
   /// Avvisa quando la rubrica del telefono cambia (contatto aggiunto o modificato).
   void addListener(void Function() listener);
 
@@ -79,6 +82,19 @@ class DeviceContactsReader implements ContactsReader {
 
   @override
   void removeListener(void Function() listener) => FlutterContacts.removeListener(listener);
+
+  @override
+  Future<List<(String, List<String>)>> entries() async {
+    final List<Contact> contacts = await FlutterContacts.getContacts(withProperties: true);
+    return <(String, List<String>)>[
+      for (final Contact c in contacts)
+        if (c.displayName.trim().isNotEmpty)
+          (
+            c.displayName.trim(),
+            <String>[for (final Phone p in c.phones) p.normalizedNumber.isNotEmpty ? p.normalizedNumber : p.number],
+          ),
+    ];
+  }
 
   @override
   Future<List<String>> phoneNumbers() async {
@@ -126,6 +142,10 @@ abstract class ContactsRepository {
 
   Future<List<RecognizedContact>> contacts();
 
+  /// Nomi come scritti nella rubrica del telefono, per persona di Piazly (Fase 4, Blocco 11).
+  /// Restano sul telefono.
+  Future<Map<String, String>> localNames();
+
   Future<void> setDiscoverable(bool value);
 
   /// «Revoca e cancella»: stop e cancellazione dei dati derivati.
@@ -162,6 +182,9 @@ class SupabaseContactsRepository implements ContactsRepository {
 
   static const FlutterSecureStorage _storage = FlutterSecureStorage();
   static const String _fingerprintKey = 'piazly_contacts_fingerprint';
+
+  /// Persona di Piazly → numeri della rubrica che le corrispondono (solo sul telefono).
+  static const String _numbersKey = 'piazly_contacts_numbers';
   bool _autoRunning = false;
 
   static Future<T> _guard<T>(Future<T> Function() body) async {
@@ -240,9 +263,58 @@ class SupabaseContactsRepository implements ContactsRepository {
     onProgress?.call(0.9);
     await _client.rpc('match_contacts', params: <String, Object?>{'p_tags': tags});
     await _saveFingerprint(numbers);
+    await _saveNumbers(numbers, tags);
     onProgress?.call(1);
     return contacts();
   });
+
+  /// Quale numero della rubrica corrisponde a quale persona: serve per mostrare i nomi della
+  /// rubrica nelle chat. Il nome non lascia mai il telefono.
+  Future<void> _saveNumbers(List<String> numbers, List<String> tags) async {
+    try {
+      final Object? rows = await _client.rpc('match_contact_tags', params: <String, Object?>{'p_tags': tags});
+      final Map<String, String> byTag = <String, String>{
+        for (int i = 0; i < tags.length && i < numbers.length; i++) tags[i]: numbers[i],
+      };
+      final Map<String, List<String>> byUser = <String, List<String>>{};
+      if (rows is List) {
+        for (final Object? r in rows) {
+          if (r is! Map) continue;
+          final String? number = byTag['${r['tag']}'];
+          if (number != null) (byUser['${r['id']}'] ??= <String>[]).add(number);
+        }
+      }
+      await _storage.write(key: _numbersKey, value: jsonEncode(byUser));
+    } catch (_) {
+      // Senza questa informazione le chat mostrano il nome scelto dalla persona su Piazly.
+    }
+  }
+
+  @override
+  Future<Map<String, String>> localNames() async {
+    try {
+      final String? raw = await _storage.read(key: _numbersKey);
+      if (raw == null) return const <String, String>{};
+      final Object? j = jsonDecode(raw);
+      if (j is! Map || j.isEmpty) return const <String, String>{};
+      if (!await _reader.requestPermission()) return const <String, String>{};
+      final Map<String, String> nameOf = <String, String>{};
+      for (final (String name, List<String> phones) in await _reader.entries()) {
+        for (final String n in normalizeContactNumbers(phones)) {
+          nameOf.putIfAbsent(n, () => name);
+        }
+      }
+      return <String, String>{
+        for (final MapEntry<dynamic, dynamic> e in j.entries)
+          if (e.value is List)
+            if ((e.value as List).map((Object? n) => nameOf['$n']).whereType<String>().firstOrNull
+                case final String name)
+              '${e.key}': name,
+      };
+    } catch (_) {
+      return const <String, String>{};
+    }
+  }
 
   Future<void> _saveFingerprint(List<String> numbers) async {
     try {
@@ -269,7 +341,14 @@ class SupabaseContactsRepository implements ContactsRepository {
       } catch (_) {
         stored = null;
       }
-      final bool changed = stored != null && stored != contactsFingerprint(numbers);
+      bool hasNumbers = false;
+      try {
+        hasNumbers = await _storage.read(key: _numbersKey) != null;
+      } catch (_) {
+        hasNumbers = false;
+      }
+      // Prima volta dopo l'aggiornamento: serve una sincronizzazione per i nomi della rubrica.
+      final bool changed = (stored != null && stored != contactsFingerprint(numbers)) || !hasNumbers;
       if (!shouldAutoSync(
         enabled: true,
         contactsChanged: changed,
@@ -314,6 +393,7 @@ class SupabaseContactsRepository implements ContactsRepository {
     await _client.rpc('revoke_contacts');
     try {
       await _storage.delete(key: _fingerprintKey);
+      await _storage.delete(key: _numbersKey);
     } catch (_) {
       // L'impronta locale è facoltativa.
     }

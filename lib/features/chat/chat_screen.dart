@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/nexus_ui.dart';
+import '../calls/calls_list.dart';
 import '../profile/avatar_view.dart';
 import '../profile/profile_repository.dart';
 import 'chat_backup_screen.dart';
@@ -49,12 +50,56 @@ class ChatScreen extends StatelessWidget {
   }
 }
 
-class _ChatList extends StatelessWidget {
+class _ChatList extends StatefulWidget {
   const _ChatList({required this.chat, required this.profiles, required this.now});
 
   final ChatService chat;
   final ProfileRepository? profiles;
   final DateTime now;
+
+  @override
+  State<_ChatList> createState() => _ChatListState();
+}
+
+class _ChatListState extends State<_ChatList> {
+  /// Sezione aperta: false = chat, true = chiamate (Blocco 11).
+  bool _calls = false;
+
+  ChatService get chat => widget.chat;
+  ProfileRepository? get profiles => widget.profiles;
+  DateTime get now => widget.now;
+
+  /// «Chat | Chiamate» in alto, come le schede di WhatsApp.
+  Widget _sections(BuildContext context) {
+    final int missed = chat.calls?.log.unseenMissed ?? 0;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+      child: SegmentedButton<bool>(
+        key: const ValueKey<String>('chat_sezioni'),
+        showSelectedIcon: false,
+        segments: <ButtonSegment<bool>>[
+          const ButtonSegment<bool>(
+            value: false,
+            icon: Icon(Icons.chat_bubble_outline_rounded),
+            label: Text('Chat'),
+          ),
+          ButtonSegment<bool>(
+            value: true,
+            icon: const Icon(Icons.call_outlined),
+            label: Text(missed > 0 ? 'Chiamate · $missed' : 'Chiamate', key: const ValueKey<String>('sezione_chiamate')),
+          ),
+        ],
+        selected: <bool>{_calls},
+        onSelectionChanged: (Set<bool> v) => setState(() => _calls = v.first),
+      ),
+    );
+  }
+
+  void _openChat(String conversationId) => Navigator.of(context).push<void>(
+    MaterialPageRoute<void>(
+      builder: (_) => ChatThreadScreen(chat: chat, conversationId: conversationId, profiles: profiles),
+    ),
+  );
 
   Future<void> _newChat(BuildContext context) => Navigator.of(context).push<void>(
     MaterialPageRoute<void>(
@@ -98,6 +143,22 @@ class _ChatList extends StatelessWidget {
     }
     final List<ChatThread> threads = chat.threads;
     final List<ChatThread> requests = chat.requests;
+    if (chat.calls != null) {
+      return Column(
+        children: [
+          ListenableBuilder(listenable: chat.calls!.log, builder: (BuildContext c, _) => _sections(c)),
+          Expanded(
+            child: _calls
+                ? CallsList(chat: chat, calls: chat.calls!, profiles: profiles, openChat: _openChat, now: () => now)
+                : _chats(context, theme, threads, requests),
+          ),
+        ],
+      );
+    }
+    return _chats(context, theme, threads, requests);
+  }
+
+  Widget _chats(BuildContext context, ThemeData theme, List<ChatThread> threads, List<ChatThread> requests) {
     return Stack(
       children: [
         RefreshIndicator(

@@ -2740,6 +2740,35 @@ def check_group_calls_phase4() -> None:
     rpc("push_unregister", {"p_fid": fid}, tb)
 
 
+def check_contact_names_phase4() -> None:
+    """CN · Nomi della rubrica (Fase 4, Blocco 11): l'impronta → persona solo per i contatti riconosciuti."""
+    ta, tc = token(UID_A), token(UID_C)
+    tag_b = sql(f"select tag from private.phone_numbers where user_id = '{UID_B}';")
+    tag_d = sql(f"select tag from private.phone_numbers where user_id = '{UID_D}';")
+    sql(f"insert into public.consents (user_id, kind) values ('{UID_A}', 'contacts') "
+        "on conflict (user_id, kind) do update set revoked_at = null;")
+    sql(f"insert into private.contact_links (owner_id, contact_id, expires_at) values "
+        f"('{UID_A}', '{UID_B}', now() + interval '30 days') on conflict (owner_id, contact_id) "
+        "do update set expires_at = excluded.expires_at;")
+    sql(f"delete from private.contact_links where owner_id = '{UID_A}' and contact_id = '{UID_D}';")
+    status, rows = rpc("match_contact_tags", {"p_tags": [tag_b, tag_d, "ab" * 32]}, ta)
+    got = sorted((r.get("id"), r.get("tag")) for r in rows) if isinstance(rows, list) else rows
+    check("CN1", "Risponde solo per le persone già riconosciute come contatti (non per gli altri numeri)",
+          status == 200 and got == [(UID_B, tag_b)], f"{status}, {len(got) if isinstance(got, list) else got}")
+
+    no_consent = rpc("match_contact_tags", {"p_tags": [tag_b]}, tc)[0]
+    bad = rpc("match_contact_tags", {"p_tags": ["non-valido"]}, ta)[0]
+    anon = rpc("match_contact_tags", {"p_tags": [tag_b]}, None)[0]
+    sql(f"update private.contact_links set expires_at = now() - interval '1 second' "
+        f"where owner_id = '{UID_A}' and contact_id = '{UID_B}';")
+    _, expired = rpc("match_contact_tags", {"p_tags": [tag_b]}, ta)
+    sql(f"update private.contact_links set expires_at = now() + interval '30 days' "
+        f"where owner_id = '{UID_A}' and contact_id = '{UID_B}';")
+    check("CN2", "Senza consenso, con dati strani, senza accesso o con il contatto scaduto: niente",
+          no_consent >= 400 and bad >= 400 and anon >= 400 and expired == [],
+          f"{no_consent}, {bad}, {anon}, {expired}")
+
+
 def check_push_phase4() -> None:
     """U · Notifiche (Fase 4, Blocco 5): coda server, silenzia, non disturbare, mai i Mi piace."""
     ta, tb = token(UID_A), token(UID_B)
@@ -2884,6 +2913,7 @@ def main() -> int:
     check_realtime_phase4()
     check_preview_phase4()
     check_group_calls_phase4()
+    check_contact_names_phase4()
     failed = [r for r in results if not r[2]]
     print(f"{'Caso':6} {'Esito':9} Descrizione")
     for case, desc, ok, detail in results:

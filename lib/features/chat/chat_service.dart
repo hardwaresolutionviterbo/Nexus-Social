@@ -26,6 +26,7 @@ class ChatService extends ChangeNotifier {
     required this.store,
     required this.myId,
     this.contactsLoader,
+    this.localNames,
     this.media,
     this.files,
     this.fastPoll = const Duration(seconds: 3),
@@ -73,6 +74,34 @@ class ChatService extends ChangeNotifier {
   final ChatStore store;
   final String myId;
   final Future<List<ChatContact>> Function()? contactsLoader;
+
+  /// Nomi come scritti nella rubrica del telefono (Blocco 11): hanno la precedenza su quelli
+  /// scelti dalle persone su Piazly, come su WhatsApp.
+  final Future<Map<String, String>> Function()? localNames;
+  Map<String, String> _local = const <String, String>{};
+  DateTime _localAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// Rilegge i nomi della rubrica (all'avvio, quando cambia la rubrica, ogni tanto).
+  Future<void> reloadNames() async {
+    final Future<Map<String, String>> Function()? load = localNames;
+    if (load == null) return;
+    try {
+      _local = await load();
+      _localAt = DateTime.now();
+      _conversations.updateAll((String _, ChatConversation c) => _named(c));
+      _changed();
+    } catch (_) {
+      // Restano i nomi di Piazly.
+    }
+  }
+
+  /// Nome della rubrica, se la persona c'è.
+  String? localName(String userId) => _local[userId];
+
+  ChatConversation _named(ChatConversation c) {
+    final String? n = c.isGroup ? null : _local[c.peerId];
+    return n == null ? c : c.copyWith(peerName: n);
+  }
 
   /// Allegati cifrati sul server e in chiaro sul telefono (Blocco 3).
   final ChatMediaServer? media;
@@ -140,6 +169,7 @@ class ChatService extends ChangeNotifier {
     try {
       await _run(_init);
       _ready = true;
+      await reloadNames();
       _listenLive();
       await refresh();
       _schedule();
@@ -255,8 +285,17 @@ class ChatService extends ChangeNotifier {
       .where((m) => !m.mine && m.kind != MessageKind.notice && (m.serverId ?? 0) > c.myReadUpto)
       .length;
 
-  Future<List<ChatContact>> contacts() async =>
-      contactsLoader == null ? const <ChatContact>[] : await contactsLoader!();
+  Future<List<ChatContact>> contacts() async {
+    if (contactsLoader == null) return const <ChatContact>[];
+    final List<ChatContact> list = await contactsLoader!();
+    final List<ChatContact> named = <ChatContact>[
+      for (final ChatContact c in list)
+        _local[c.id] == null
+            ? c
+            : ChatContact(id: c.id, name: _local[c.id]!, username: c.username, avatarPath: c.avatarPath),
+    ];
+    return named..sort((ChatContact a, ChatContact b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+  }
 
   // ---------------------------------------------------------------- aggiornamento
 
@@ -302,9 +341,13 @@ class ChatService extends ChangeNotifier {
 
   Future<void> _loadConversations() async {
     final List<ChatConversation> list = await server.conversations();
+    if (localNames != null && DateTime.now().difference(_localAt) > const Duration(minutes: 5)) {
+      _localAt = DateTime.now();
+      unawaited(reloadNames());
+    }
     _conversations
       ..clear()
-      ..addEntries(list.map((c) => MapEntry<String, ChatConversation>(c.id, c)));
+      ..addEntries(list.map((c) => MapEntry<String, ChatConversation>(c.id, _named(c))));
     _conversationsAt = DateTime.now();
     for (final ChatConversation c in list) {
       if (!_messages.containsKey(c.id)) _messages[c.id] = await store.messages(c.id);
@@ -391,7 +434,7 @@ class ChatService extends ChangeNotifier {
   /// Nome di un membro del gruppo («Tu» per sé stessi).
   String memberName(String conversationId, String userId) {
     if (userId == myId) return 'Tu';
-    return _names[conversationId]?[userId] ?? 'Un membro';
+    return _local[userId] ?? _names[conversationId]?[userId] ?? 'Un membro';
   }
 
   Future<void> _loadNames(String conversationId) async {

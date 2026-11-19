@@ -107,6 +107,7 @@ class ChatConversation {
     String? myJoinedKey,
     String? myMlsState,
     int? pending,
+    String? peerName,
   }) => ChatConversation(
     id: id,
     status: status,
@@ -114,7 +115,7 @@ class ChatConversation {
     groupId: groupId ?? this.groupId,
     peerId: peerId,
     peerUsername: peerUsername,
-    peerName: peerName,
+    peerName: peerName ?? this.peerName,
     peerAvatarPath: peerAvatarPath,
     peerSignatureKey: peerSignatureKey ?? this.peerSignatureKey,
     peerJoinedKey: peerJoinedKey ?? this.peerJoinedKey,

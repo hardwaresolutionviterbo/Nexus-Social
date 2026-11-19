@@ -6,6 +6,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:material_ui/material_ui.dart' show Widget;
+import 'package:nexus_social/features/calls/call_log.dart';
 import 'package:nexus_social/features/calls/call_service.dart';
 import 'package:nexus_social/features/chat/chat_backup.dart';
 import 'package:nexus_social/features/chat/chat_crypto.dart';
@@ -779,8 +780,10 @@ Future<ChatService> fakePhone(
   BackupKeyStore? backupKeys,
   CallService Function(ChatService chat)? calls,
   PreviewKeyStore? previews,
+  Map<String, String>? localNames,
 }) async {
   final ChatService s = ChatService(
+    localNames: localNames == null ? null : () async => localNames,
     previews: previews,
     calls: calls,
     clock: () => hub.clock,
@@ -976,7 +979,11 @@ class FakeRinger implements CallRinger {
 }
 
 /// Telefono finto con le chiamate.
-CallService Function(ChatService) fakeCalls({Duration ring = const Duration(seconds: 45), FakeRinger? ringer}) =>
+CallService Function(ChatService) fakeCalls({
+  Duration ring = const Duration(seconds: 45),
+  FakeRinger? ringer,
+  CallLogStore? log,
+}) =>
     (ChatService chat) =>
         CallService(
           chat: chat,
@@ -985,4 +992,5 @@ CallService Function(ChatService) fakeCalls({Duration ring = const Duration(seco
           groupMedia: FakeGroupCallMedia.new,
           ringTimeout: ring,
           ringer: ringer,
+          logStore: log,
         );

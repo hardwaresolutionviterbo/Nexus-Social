@@ -15,6 +15,7 @@ import 'core/services/backend_bootstrap.dart';
 import 'core/services/firebase_services.dart';
 import 'core/services/push_device_registry.dart';
 import 'core/services/supabase_push_backend.dart';
+import 'features/calls/call_log.dart';
 import 'features/calls/call_service.dart';
 import 'features/calls/webrtc_call_media.dart';
 import 'features/chat/chat_backup.dart';
@@ -123,11 +124,15 @@ ChatService _chatFor(String uid) {
       ice: SupabaseIceProvider(Supabase.instance.client),
       media: WebRtcCallMedia.new,
       groupMedia: WebRtcGroupCallMedia.new,
+      // Registro delle chiamate, solo su questo telefono (Blocco 11).
+      logStore: FileCallLogStore(folder),
       ringer: SystemCallRinger(),
     ),
     // Backup cifrato con password (Blocco 6): la chiave resta nell'archivio sicuro del telefono.
     backupServer: SupabaseBackupServer(Supabase.instance.client, uid: () => uid),
     backupKeys: SecureBackupKeyStore(const FlutterSecureStorage(), uid: uid),
+    // Nomi come scritti nella rubrica del telefono (Blocco 11).
+    localNames: contacts.localNames,
     contactsLoader: () async {
       try {
         return <ChatContact>[
