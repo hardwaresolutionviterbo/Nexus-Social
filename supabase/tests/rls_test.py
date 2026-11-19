@@ -2769,6 +2769,57 @@ def check_contact_names_phase4() -> None:
           f"{no_consent}, {bad}, {anon}, {expired}")
 
 
+def check_presence_phase4() -> None:
+    """OL · Online e ultimo accesso (Fase 4, Blocco 12): secondo la privacy di ognuno, e reciproco."""
+    ta, tb, tc = token(UID_A), token(UID_B), token(UID_C)
+    for t, other in ((ta, UID_B), (tb, UID_A)):
+        rpc("unblock_user", {"p_user_id": other}, t)
+    # B ha A in rubrica; C no.
+    sql(f"insert into private.contact_links (owner_id, contact_id, expires_at) values "
+        f"('{UID_B}', '{UID_A}', now() + interval '30 days') on conflict (owner_id, contact_id) "
+        "do update set expires_at = excluded.expires_at;")
+    sql(f"delete from private.contact_links where owner_id = '{UID_B}' and contact_id = '{UID_C}';")
+    for t in (ta, tb, tc):
+        rpc("set_last_seen", {"p_value": "contatti"}, t)
+
+    def seen(tok, who=UID_B):
+        status, rows = rpc("presence_of", {"p_users": [who]}, tok)
+        row = rows[0] if status == 200 and isinstance(rows, list) and rows else {}
+        return status, row.get("online"), row.get("last_seen") is not None
+
+    ping = rpc("presence_ping", {"p_online": True}, tb)[0]
+    contact = seen(ta)
+    stranger = seen(tc)
+    rpc("set_last_seen", {"p_value": "tutti"}, tb)
+    everyone = seen(tc)
+    rpc("set_last_seen", {"p_value": "nessuno"}, tb)
+    nobody = seen(ta)
+    rpc("set_last_seen", {"p_value": "contatti"}, tb)
+    check("OL1", "«I miei contatti»: lo vede chi è nella rubrica; «Tutti»: tutti; «Nessuno»: nessuno",
+          ping in (200, 204) and contact == (200, True, True) and stranger == (200, False, False)
+          and everyone == (200, True, True) and nobody == (200, False, False),
+          f"{ping}, {contact}, {stranger}, {everyone}, {nobody}")
+
+    rpc("set_last_seen", {"p_value": "nessuno"}, ta)
+    hidden_me = seen(ta)
+    rpc("set_last_seen", {"p_value": "contatti"}, ta)
+    rpc("block_user", {"p_user_id": UID_B}, ta)
+    blocked = seen(ta)
+    rpc("unblock_user", {"p_user_id": UID_B}, ta)
+    check("OL2", "Chi nasconde il proprio non vede quello degli altri; con un blocco nessuno dei due",
+          hidden_me == (200, False, False) and blocked == (200, False, False), f"{hidden_me}, {blocked}")
+
+    rpc("presence_ping", {"p_online": False}, tb)
+    away = seen(ta)
+    bad = rpc("set_last_seen", {"p_value": "amici"}, ta)[0]
+    anon = [rpc("presence_ping", {"p_online": True}, None)[0], rpc("presence_of", {"p_users": [UID_B]}, None)[0]]
+    _, mine = rpc("get_my_privacy", {}, ta)
+    check("OL3", "App chiusa: non più online ma ultimo accesso; valori strani e senza accesso rifiutati",
+          away == (200, False, True) and bad >= 400 and all(x >= 400 for x in anon)
+          and isinstance(mine, dict) and mine.get("last_seen") == "contatti",
+          f"{away}, {bad}, {anon}, {mine.get('last_seen') if isinstance(mine, dict) else mine}")
+
+
 def check_push_phase4() -> None:
     """U · Notifiche (Fase 4, Blocco 5): coda server, silenzia, non disturbare, mai i Mi piace."""
     ta, tb = token(UID_A), token(UID_B)
@@ -2914,6 +2965,7 @@ def main() -> int:
     check_preview_phase4()
     check_group_calls_phase4()
     check_contact_names_phase4()
+    check_presence_phase4()
     failed = [r for r in results if not r[2]]
     print(f"{'Caso':6} {'Esito':9} Descrizione")
     for case, desc, ok, detail in results:

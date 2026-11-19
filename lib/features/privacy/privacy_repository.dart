@@ -17,6 +17,21 @@ enum PhoneVisibility {
 }
 
 /// Scelte attuali della pagina Privacy (lette dal server, che le applica: P2).
+/// Chi vede «online» e «ultimo accesso» (Fase 4, Blocco 12).
+enum LastSeenVisibility {
+  everyone('tutti', 'Tutti'),
+  contacts('contatti', 'I miei contatti'),
+  nobody('nessuno', 'Nessuno');
+
+  const LastSeenVisibility(this.key, this.label);
+
+  final String key;
+  final String label;
+
+  static LastSeenVisibility fromKey(Object? v) =>
+      LastSeenVisibility.values.where((LastSeenVisibility x) => x.key == v).firstOrNull ?? LastSeenVisibility.contacts;
+}
+
 class PrivacySettings {
   const PrivacySettings({
     this.phoneVisibility = PhoneVisibility.contacts,
@@ -29,7 +44,11 @@ class PrivacySettings {
     this.contactsSyncedAt,
     this.contactsExpireAt,
     this.contactsCount = 0,
+    this.lastSeen = LastSeenVisibility.contacts,
   });
+
+  /// Chi vede «online» e «ultimo accesso».
+  final LastSeenVisibility lastSeen;
 
   factory PrivacySettings.fromJson(Map<String, dynamic> json) => PrivacySettings(
     phoneVisibility: PhoneVisibility.fromKey(json['phone_visibility']),
@@ -42,6 +61,7 @@ class PrivacySettings {
     contactsSyncedAt: _date(json['contacts_synced_at']),
     contactsExpireAt: _date(json['contacts_expire_at']),
     contactsCount: (json['contacts_count'] as num?)?.toInt() ?? 0,
+    lastSeen: LastSeenVisibility.fromKey(json['last_seen']),
   );
 
   static DateTime? _date(Object? v) => v is String ? DateTime.tryParse(v)?.toLocal() : null;
@@ -67,7 +87,9 @@ class PrivacySettings {
     bool? showBio,
     bool? showSocial,
     int? blockedCount,
+    LastSeenVisibility? lastSeen,
   }) => PrivacySettings(
+    lastSeen: lastSeen ?? this.lastSeen,
     phoneVisibility: phoneVisibility ?? this.phoneVisibility,
     discoverable: discoverable ?? this.discoverable,
     showBio: showBio ?? this.showBio,
@@ -108,6 +130,9 @@ abstract class PrivacyRepository {
 
   Future<void> setPhoneVisibility(PhoneVisibility value);
 
+  /// Chi vede «online» e «ultimo accesso» (Fase 4, Blocco 12).
+  Future<void> setLastSeen(LastSeenVisibility value);
+
   Future<void> setProfileVisibility({required bool showBio, required bool showSocial});
 
   Future<List<BlockedUser>> blockedUsers();
@@ -142,6 +167,11 @@ class SupabasePrivacyRepository implements PrivacyRepository {
     return data is Map<String, dynamic>
         ? PrivacySettings.fromJson(data)
         : const PrivacySettings();
+  });
+
+  @override
+  Future<void> setLastSeen(LastSeenVisibility value) => _guard(() async {
+    await _client.rpc('set_last_seen', params: <String, Object?>{'p_value': value.key});
   });
 
   @override

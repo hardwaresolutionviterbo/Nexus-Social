@@ -108,6 +108,9 @@ class FakeChatHub {
   final Map<String, Set<String>> contacts = <String, Set<String>>{};
   final Set<String> blocks = <String>{};
 
+  /// Online e ultimo accesso (Blocco 12), senza regole di privacy (quelle le prova il server).
+  final Map<String, Presence> presence = <String, Presence>{};
+
   /// Tempo reale finto (Blocco 9): spento di base, i test lo accendono.
   bool live = false;
   final Map<String, StreamController<void>> _pokes = <String, StreamController<void>>{};
@@ -281,6 +284,15 @@ class FakeChatServer implements ChatServer {
     }
     return (id, hub.clock);
   }
+
+  @override
+  Future<void> presencePing(bool online) async => hub.presence[uid] = Presence(online: online, lastSeen: hub.clock);
+
+  @override
+  Future<Map<String, Presence>> presenceOf(List<String> userIds) async => <String, Presence>{
+    for (final String id in userIds)
+      if (hub.presence[id] case final Presence p) id: p,
+  };
 
   @override
   bool get live => hub.live;

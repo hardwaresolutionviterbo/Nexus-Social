@@ -68,6 +68,11 @@ class PrivacyController extends ChangeNotifier {
     () => repository.setPhoneVisibility(value),
   );
 
+  Future<void> setLastSeen(LastSeenVisibility value) => _save(
+    settings.copyWith(lastSeen: value),
+    () => repository.setLastSeen(value),
+  );
+
   Future<void> setShowBio(bool value) => _save(
     settings.copyWith(showBio: value),
     () => repository.setProfileVisibility(showBio: value, showSocial: settings.showSocial),

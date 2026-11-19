@@ -718,6 +718,27 @@ class ChatThread {
 }
 
 /// Contatto della rubrica a cui scrivere (mai il numero).
+/// «Online» o ultimo accesso di una persona (Blocco 12); null se non si può vedere.
+class Presence {
+  const Presence({required this.online, this.lastSeen});
+
+  final bool online;
+  final DateTime? lastSeen;
+}
+
+/// «online», «ultimo accesso oggi alle 18:05», «ultimo accesso ieri alle 9:12», «… il 12/11 alle …».
+String? presenceLabel(Presence? p, DateTime now) {
+  if (p == null) return null;
+  if (p.online) return 'online';
+  final DateTime? at = p.lastSeen?.toLocal();
+  if (at == null) return null;
+  final String hm = '${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
+  final int days = DateTime(now.year, now.month, now.day).difference(DateTime(at.year, at.month, at.day)).inDays;
+  if (days <= 0) return 'ultimo accesso oggi alle $hm';
+  if (days == 1) return 'ultimo accesso ieri alle $hm';
+  return 'ultimo accesso il ${at.day}/${at.month} alle $hm';
+}
+
 class ChatContact {
   const ChatContact({required this.id, required this.name, required this.username, this.avatarPath});
 

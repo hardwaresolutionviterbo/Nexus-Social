@@ -27,6 +27,12 @@ abstract class ChatServer {
   /// [preview]: anteprima cifrata per la notifica (Blocco 10), che il server non legge.
   Future<(int, DateTime)> send(String conversationId, int generation, String payload, {String? preview});
 
+  /// L'app è aperta (ogni 30 secondi) o si è appena chiusa (Blocco 12).
+  Future<void> presencePing(bool online);
+
+  /// Online e ultimo accesso, solo di chi lo lascia vedere.
+  Future<Map<String, Presence>> presenceOf(List<String> userIds);
+
   /// Tocchi in tempo reale sul canale privato (Blocco 9): «c'è qualcosa di nuovo».
   Stream<void> wakeUps(String uid);
 
@@ -191,6 +197,24 @@ class SupabaseChatServer implements ChatServer {
   }
 
   bool _live = false;
+
+  @override
+  Future<void> presencePing(bool online) async {
+    await _rpc('presence_ping', {'p_online': online});
+  }
+
+  @override
+  Future<Map<String, Presence>> presenceOf(List<String> userIds) async {
+    final rows = _rows(await _rpc('presence_of', {'p_users': userIds}));
+    return <String, Presence>{
+      for (final Map<String, dynamic> r in rows)
+        if (r['online'] == true || r['last_seen'] != null)
+          '${r['id']}': Presence(
+            online: r['online'] == true,
+            lastSeen: DateTime.tryParse('${r['last_seen']}')?.toLocal(),
+          ),
+    };
+  }
 
   @override
   bool get live => _live;

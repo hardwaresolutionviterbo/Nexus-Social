@@ -13,6 +13,7 @@ import 'privacy_repository.dart';
 enum PrivacySection {
   profile('Visibilità del profilo', Icons.person_outline_rounded, AppColors.brandBlue),
   phone('Numero di telefono', Icons.phone_outlined, AppColors.brandOrange),
+  lastSeen('Ultimo accesso e online', Icons.access_time_rounded, AppColors.brandBlue),
   contacts('Contatti e rubrica', Icons.contacts_outlined, AppColors.brandViolet),
   location('Posizione', Icons.place_outlined, AppColors.brandMint),
   gps('GPS in tempo reale', Icons.my_location_rounded, AppColors.brandCyan),
@@ -31,6 +32,7 @@ enum PrivacySection {
       'Bio ${c.settings.showBio ? 'visibile' : 'nascosta'} · '
           'social ${c.settings.showSocial ? 'visibili' : 'nascosti'}',
     PrivacySection.phone => c.settings.phoneVisibility.label,
+    PrivacySection.lastSeen => c.settings.lastSeen.label,
     PrivacySection.contacts => c.settings.contactsEnabled
         ? 'Attiva · ${c.contacts.length == 1 ? '1 contatto' : '${c.contacts.length} contatti'}'
         : 'Rubrica non attiva',
@@ -67,6 +69,7 @@ class PrivacySectionBody extends StatelessWidget {
       builder: (BuildContext context, _) => switch (section) {
         PrivacySection.profile => _ProfileBody(controller: controller, onPreview: onPreview),
         PrivacySection.phone => _PhoneBody(controller: controller),
+        PrivacySection.lastSeen => _LastSeenBody(controller: controller),
         PrivacySection.contacts => controller.contactsRepository == null
             ? const _ContactsBody()
             : _LiveContactsBody(controller: controller, profiles: profiles),
@@ -213,6 +216,62 @@ class _PhoneBody extends StatelessWidget {
             'Agli sconosciuti il numero non si vede mai. Accettare una chat non lo rende '
             'visibile: chi non ha il tuo numero ti scrive tramite @username.',
             icon: Icons.lock_outline_rounded,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// «Ultimo accesso e online» (Fase 4, Blocco 12), come su WhatsApp.
+class _LastSeenBody extends StatelessWidget {
+  const _LastSeenBody({required this.controller});
+
+  final PrivacyController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    return SectionCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Chi può vedere quando sono online e il mio ultimo accesso?', style: theme.textTheme.titleSmall),
+          const SizedBox(height: 6),
+          RadioGroup<LastSeenVisibility>(
+            groupValue: controller.settings.lastSeen,
+            onChanged: (LastSeenVisibility? v) {
+              if (v != null && !controller.saving) controller.setLastSeen(v);
+            },
+            child: const Column(
+              children: [
+                RadioListTile<LastSeenVisibility>(
+                  key: ValueKey<String>('accesso_tutti'),
+                  contentPadding: EdgeInsets.zero,
+                  value: LastSeenVisibility.everyone,
+                  title: Text('Tutti'),
+                  subtitle: Text('Chi ha una chat con te'),
+                ),
+                RadioListTile<LastSeenVisibility>(
+                  key: ValueKey<String>('accesso_contatti'),
+                  contentPadding: EdgeInsets.zero,
+                  value: LastSeenVisibility.contacts,
+                  title: Text('I miei contatti'),
+                  subtitle: Text('Solo chi hai in rubrica'),
+                ),
+                RadioListTile<LastSeenVisibility>(
+                  key: ValueKey<String>('accesso_nessuno'),
+                  contentPadding: EdgeInsets.zero,
+                  value: LastSeenVisibility.nobody,
+                  title: Text('Nessuno'),
+                ),
+              ],
+            ),
+          ),
+          const _Note(
+            'Come su WhatsApp: se non mostri il tuo, non vedi nemmeno quello degli altri. '
+            'Con le persone bloccate non si vede in nessuna delle due direzioni.',
+            icon: Icons.sync_alt_rounded,
           ),
         ],
       ),

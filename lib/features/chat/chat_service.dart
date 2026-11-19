@@ -169,6 +169,10 @@ class ChatService extends ChangeNotifier {
     try {
       await _run(_init);
       _ready = true;
+      unawaited(server.presencePing(true).catchError((Object _) {}));
+      _heartbeat ??= Timer.periodic(const Duration(seconds: 30), (_) {
+        if (!_disposed && _foreground) unawaited(server.presencePing(true).catchError((Object _) {}));
+      });
       await reloadNames();
       _listenLive();
       await refresh();
@@ -206,6 +210,28 @@ class ChatService extends ChangeNotifier {
     _foreground = value;
     _schedule();
     if (value) unawaited(refresh());
+    _heartbeat?.cancel();
+    _heartbeat = null;
+    if (!_ready) return;
+    // «Online» (Blocco 12): un segnale ogni 30 secondi mentre l'app è aperta.
+    unawaited(server.presencePing(value).catchError((Object _) {}));
+    if (value) {
+      _heartbeat = Timer.periodic(const Duration(seconds: 30), (_) {
+        if (!_disposed) unawaited(server.presencePing(true).catchError((Object _) {}));
+      });
+    }
+  }
+
+  Timer? _heartbeat;
+
+  /// Online o ultimo accesso di una persona (null se non si può vedere).
+  Future<Presence?> presence(String userId) async {
+    if (!_ready || userId.isEmpty) return null;
+    try {
+      return (await server.presenceOf(<String>[userId]))[userId];
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Chat aperta sullo schermo: controlli più frequenti e messaggi segnati come letti.
@@ -230,6 +256,7 @@ class ChatService extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _timer?.cancel();
+    _heartbeat?.cancel();
     unawaited(_wake?.cancel());
     backup?.dispose();
     calls?.dispose();

@@ -132,10 +132,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   DateTime? _recording;
   Timer? _recordTick;
 
+  /// Online o ultimo accesso dell'altra persona (Blocco 12), aggiornato ogni 10 secondi.
+  Presence? _presence;
+  Timer? _presenceTick;
+
+  Future<void> _loadPresence() async {
+    final ChatConversation? c = widget.chat.conversation(widget.conversationId);
+    if (c == null || c.isGroup) return;
+    final Presence? p = await widget.chat.presence(c.peerId);
+    if (mounted) setState(() => _presence = p);
+  }
+
   @override
   void initState() {
     super.initState();
     widget.chat.setOpenConversation(widget.conversationId);
+    unawaited(_loadPresence());
+    _presenceTick = Timer.periodic(const Duration(seconds: 10), (_) => unawaited(_loadPresence()));
     widget.chat.addListener(_onChange);
     // Nei gruppi servono i nomi dei membri (fumetti, citazioni, invito).
     if (widget.chat.conversation(widget.conversationId)?.isGroup ?? false) {
@@ -153,6 +166,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     _text.dispose();
     _focus.dispose();
     _recordTick?.cancel();
+    _presenceTick?.cancel();
     if (_recording != null) unawaited(_device.cancelVoice());
     super.dispose();
   }
@@ -467,9 +481,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                             style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
                         if (c != null)
                           Text(
-                            group ? '${c.members} ${c.members == 1 ? 'membro' : 'membri'} · tocca per le info'
-                                : '@${c.peerUsername}',
-                            style: theme.textTheme.bodySmall,
+                            group
+                                ? '${c.members} ${c.members == 1 ? 'membro' : 'membri'} · tocca per le info'
+                                : (presenceLabel(_presence, now) ?? '@${c.peerUsername}'),
+                            key: const ValueKey<String>('chat_stato_persona'),
+                            style: _presence?.online == true
+                                ? theme.textTheme.bodySmall?.copyWith(
+                                    color: const Color(0xFF2E7D32),
+                                    fontWeight: FontWeight.w600,
+                                  )
+                                : theme.textTheme.bodySmall,
                           ),
                       ],
                     ),
