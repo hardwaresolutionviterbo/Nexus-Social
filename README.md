@@ -9,7 +9,7 @@ App **Flutter** per Android e iPhone. Contiene:
 Si lavora a fasi e a blocchi. Alla fine di ogni blocco c'è un APK da provare sul telefono.
 Niente arriva in `main` né sul database reale senza l'autorizzazione del titolare.
 
-*Aggiornato il 18/11/2026.*
+*Aggiornato il 19/11/2026.*
 
 ## Stato del lavoro
 
@@ -19,7 +19,7 @@ Niente arriva in `main` né sul database reale senza l'autorizzazione del titola
 | 1 | Fondamenta: app installabile, servizi, tema, navigazione | **Completata** | [`docs/fase1/CHECKLIST.md`](docs/fase1/CHECKLIST.md) |
 | 2 | Accesso con SMS, profilo, privacy e blocchi, sicurezza (PIN, impronta), rubrica | **Completata, in `main`** | [`docs/fase2/`](docs/fase2/) |
 | 3 | Mappa Sociale 3D, annunci, annunci vicini e filtri, commenti, Mi piace, notifiche nell'app | **Completata, in `main`** | [`docs/fase3/`](docs/fase3/) |
-| 4 | Chat cifrata, allegati, gruppi, notifiche, backup, chiamate | **In corso**: Blocchi 1–4 in `main`, Blocco 5 (notifiche) da provare, Blocco 6 (backup) da provare, Blocco 7 da provare, Blocco 8 (chiamate) da provare | [`docs/fase4/`](docs/fase4/) |
+| 4 | Chat cifrata, allegati, gruppi, notifiche, backup, segnalazioni, chiamate e videochiamate (anche di gruppo), tempo reale | **Completata, in `main`** | [`docs/fase4/`](docs/fase4/) |
 | 5 | Scambia e Vendita: categorie, annunci, ricerca, proposte, feedback | **Completata, in `main`** | [`docs/fase5/`](docs/fase5/) |
 | 6 | Aziende, promozioni, abbonamento 9,99 €/mese | Da iniziare | |
 | 7 | Gestionale Admin dentro l'app | Da iniziare | |
@@ -31,7 +31,7 @@ Il server funziona senza piano a pagamento (niente Blaze su Firebase). Firebase 
 l'accesso con SMS e per l'invio delle notifiche. Tutto il resto è su Supabase. Spiegazione in
 [`docs/server/`](docs/server/).
 
-## Fase 4 · Chat
+## Fase 4 · Chat (completata)
 
 | Blocco | Contenuto | Stato | Esito |
 | --- | --- | --- | --- |
@@ -39,14 +39,42 @@ l'accesso con SMS e per l'invio delle notifiche. Tutto il resto è su Supabase. 
 | 2 | Rispondi, reazioni, inoltra, elimina per tutti | In `main` | [`BLOCCO2_ESITO.md`](docs/fase4/BLOCCO2_ESITO.md) |
 | 3 | Foto, video, vocali e documenti cifrati | In `main` | [`BLOCCO3_ESITO.md`](docs/fase4/BLOCCO3_ESITO.md) |
 | 4 | Gruppi cifrati, amministratori, codice d'invito | In `main` | [`BLOCCO4_ESITO.md`](docs/fase4/BLOCCO4_ESITO.md) |
-| 5 | Notifiche ad app chiusa, «Silenzia», «Non disturbare» | Sul ramo `fase4/blocco5`, server attivo, da provare | [`BLOCCO5_ESITO.md`](docs/fase4/BLOCCO5_ESITO.md) |
-| 6 | Backup della chat cifrato con password | Sul ramo `fase4/blocco6`, server attivo, da provare | [`BLOCCO6_ESITO.md`](docs/fase4/BLOCCO6_ESITO.md) |
-| 7 | «Segnala» con i messaggi scelti, «Condividi l'incontro», notifiche dei commenti che aprono l'annuncio | Sul ramo `fase4/blocco7`, server attivo, da provare | [`BLOCCO7_ESITO.md`](docs/fase4/BLOCCO7_ESITO.md) |
-| 8 | Chiamate vocali e videochiamate (chat a due) | Sul ramo `fase4/blocco8`, server attivo, da provare | [`BLOCCO8_ESITO.md`](docs/fase4/BLOCCO8_ESITO.md) |
-| 9 | Messaggi e chiamate in tempo reale | Sul ramo `fase4/blocco9`, server attivo, da provare | [`BLOCCO9_ESITO.md`](docs/fase4/BLOCCO9_ESITO.md) |
-| 10 | Chiamata a tutto schermo, testo nelle notifiche, chiamate di gruppo | Sui rami `fase4/blocco10` e `fase4/blocco10b`, server attivo, da provare | [`BLOCCO10_ESITO.md`](docs/fase4/BLOCCO10_ESITO.md) |
+| 5 | Notifiche ad app chiusa, «Silenzia», «Non disturbare» | In `main` | [`BLOCCO5_ESITO.md`](docs/fase4/BLOCCO5_ESITO.md) |
+| 6 | Backup della chat cifrato con password | In `main` | [`BLOCCO6_ESITO.md`](docs/fase4/BLOCCO6_ESITO.md) |
+| 7 | «Segnala» con i messaggi scelti, «Condividi l'incontro», notifiche dei commenti che aprono l'annuncio | In `main` | [`BLOCCO7_ESITO.md`](docs/fase4/BLOCCO7_ESITO.md) |
+| 8 | Chiamate vocali e videochiamate (chat a due) | In `main` | [`BLOCCO8_ESITO.md`](docs/fase4/BLOCCO8_ESITO.md) |
+| 9 | Messaggi e chiamate in tempo reale | In `main` | [`BLOCCO9_ESITO.md`](docs/fase4/BLOCCO9_ESITO.md) |
+| 10 | Chiamata a tutto schermo, testo nelle notifiche, chiamate di gruppo | In `main` | [`BLOCCO10_ESITO.md`](docs/fase4/BLOCCO10_ESITO.md) |
 
 Le scelte tecniche della chat sono in [`docs/fase4/DECISIONI.md`](docs/fase4/DECISIONI.md).
+
+## Servizi esterni
+
+| Servizio | A cosa serve | Costo |
+| --- | --- | --- |
+| Firebase (piano Spark) | Accesso con SMS, invio delle notifiche (FCM) | Gratuito |
+| Supabase | Database, file, funzioni del server, tempo reale | Piano gratuito |
+| Cloudflare Realtime TURN | Ponte per chiamate e videochiamate quando i telefoni non si collegano direttamente | Gratis fino a 1.000 GB al mese, poi 0,05 $/GB |
+| OpenFreeMap | Mappa | Gratuito |
+
+Le chiavi segrete stanno solo nei secret di Supabase, create dal titolare:
+- `FIREBASE_SERVICE_ACCOUNT`;
+- `CLOUDFLARE_TURN_KEY_ID`;
+- `CLOUDFLARE_TURN_API_TOKEN`.
+
+Nel repository non ce n'è nessuna.
+
+## Cosa resta da fare
+
+- **Grafica e funzioni mancanti:** le modifiche che il titolare indicherà dopo le prove.
+- **Fase 6:** aziende, promozioni e abbonamento.
+- **Fase 7:** il gestionale. Comprende la lettura delle segnalazioni delle chat, che oggi sono
+  già salvate sul server.
+- **Fasi 8–10:** traduzione, gamification, test finali, GDPR, beta e pubblicazione.
+- **iPhone:** chiamata a tutto schermo (CallKit) e testo nelle notifiche (Notification Service
+  Extension), da fare con le build iOS.
+- **Chiamate con più di 4 persone:** servirebbe un server centrale (SFU), che costa. Per ora
+  non è previsto.
 
 ## Dove trovare le cose
 

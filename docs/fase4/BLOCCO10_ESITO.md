@@ -1,6 +1,7 @@
 # Fase 4 · Blocco 10 · Chiudere la Fase 4 — esito
 
-Ramo `fase4/blocco10`, nato da `fase4/blocco9b`. Tre cose da fare, scelte dal titolare il
+Ramo `fase4/blocco10`, nato da `fase4/blocco9b`. Unito in `main` il 19/11/2026 con
+l'autorizzazione del titolare, insieme ai Blocchi 5–9. Tre cose da fare, scelte dal titolare il
 18/11/2026:
 1. Chiamata a tutto schermo con il telefono bloccato.
 2. Testo del messaggio nella notifica.
