@@ -398,8 +398,8 @@ class _StatusAudienceScreenState extends State<StatusAudienceScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(18, 8, 18, 8),
             child: Text(
-              'Vale per i prossimi stati che pubblichi. Li vede solo chi ti ha in rubrica e che tu hai '
-              'in rubrica, e nessuno che hai bloccato.',
+              'Vale per i prossimi stati che pubblichi. Li vede solo chi hai nella rubrica del '
+              'telefono e usa Piazly, mai chi hai bloccato.',
               style: theme.textTheme.bodySmall,
             ),
           ),
@@ -416,7 +416,7 @@ class _StatusAudienceScreenState extends State<StatusAudienceScreen> {
                     subtitle: a == StatusAudience.contacts
                         ? null
                         : Text(a == StatusAudience.except
-                            ? '${_except.length} esclusi'
+                            ? _except.length == 1 ? '1 escluso' : '${_except.length} esclusi'
                             : _only.length == 1 ? '1 persona scelta' : '${_only.length} persone scelte'),
                   ),
               ],
