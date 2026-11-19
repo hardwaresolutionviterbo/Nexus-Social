@@ -130,6 +130,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey<String>('azienda_documento')));
     await tester.pumpAndSettle();
     expect(find.text('Documento caricato'), findsOneWidget);
+    // L'avviso in basso sparisce da solo dopo qualche secondo.
+    await tester.pump(const Duration(seconds: 6));
+    await tester.pumpAndSettle();
 
     // Profilo attività.
     await tester.tap(find.byKey(const ValueKey<String>('azienda_crea_pagina')));
