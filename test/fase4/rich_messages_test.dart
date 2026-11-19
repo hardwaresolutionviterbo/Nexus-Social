@@ -11,6 +11,7 @@ import 'package:nexus_social/features/chat/chat_media.dart';
 import 'package:nexus_social/features/chat/chat_media_picker.dart';
 import 'package:nexus_social/features/chat/chat_models.dart';
 import 'package:nexus_social/features/chat/chat_rich.dart';
+import 'package:nexus_social/features/chat/chat_rich_widgets.dart';
 import 'package:nexus_social/features/chat/chat_safety_screens.dart';
 import 'package:nexus_social/features/chat/chat_screen.dart';
 import 'package:nexus_social/features/chat/chat_service.dart';
