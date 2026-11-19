@@ -46,6 +46,7 @@ class AiChatTile extends StatelessWidget {
           onTap: onTap,
           leading: const AiAvatar(),
           title: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               Text('Piazly AI', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
               const SizedBox(width: 6),
@@ -148,12 +149,19 @@ class _AiChatScreenState extends State<AiChatScreen> {
           children: [
             AiAvatar(radius: 18),
             SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Piazly AI'),
-                Text('Assistente automatico', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w400)),
-              ],
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Piazly AI', maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text(
+                    'Assistente automatico',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w400),
+                  ),
+                ],
+              ),
             ),
           ],
         ),

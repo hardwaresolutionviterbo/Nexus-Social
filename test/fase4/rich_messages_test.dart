@@ -374,6 +374,7 @@ void main() {
     tall(tester);
     final AiService ai = AiService(server: FakeAiServer());
     final ChatService me = await fakePhone(hub, io);
+    final ChatService b = await fakePhone(hub, bruno);
     final String conv = await me.openDirect(bruno);
     await tester.pumpWidget(app(ChatThreadScreen(chat: me, conversationId: conv, device: RichDevice(), ai: ai)));
     await tester.pumpAndSettle();
@@ -393,7 +394,7 @@ void main() {
     await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 500)));
     await tester.pumpAndSettle();
     expect(me.messages(conv).single.media?.kind, MediaKind.image);
-    await finish(tester, <ChatService>[me]);
+    await finish(tester, <ChatService>[me, b]);
     ai.dispose();
   });
 }
