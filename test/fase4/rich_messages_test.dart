@@ -391,7 +391,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey<String>('ia_anteprima')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey<String>('ia_invia')));
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 500)));
+    // La foto si prepara fuori dal tempo finto dei test (compute).
+    for (int i = 0; i < 30 && me.messages(conv).isEmpty; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200)));
+      await tester.pump();
+    }
     await tester.pumpAndSettle();
     expect(me.messages(conv).single.media?.kind, MediaKind.image);
     await finish(tester, <ChatService>[me, b]);
