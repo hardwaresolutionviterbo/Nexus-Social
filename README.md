@@ -50,6 +50,7 @@ l'accesso con SMS e per l'invio delle notifiche. Tutto il resto è su Supabase. 
 | 13 | Stati di 24 ore (testo, foto, video), chi li vede, «Visto da» | Sul ramo `fase4/blocco13`, server attivo, da provare | [`BLOCCO13_ESITO.md`](docs/fase4/BLOCCO13_ESITO.md) |
 | 14 | Correzioni del titolare (Profilo, Autorizzazioni, intestazione chat) e GPS in tempo reale | Sul ramo `fase4/blocco14`, server attivo, da provare | [`BLOCCO14_ESITO.md`](docs/fase4/BLOCCO14_ESITO.md) |
 | 15 | Nuova barra in basso: Chat, Stati, Mappa al centro, Vendita (con dentro Scambia), Profilo | Sul ramo `fase4/blocco15`, da provare | — |
+| 16 | Nuova grafica dai mockup del titolare: Chat, Chiamate, Stati, Mappa, Scambia & Vendi, I miei annunci, annuncio, Profilo, pagina iniziale | Sul ramo `fase4/blocco16`, da provare | — |
 
 Le scelte tecniche della chat sono in [`docs/fase4/DECISIONI.md`](docs/fase4/DECISIONI.md).
 
