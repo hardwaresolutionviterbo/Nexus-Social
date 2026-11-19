@@ -9,13 +9,17 @@ import 'package:nexus_social/features/map/map_location.dart';
 import 'package:nexus_social/features/market/market_listing_screen.dart';
 import 'package:nexus_social/features/market/market_models.dart';
 import 'package:nexus_social/features/market/market_section_screen.dart';
+import 'package:nexus_social/features/market/comuni_italia.dart';
 
+import '../support/fake_comuni.dart';
 import '../support/fake_map.dart';
 import '../support/fake_market.dart';
 
 /// Fase 5, Blocco 2 · Scambia & Vendi: ricerca per parola, 13 filtri, 5 ordinamenti,
 /// pagine da 20, scheda con avviso antitruffa, Contatta, Segnala, Condividi.
 void main() {
+  setUpAll(() => ComuniItalia.testData = fakeComuni());
+  tearDownAll(() => ComuniItalia.testData = null);
   group('Regole della ricerca', () {
     test('parametri per il server: sezione, filtri, ordinamento senza punto o parola', () {
       final MarketQuery q = MarketQuery(

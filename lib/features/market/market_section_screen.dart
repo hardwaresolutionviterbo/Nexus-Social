@@ -9,6 +9,7 @@ import '../map/map_screen.dart' show MapServices;
 import '../map/social_repository.dart';
 import '../profile/profile_form_screen.dart' show PickImage, pickFromGallery;
 import 'category_picker.dart';
+import 'comuni_italia.dart';
 import 'market_catalog_data.dart';
 import 'market_deals_screen.dart';
 import 'market_filters_screen.dart';
@@ -101,6 +102,12 @@ class _MarketSectionScreenState extends State<MarketSectionScreen> {
     _scroll.addListener(_maybeLoadMore);
     widget.searchRequests?.addListener(_focusSearch);
     if (widget.repository != null) _search();
+    // Nomi dei comuni sulle schede degli annunci.
+    if (ComuniItalia.loaded == null) {
+      ComuniItalia.load().then((_) {
+        if (mounted) setState(() {});
+      }, onError: (Object _) {});
+    }
   }
 
   @override
@@ -804,6 +811,7 @@ class _ResultCard extends StatelessWidget {
       MarketType.free => ('Regalo', PiazlyColors.green),
       MarketType.wanted => ('Cerco', AppColors.brandBlue),
     };
+    final String? place = ComuniItalia.loaded?.nearest(l.point).label;
     final List<String> meta = <String>[
       if (l.condition != null) l.condition!.label,
       if (l.ownerIsBusiness) 'Azienda',
@@ -864,13 +872,23 @@ class _ResultCard extends StatelessWidget {
                   Text(l.priceLabel, style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700)),
                 if (meta.isNotEmpty)
                   Text(meta.join(' · '), maxLines: 1, overflow: TextOverflow.ellipsis, style: theme.textTheme.bodySmall),
-                if (l.distanceBandMeters != null) ...[
+                if (place != null || l.distanceBandMeters != null) ...[
                   const SizedBox(height: 4),
                   Row(
                     children: [
                       const Icon(Icons.location_on_outlined, size: 15, color: PiazlyColors.violet),
                       const SizedBox(width: 3),
-                      Text(marketDistanceLabel(l.distanceBandMeters!), style: theme.textTheme.bodySmall),
+                      Expanded(
+                        child: Text(
+                          <String>[
+                            ?place,
+                            if (l.distanceBandMeters != null) marketDistanceLabel(l.distanceBandMeters!),
+                          ].join(' · '),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ),
                     ],
                   ),
                 ],

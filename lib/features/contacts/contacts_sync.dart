@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuth, User;
 import 'package:crypto/crypto.dart' show sha256;
-import 'package:flutter/foundation.dart' show compute;
+import 'package:flutter/foundation.dart' show ValueNotifier, compute;
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'
@@ -57,6 +57,11 @@ String rubricaErrorMessage(int status) => switch (status) {
   401 => 'Accesso scaduto: riapri l\'app e riprova.',
   _ => 'Sincronizzazione non riuscita. Riprova più tardi.',
 };
+
+/// Avvisi per chi mostra i nomi della rubrica (la chat): sono cambiati, rileggili.
+abstract final class ContactsEvents {
+  static final ValueNotifier<int> namesChanged = ValueNotifier<int>(0);
+}
 
 /// Rubrica del telefono, letta solo con il permesso del sistema.
 abstract class ContactsReader {
@@ -260,10 +265,23 @@ class SupabaseContactsRepository implements ContactsRepository {
     if (values.length != blinded.length) throw const ProfileFailure('Risposta non valida.');
     onProgress?.call(0.6);
     final List<String> tags = await compute(_finalizeAll, (blinded, values));
-    onProgress?.call(0.9);
-    await _client.rpc('match_contacts', params: <String, Object?>{'p_tags': tags});
-    await _saveFingerprint(numbers);
+    onProgress?.call(0.85);
+    // Prima i nomi della rubrica (senza limiti): così compaiono anche se poi il limite
+    // giornaliero ferma l'aggiornamento dei collegamenti.
     await _saveNumbers(numbers, tags);
+    onProgress?.call(0.9);
+    try {
+      await _client.rpc('match_contacts', params: <String, Object?>{'p_tags': tags});
+    } on PostgrestException catch (e) {
+      if (e.message.contains('Limite')) {
+        await _markLimited();
+        ContactsEvents.namesChanged.value++;
+        throw ProfileFailure(rubricaErrorMessage(429));
+      }
+      rethrow;
+    }
+    await _saveFingerprint(numbers);
+    ContactsEvents.namesChanged.value++;
     onProgress?.call(1);
     return contacts();
   });
@@ -316,6 +334,29 @@ class SupabaseContactsRepository implements ContactsRepository {
     }
   }
 
+  static const String _limitedKey = 'piazly_contacts_limit_day';
+
+  static String _today() {
+    final DateTime n = DateTime.now();
+    return '${n.year}-${n.month}-${n.day}';
+  }
+
+  /// Limite di oggi raggiunto: niente altri tentativi automatici fino a domani (ognuno
+  /// consumerebbe uno dei 3 aggiornamenti al giorno).
+  Future<void> _markLimited() async {
+    try {
+      await _storage.write(key: _limitedKey, value: _today());
+    } catch (_) {}
+  }
+
+  Future<bool> _limitedToday() async {
+    try {
+      return await _storage.read(key: _limitedKey) == _today();
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> _saveFingerprint(List<String> numbers) async {
     try {
       await _storage.write(key: _fingerprintKey, value: contactsFingerprint(numbers));
@@ -357,7 +398,13 @@ class SupabaseContactsRepository implements ContactsRepository {
       )) {
         return false;
       }
-      await sync();
+      if (await _limitedToday()) return false;
+      try {
+        await sync();
+      } on ProfileFailure catch (f) {
+        if (f.message == rubricaErrorMessage(429)) await _markLimited();
+        rethrow;
+      }
       return true;
     } catch (_) {
       // Limite giornaliero, rete assente…: si riprova alla prossima apertura.

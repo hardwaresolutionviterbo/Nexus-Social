@@ -15,6 +15,7 @@ import '../map/map_surface.dart' show MapLibreSurface, MapSurfaceHandle;
 import '../map/listing_social_panel.dart';
 import '../map/social_models.dart' show ListingSocial;
 import '../map/social_repository.dart';
+import 'comuni_italia.dart';
 import 'market_feedback.dart';
 import 'market_models.dart';
 import 'market_publish_screen.dart' show AntiScamNotice, MarketPhoto, MarketPublishScreen;
@@ -74,6 +75,11 @@ class _MarketListingScreenState extends State<MarketListingScreen> {
   void initState() {
     super.initState();
     _refresh();
+    if (ComuniItalia.loaded == null) {
+      ComuniItalia.load().then((_) {
+        if (mounted) setState(() {});
+      }, onError: (Object _) {});
+    }
   }
 
   Future<void> _refresh() async {
@@ -471,7 +477,9 @@ class _MarketListingScreenState extends State<MarketListingScreen> {
                         ),
                         child: Text(
                           <String>[
-                            l.place == ListingPlace.approximateZone ? 'Zona approssimata' : 'Punto scelto',
+                            // Il comune dell'annuncio (dal punto pubblico).
+                            ComuniItalia.loaded?.nearest(l.point).label ??
+                                (l.place == ListingPlace.approximateZone ? 'Zona approssimata' : 'Punto scelto'),
                             if (l.distanceBandMeters != null) marketDistanceLabel(l.distanceBandMeters!),
                           ].join(' · '),
                         ),

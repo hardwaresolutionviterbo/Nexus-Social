@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/piazly_ui.dart';
 import '../map/listing_models.dart' show GeoPoint, ListingPlace;
 import '../map/listing_repository.dart' show ListingFailure;
 import '../map/map_location.dart';
@@ -11,6 +12,8 @@ import '../map/map_screen.dart' show MapServices;
 import '../map/point_picker_screen.dart';
 import '../profile/profile_form_screen.dart' show PickImage, pickFromGallery;
 import 'category_picker.dart';
+import 'comune_picker_screen.dart';
+import 'comuni_italia.dart';
 import 'market_models.dart';
 import 'market_repository.dart';
 
@@ -76,6 +79,10 @@ class _MarketPublishScreenState extends State<MarketPublishScreen> {
   ListingPlace _place = ListingPlace.approximateZone;
   GeoPoint? _here;
   GeoPoint? _chosen;
+
+  /// Località dell'annuncio: un comune d'Italia (richiesta del titolare, 19/11/2026). Il punto
+  /// pubblico è il centro del comune, oppure un punto d'incontro scelto a mano.
+  Comune? _comune;
   bool _locating = false;
   bool _confirmed = false;
   bool _busy = false;
@@ -109,6 +116,16 @@ class _MarketPublishScreenState extends State<MarketPublishScreen> {
       _place = e.place;
       _here = e.savedPoint;
       if (e.place == ListingPlace.chosenPoint) _chosen = e.savedPoint;
+      final GeoPoint saved = e.savedPoint;
+      ComuniItalia.load().then((ComuniItalia d) {
+        if (!mounted) return;
+        final Comune c = d.nearest(saved);
+        setState(() {
+          _comune = c;
+          // Se il punto salvato è proprio il centro del comune, non è un punto d'incontro.
+          if (c.point == saved) _place = ListingPlace.approximateZone;
+        });
+      });
       for (final MapEntry<String, Object> a in e.attributes.entries) {
         _attr[a.key] = TextEditingController(text: '${a.value}');
       }
@@ -174,7 +191,14 @@ class _MarketPublishScreenState extends State<MarketPublishScreen> {
         return;
       }
       final GeoFix fix = await s.location.fixes().first.timeout(const Duration(seconds: 20));
-      if (mounted) setState(() => _here = GeoPoint(fix.latitude, fix.longitude));
+      final GeoPoint here = GeoPoint(fix.latitude, fix.longitude);
+      final ComuniItalia d = await ComuniItalia.load();
+      if (mounted) {
+        setState(() {
+          _here = here;
+          _comune = d.nearest(here);
+        });
+      }
     } on TimeoutException {
       if (mounted) setState(() => _error = 'Posizione non trovata: riprova o scegli un punto.');
     } finally {
@@ -217,11 +241,8 @@ class _MarketPublishScreenState extends State<MarketPublishScreen> {
         return 'Indica il campo «$label».';
       }
     }
-    if ((_place == ListingPlace.approximateZone ? _here : _chosen) == null) {
-      return _place == ListingPlace.approximateZone
-          ? 'Serve la tua posizione: tocca «Usa la mia posizione».'
-          : 'Scegli il punto sulla mappa.';
-    }
+    if (_comune == null) return 'Scegli il comune dell\'annuncio, o tocca «Usa la mia posizione».';
+    if (_place == ListingPlace.chosenPoint && _chosen == null) return 'Scegli il punto d\'incontro sulla mappa.';
     if (!_confirmed) return 'Conferma che non pubblichi prodotti vietati.';
     return null;
   }
@@ -264,8 +285,10 @@ class _MarketPublishScreenState extends State<MarketPublishScreen> {
       ships: _objectFields && _ships,
       pickup: _objectFields && _pickup,
       attributes: attributes,
-      place: _place,
-      point: (_place == ListingPlace.approximateZone ? _here : _chosen)!,
+      // Sempre «preciso» per il server: il punto è il centro del comune (pubblico) o il punto
+      // d'incontro scelto; la posizione del telefono non si invia mai.
+      place: ListingPlace.chosenPoint,
+      point: _place == ListingPlace.chosenPoint ? _chosen! : _comune!.point,
       keptPhotos: <String>[for (final _Photo p in _photos) if (p.path != null) p.path!],
       newPhotos: <Uint8List>[for (final _Photo p in _photos) if (p.bytes != null) p.bytes!],
       wantedInExchange: _type == MarketType.swap ? _wanted.text : null,
@@ -517,46 +540,60 @@ class _MarketPublishScreenState extends State<MarketPublishScreen> {
             ],
             const SizedBox(height: AppSpacing.md),
             const _Title('Dove'),
-            RadioGroup<ListingPlace>(
-              groupValue: _place,
-              onChanged: (ListingPlace? v) => setState(() => _place = v ?? _place),
-              child: Column(
+            SoftCard(
+              key: const ValueKey<String>('mercato_localita'),
+              margin: const EdgeInsets.only(bottom: 8),
+              onTap: () async {
+                final Comune? c = await ComunePickerScreen.open(context);
+                if (c != null && mounted) setState(() => _comune = c);
+              },
+              child: Row(
                 children: [
-                  RadioListTile<ListingPlace>(
-                    contentPadding: EdgeInsets.zero,
-                    value: ListingPlace.approximateZone,
-                    title: const Text('Zona approssimata intorno a te'),
-                    subtitle: Text(_here == null
-                        ? 'Gli altri vedono solo la zona, mai dove ti trovi.'
-                        : 'Posizione pronta: gli altri vedono solo la zona.'),
+                  const IconTile(Icons.location_city_rounded, color: AppColors.brandOrange),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _comune?.label ?? 'Scegli il comune',
+                          key: const ValueKey<String>('mercato_comune_scelto'),
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        Text(
+                          _comune == null
+                              ? 'Regione, provincia e comune: tutti i comuni d\'Italia'
+                              : '${_comune!.province} · ${_comune!.region}',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
                   ),
-                  RadioListTile<ListingPlace>(
-                    contentPadding: EdgeInsets.zero,
-                    value: ListingPlace.chosenPoint,
-                    title: const Text('Punto scelto sulla mappa'),
-                    subtitle: const Text('Es. un luogo pubblico per il ritiro.'),
-                  ),
+                  const Icon(Icons.chevron_right_rounded, color: AppColors.brandOrange),
                 ],
               ),
             ),
-            Wrap(
-              spacing: 8,
-              children: [
-                if (_place == ListingPlace.approximateZone)
-                  OutlinedButton.icon(
-                    key: const ValueKey<String>('mercato_mia_posizione'),
-                    onPressed: _locating || widget.services == null ? null : _locate,
-                    icon: const Icon(Icons.my_location_rounded),
-                    label: Text(_locating ? 'Cerco…' : _here == null ? 'Usa la mia posizione' : 'Aggiorna posizione'),
-                  )
-                else
-                  OutlinedButton.icon(
-                    onPressed: widget.services == null ? null : _choosePoint,
-                    icon: const Icon(Icons.place_rounded),
-                    label: Text(_chosen == null ? 'Scegli il punto' : 'Cambia punto'),
-                  ),
-              ],
+            OutlinedButton.icon(
+              key: const ValueKey<String>('mercato_mia_posizione'),
+              onPressed: _locating || widget.services == null ? null : _locate,
+              icon: const Icon(Icons.my_location_rounded),
+              label: Text(_locating ? 'Cerco…' : 'Usa la mia posizione (trova il comune)'),
             ),
+            SwitchListTile(
+              key: const ValueKey<String>('mercato_punto_incontro'),
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Indica anche un punto d\'incontro'),
+              subtitle: const Text('Facoltativo: un luogo pubblico per il ritiro. Altrimenti gli altri '
+                  'vedono solo il comune.'),
+              value: _place == ListingPlace.chosenPoint,
+              onChanged: (bool v) => setState(() => _place = v ? ListingPlace.chosenPoint : ListingPlace.approximateZone),
+            ),
+            if (_place == ListingPlace.chosenPoint)
+              OutlinedButton.icon(
+                onPressed: widget.services == null ? null : _choosePoint,
+                icon: const Icon(Icons.place_rounded),
+                label: Text(_chosen == null ? 'Scegli il punto' : 'Cambia punto'),
+              ),
             const SizedBox(height: AppSpacing.md),
             const AntiScamNotice(),
             CheckboxListTile(

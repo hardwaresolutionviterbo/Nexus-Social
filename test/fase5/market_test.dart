@@ -11,13 +11,17 @@ import 'package:nexus_social/features/market/market_catalog_data.dart';
 import 'package:nexus_social/features/market/market_models.dart';
 import 'package:nexus_social/features/market/market_section_screen.dart';
 import 'package:nexus_social/features/market/my_market_screen.dart';
+import 'package:nexus_social/features/market/comuni_italia.dart';
 
+import '../support/fake_comuni.dart';
 import '../support/fake_map.dart';
 import '../support/fake_market.dart';
 
 /// Fase 5, Blocco 1 · Scambia & Vendi: catalogo della specifica del titolare, 4 tipologie,
 /// pubblicazione con foto obbligatorie, campi specifici, divieti, i miei annunci.
 void main() {
+  setUpAll(() => ComuniItalia.testData = fakeComuni());
+  tearDownAll(() => ComuniItalia.testData = null);
   final DateTime now = DateTime(2026, 11, 15, 10, 30);
 
   group('Catalogo (specifica del titolare, test di accettazione)', () {
@@ -248,8 +252,9 @@ void main() {
       expect(d.pickup && d.ships, isTrue);
       expect(d.attributes, <String, Object>{'memoria': '128 GB'});
       expect(d.newPhotos, hasLength(1));
-      expect(d.point, const GeoPoint(41.9028, 12.4964));
-      expect(d.place, ListingPlace.approximateZone);
+      // La località è il comune (Roma): il punto pubblico è il suo centro, non la posizione del telefono.
+      expect(d.point, const GeoPoint(41.8933, 12.4829));
+      expect(d.place, ListingPlace.chosenPoint);
       expect(d.noProhibitedItems, isTrue);
       expect(find.text('Annuncio pubblicato.'), findsOneWidget);
     });

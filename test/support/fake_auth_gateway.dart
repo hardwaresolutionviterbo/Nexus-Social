@@ -21,6 +21,11 @@ class FakeAuthGateway implements AuthGateway {
   @override
   String? get currentUid => uid;
 
+  String? phone = '+393331234567';
+
+  @override
+  String? get currentPhone => uid == null ? null : phone;
+
   @override
   Future<CodeRequest> sendCode(String phoneE164) async {
     calls.add('sendCode:$phoneE164');

@@ -40,7 +40,12 @@ class ProfileScreen extends StatelessWidget {
     this.feedback,
     this.isAdmin,
     this.market,
+    this.phone,
   });
+
+  /// Il mio numero di telefono, mostrato solo a me nel Profilo.
+  final String? phone;
+
 
   /// Per i numeri in alto (feedback, annunci, scambi, conclusi).
   final MarketRepository? market;
@@ -164,7 +169,15 @@ class ProfileScreen extends StatelessWidget {
     return ListView(
       padding: AppSpacing.pagePadding,
       children: [
-        FadeSlideIn(child: _ProfileHeader(me: me, profiles: profiles, signedIn: _signedIn, onEdit: me == null ? null : () => _openEditor(context))),
+        FadeSlideIn(
+          child: _ProfileHeader(
+            me: me,
+            profiles: profiles,
+            signedIn: _signedIn,
+            phone: phone,
+            onEdit: me == null ? null : () => _openEditor(context),
+          ),
+        ),
         if (me != null && market != null)
           Transform.translate(
             offset: const Offset(0, -26),
@@ -361,10 +374,20 @@ class ProfileScreen extends StatelessWidget {
 }
 
 /// Mostra il contenuto solo se il server dice che l'utente è amministratore.
+/// «+39 333 123 4567» da «+393331234567».
+String formatPhone(String e164) {
+  final String d = e164.replaceAll(RegExp(r'[^0-9+]'), '');
+  if (d.startsWith('+39') && d.length == 13) {
+    return '+39 ${d.substring(3, 6)} ${d.substring(6, 9)} ${d.substring(9)}';
+  }
+  return d;
+}
+
 /// Intestazione viola con onde leggere, foto grande con l'anello arancio e la fotocamera.
 class _ProfileHeader extends StatelessWidget {
-  const _ProfileHeader({required this.me, required this.profiles, required this.signedIn, this.onEdit});
+  const _ProfileHeader({required this.me, required this.profiles, required this.signedIn, this.onEdit, this.phone});
 
+  final String? phone;
   final MyProfile? me;
   final ProfileRepository? profiles;
   final bool signedIn;
@@ -480,22 +503,31 @@ class _ProfileHeader extends StatelessWidget {
                           style: theme.textTheme.bodySmall?.copyWith(color: Colors.white.withValues(alpha: 0.85)),
                         ),
                       ],
-                      const SizedBox(height: 10),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.92),
-                          borderRadius: BorderRadius.circular(999),
+                      // Al posto di «Fase 2»: il mio numero, che vedo solo io (decisione del titolare).
+                      if (phone != null && phone!.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Container(
+                          key: const ValueKey<String>('mio_numero'),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.92),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.phone_rounded, color: PiazlyColors.violet, size: 18),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  formatPhone(phone!),
+                                  style: const TextStyle(color: PiazlyColors.violet, fontWeight: FontWeight.w800),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.bar_chart_rounded, color: PiazlyColors.violet, size: 20),
-                            SizedBox(width: 6),
-                            Text('Fase 2', style: TextStyle(color: PiazlyColors.violet, fontWeight: FontWeight.w800)),
-                          ],
-                        ),
-                      ),
+                      ],
                     ],
                   ),
                 ),

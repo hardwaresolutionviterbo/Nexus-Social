@@ -66,3 +66,5 @@ flutter:
     - docs/fase0/BOZZA_TERMINI_USO.md
     - docs/fase0/BOZZA_PRIVACY_POLICY.md
     - docs/fase0/BOZZA_REGOLE_COMMUNITY.md
+    # Comuni d'Italia (ISTAT) con il centro di ciascuno, per la località degli annunci.
+    - assets/data/comuni_italia.json

@@ -58,7 +58,11 @@ class AppShell extends StatefulWidget {
     this.market,
     this.chat,
     this.isAdmin,
+    this.phone,
   });
+
+  /// Il mio numero di telefono, mostrato solo a me nel Profilo.
+  final String? phone;
 
   /// Vero solo per gli amministratori di Piazly: vedono lo stato dei servizi e la diagnostica.
   final Future<bool> Function()? isAdmin;
@@ -145,6 +149,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       contacts: widget.contacts,
       isAdmin: widget.isAdmin,
       market: widget.market,
+      phone: widget.phone,
       // Media dei feedback sul profilo dei privati (Fase 5, Blocco 4).
       feedback: widget.market == null || widget.profile == null || widget.profile!.isBusiness
           ? null

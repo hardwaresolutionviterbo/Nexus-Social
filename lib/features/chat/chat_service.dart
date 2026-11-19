@@ -90,9 +90,10 @@ class ChatService extends ChangeNotifier {
   /// Rilegge i nomi della rubrica (all'avvio, quando cambia la rubrica, ogni tanto).
   Future<void> reloadNames() async {
     final Future<Map<String, String>> Function()? load = localNames;
-    if (load == null) return;
+    if (load == null || _disposed) return;
     try {
       _local = await load();
+      if (_disposed) return;
       _localAt = DateTime.now();
       _conversations.updateAll((String _, ChatConversation c) => _named(c));
       _changed();

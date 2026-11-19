@@ -125,7 +125,7 @@ ChatService _chatFor(String uid) {
   final Future<Directory> folder = getApplicationSupportDirectory()
       .then((Directory d) => Directory('${d.path}/chat/$safe'));
   final SupabaseContactsRepository contacts = SupabaseContactsRepository(Supabase.instance.client);
-  return ChatService(
+  final ChatService chat = ChatService(
     server: SupabaseChatServer(Supabase.instance.client),
     crypto: () async => MlsChatCrypto.open(
       uid: uid,
@@ -171,4 +171,7 @@ ChatService _chatFor(String uid) {
       }
     },
   );
+  // Rubrica aggiornata: i nomi nelle chat si rileggono subito.
+  ContactsEvents.namesChanged.addListener(chat.reloadNames);
+  return chat;
 }

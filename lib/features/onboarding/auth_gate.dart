@@ -328,6 +328,7 @@ class _AuthGateState extends State<AuthGate> {
               market: widget.market,
               chat: _uid == null ? null : _chatFor(_uid!),
               isAdmin: widget.isAdmin,
+              phone: widget.gateway.currentPhone,
             );
             final ContactsRepository? contacts = widget.contacts;
             final Widget synced = contacts == null
