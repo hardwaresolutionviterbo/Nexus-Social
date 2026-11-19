@@ -89,7 +89,9 @@ create table public.business_pages (
   lat double precision not null check (lat between 35.4 and 47.2),
   lng double precision not null check (lng between 6.6 and 18.6),
   phone text check (phone is null or phone ~ '^\+?[0-9 ]{6,20}$'),
-  booking_url text check (booking_url is null or (booking_url ~ '^https://[^\s<>"]{3,300}$')),
+  -- Le espressioni regolari di Postgres arrivano al massimo a {…,255}: la lunghezza si controlla a parte.
+  booking_url text check (booking_url is null or (char_length(booking_url) <= 300
+                                                  and booking_url ~ '^https://[^\s<>"]{3,}$')),
   hours jsonb not null default '{}'::jsonb check (private.valid_business_hours(hours)),
   photos text[] not null default '{}' check (cardinality(photos) <= 6),
   published boolean not null default true,
