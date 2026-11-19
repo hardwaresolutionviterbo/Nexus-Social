@@ -34,4 +34,5 @@ Ramo `fase4/blocco13`, nato da `fase4/blocco12`. Richiesta del titolare del 19/1
 - App: test della pubblicazione, del pubblico, di «Visto da», di eliminazione e scadenza, e
   delle schermate.
 - Database: ST1–ST4 e la controprova `stati_per_tutti`, che deve far fallire ST1.
-- **Server reale:** migrazione 0031 da applicare, serve l'autorizzazione.
+- **Server reale (19/11/2026, autorizzato):** migrazione 0031 applicata dal commit `9d12484`,
+  con impronta verificata; nessuna differenza tra utenti anonimi e autenticati.

@@ -16,4 +16,5 @@ Ramo `fase4/blocco12`, nato da `fase4/blocco11`. Richiesta del titolare del 19/1
 - Database: OL1–OL3 e la controprova `online_senza_reciprocita`, che deve far fallire OL2.
 - Corretto anche un difetto trovato dai test: il Controllo privacy aveva il numero di passi
   scritto a mano e saltava l'ultima sezione; ora conta le sezioni da solo.
-- **Server reale:** migrazione 0030 da applicare, serve l'autorizzazione.
+- **Server reale (19/11/2026, autorizzato):** migrazione 0030 applicata dal commit `9d12484`,
+  con impronta verificata; nessuna differenza tra utenti anonimi e autenticati.

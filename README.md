@@ -46,8 +46,8 @@ l'accesso con SMS e per l'invio delle notifiche. Tutto il resto è su Supabase. 
 | 9 | Messaggi e chiamate in tempo reale | In `main` | [`BLOCCO9_ESITO.md`](docs/fase4/BLOCCO9_ESITO.md) |
 | 10 | Chiamata a tutto schermo, testo nelle notifiche, chiamate di gruppo | In `main` | [`BLOCCO10_ESITO.md`](docs/fase4/BLOCCO10_ESITO.md) |
 | 11 | Sezione «Chiamate», nomi come nella rubrica del telefono | Sul ramo `fase4/blocco11`, server attivo, da provare | [`BLOCCO11_ESITO.md`](docs/fase4/BLOCCO11_ESITO.md) |
-| 12 | «Online» e ultimo accesso, con la scelta in Privacy | Sul ramo `fase4/blocco12`, migrazione 0030 da applicare | [`BLOCCO12_ESITO.md`](docs/fase4/BLOCCO12_ESITO.md) |
-| 13 | Stati di 24 ore (testo, foto, video), chi li vede, «Visto da» | Sul ramo `fase4/blocco13`, migrazione 0031 da applicare | [`BLOCCO13_ESITO.md`](docs/fase4/BLOCCO13_ESITO.md) |
+| 12 | «Online» e ultimo accesso, con la scelta in Privacy | Sul ramo `fase4/blocco12`, server attivo, da provare | [`BLOCCO12_ESITO.md`](docs/fase4/BLOCCO12_ESITO.md) |
+| 13 | Stati di 24 ore (testo, foto, video), chi li vede, «Visto da» | Sul ramo `fase4/blocco13`, server attivo, da provare | [`BLOCCO13_ESITO.md`](docs/fase4/BLOCCO13_ESITO.md) |
 
 Le scelte tecniche della chat sono in [`docs/fase4/DECISIONI.md`](docs/fase4/DECISIONI.md).
 
