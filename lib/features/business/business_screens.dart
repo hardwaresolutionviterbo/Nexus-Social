@@ -930,7 +930,11 @@ class _BusinessPageEditScreenState extends State<BusinessPageEditScreen> {
                 for (int i = 0; i < _added.length; i++)
                   _PhotoThumb(
                     key: ValueKey<String>('foto_nuova_$i'),
-                    child: Image.memory(_added[i], fit: BoxFit.cover),
+                    child: Image.memory(
+                      _added[i],
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => Container(color: PiazlyColors.violetSoft),
+                    ),
                     onRemove: () => setState(() => _added.removeAt(i)),
                   ),
                 if (photoCount < 6)
@@ -1018,7 +1022,12 @@ class _StoredPhoto extends StatelessWidget {
     builder: (BuildContext context, AsyncSnapshot<Uint8List?> s) {
       final Uint8List? b = s.data;
       if (b == null) return Container(color: PiazlyColors.violetSoft);
-      return Image.memory(b, fit: BoxFit.cover, gaplessPlayback: true);
+      return Image.memory(
+        b,
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+        errorBuilder: (_, _, _) => Container(color: PiazlyColors.violetSoft),
+      );
     },
   );
 }
