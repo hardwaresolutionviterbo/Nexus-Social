@@ -39,8 +39,8 @@ void main() {
     await tester.pumpWidget(const MaterialApp(home: Scaffold(body: SingleChildScrollView(child: PhonePermissionsList()))));
     await tester.pumpAndSettle();
 
-    expect(find.text('Attivo'), findsNWidgets(2));
-    expect(find.text('Non attivo'), findsNWidgets(2));
+    expect(find.textContaining(RegExp(r'^Attivo\n')), findsNWidgets(2));
+    expect(find.textContaining(RegExp(r'^Non attivo\n')), findsNWidgets(2));
     expect(find.textContaining('Bloccato'), findsOneWidget);
     expect(find.textContaining('Messaggi vocali e chiamate'), findsOneWidget);
     // Testi vecchi tolti.
@@ -50,7 +50,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey<String>('permesso_camera_azione')));
     await tester.pumpAndSettle();
     expect(fake.requested, <PhonePermission>[PhonePermission.camera]);
-    expect(find.text('Attivo'), findsNWidgets(3));
+    expect(find.textContaining(RegExp(r'^Attivo\n')), findsNWidgets(3));
 
     await tester.tap(find.byKey(const ValueKey<String>('permesso_microphone_azione')));
     await tester.pumpAndSettle();
