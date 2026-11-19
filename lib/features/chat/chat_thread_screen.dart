@@ -10,6 +10,7 @@ import 'chat_group_screens.dart';
 import 'chat_media.dart';
 import 'chat_media_picker.dart';
 import 'chat_media_widgets.dart';
+import 'chat_contact_info_screen.dart';
 import 'chat_models.dart';
 import 'chat_safety_screens.dart';
 import 'chat_screen.dart' show TicksIcon, chatPreview, chatTimeLabel;
@@ -312,6 +313,24 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     return c?.peerName.isNotEmpty ?? false ? c!.peerName : widget.fallbackName;
   }
 
+  /// Info contatto, come su WhatsApp.
+  void _openPeer(ChatConversation c) => Navigator.of(context).push<void>(
+    MaterialPageRoute<void>(
+      builder: (BuildContext ctx) => ChatContactInfoScreen(
+        chat: widget.chat,
+        conversationId: c.id,
+        profiles: widget.profiles,
+        onCall: widget.chat.calls == null
+            ? null
+            : ({required bool video}) {
+                Navigator.of(ctx).pop();
+                unawaited(_call(c, video: video));
+              },
+        onMute: () => _more('silenzia', c),
+      ),
+    ),
+  );
+
   void _openInfo() => Navigator.of(context).push<void>(
     MaterialPageRoute<void>(
       builder: (_) => GroupInfoScreen(
@@ -496,7 +515,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
             titleSpacing: 0,
             title: InkWell(
               key: const ValueKey<String>('chat_intestazione'),
-              onTap: group && c != null && !c.isRequest ? _openInfo : null,
+              onTap: c == null ? null : (group ? (c.isRequest ? null : _openInfo) : () => _openPeer(c)),
               child: Row(
                 children: [
                   if (group && c != null)

@@ -740,10 +740,13 @@ String? presenceLabel(Presence? p, DateTime now) {
 }
 
 class ChatContact {
-  const ChatContact({required this.id, required this.name, required this.username, this.avatarPath});
+  const ChatContact({required this.id, required this.name, required this.username, this.avatarPath, this.phone});
 
   final String id;
   final String name;
   final String username;
   final String? avatarPath;
+
+  /// Solo se la persona lo rende visibile ai contatti (Privacy → Numero di telefono).
+  final String? phone;
 }

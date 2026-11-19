@@ -104,6 +104,8 @@ void main() {
       'lib/features/calls/call_screen.dart',
       'lib/features/calls/calls_list.dart',
       'lib/features/chat/chat_backup_screen.dart',
+      // Info contatto (Blocca chiude anche la chat).
+      'lib/features/chat/chat_contact_info_screen.dart',
       'lib/features/chat/chat_group_screens.dart',
       'lib/features/chat/chat_media_widgets.dart',
       'lib/features/chat/chat_safety_screens.dart',

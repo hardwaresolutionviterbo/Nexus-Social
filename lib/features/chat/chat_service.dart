@@ -329,7 +329,7 @@ class ChatService extends ChangeNotifier {
       for (final ChatContact c in list)
         _local[c.id] == null
             ? c
-            : ChatContact(id: c.id, name: _local[c.id]!, username: c.username, avatarPath: c.avatarPath),
+            : ChatContact(id: c.id, name: _local[c.id]!, username: c.username, avatarPath: c.avatarPath, phone: c.phone),
     ];
     return named..sort((ChatContact a, ChatContact b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
   }
@@ -1486,6 +1486,16 @@ class ChatService extends ChangeNotifier {
       await _run(_loadConversations);
       _changed();
     }
+  }
+
+  /// Blocca la persona della chat a due (dalla scheda del contatto).
+  Future<void> blockPeer(String conversationId) async {
+    final ChatConversation? c = conversation(conversationId);
+    final String? peer = c == null || c.isGroup ? null : c.peerId;
+    if (peer == null || peer.isEmpty) return;
+    await server.blockUser(peer);
+    await _run(_loadConversations);
+    _changed();
   }
 
   /// Testo di un messaggio allegato a una segnalazione (per gli allegati solo tipo e didascalia).

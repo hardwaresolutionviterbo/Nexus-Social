@@ -9,6 +9,7 @@ import 'package:nexus_social/features/calls/call_service.dart';
 import 'package:nexus_social/features/calls/calls_list.dart';
 import 'package:nexus_social/features/chat/chat_screen.dart';
 import 'package:nexus_social/features/chat/chat_service.dart';
+import 'package:nexus_social/features/chat/chat_thread_screen.dart';
 
 import 'fake_chat.dart';
 
@@ -139,6 +140,38 @@ void main() {
     expect(a.calls!.state!.phase, CallPhase.outgoing);
     expect(hub.rings.last.$1, io);
     await tester.runAsync(() => a.calls!.hangUp());
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 5));
+    await tester.runAsync(() async {
+      a.dispose();
+      b.dispose();
+    });
+  }, timeout: const Timeout(Duration(seconds: 60)));
+
+  testWidgets('tocco nome o foto in alto: «Info contatto» con il nome della rubrica, blocca', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1170, 2532);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+    final (ChatService a, ChatService b, String conv) = (await tester.runAsync(pair))!;
+    await tester.pumpWidget(MaterialApp(
+      theme: AppTheme.light,
+      home: ChatThreadScreen(chat: a, conversationId: conv),
+    ));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.byKey(const ValueKey<String>('chat_intestazione')));
+    await tester.pumpAndSettle();
+    expect(find.text('Info contatto'), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('info_nome')), findsOneWidget);
+    expect(find.text('Bruno meccanico'), findsWidgets);
+    expect(find.text('@bruno_b'), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('info_chiama')), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const ValueKey<String>('info_blocca')));
+    await tester.tap(find.byKey(const ValueKey<String>('info_blocca')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey<String>('info_conferma_blocco')));
+    await tester.runAsync(settle);
+    await tester.pumpAndSettle();
+    expect(find.text('Info contatto'), findsNothing);
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 5));
     await tester.runAsync(() async {

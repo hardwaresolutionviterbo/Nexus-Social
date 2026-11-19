@@ -164,7 +164,13 @@ ChatService _chatFor(String uid) {
       try {
         return <ChatContact>[
           for (final RecognizedContact c in await contacts.contacts())
-            ChatContact(id: c.id, name: c.publicName, username: c.username, avatarPath: c.avatarThumbPath),
+            ChatContact(
+              id: c.id,
+              name: c.publicName,
+              username: c.username,
+              avatarPath: c.avatarThumbPath,
+              phone: c.phone,
+            ),
         ];
       } catch (_) {
         return const <ChatContact>[];
