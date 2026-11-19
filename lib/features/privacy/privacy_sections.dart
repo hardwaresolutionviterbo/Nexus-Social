@@ -5,6 +5,7 @@ import '../../core/widgets/nexus_ui.dart';
 import '../contacts/contacts_sync.dart';
 import '../profile/avatar_view.dart';
 import '../profile/profile_repository.dart';
+import 'phone_permissions.dart';
 import 'privacy_controller.dart';
 import 'privacy_repository.dart';
 
@@ -335,7 +336,6 @@ class _LocationBody extends StatelessWidget {
             'GPS in tempo reale oppure un punto scelto a mano (bar, punto d\'incontro). '
             'La scelta vale solo per quell\'annuncio.',
           ),
-          _Soon('Annunci e Mappa arrivano nella Fase 3.'),
         ],
       ),
     );
@@ -420,8 +420,8 @@ class _BlockedBody extends StatelessWidget {
               ),
           const _Note(
             'Chi è bloccato non vede il tuo profilo e non viene avvisato. Non potrà '
-            'scriverti, chiamarti, commentare i tuoi annunci né vedere le tue reazioni '
-            '(con chat e commenti, nelle prossime fasi).',
+            'scriverti, chiamarti, commentare i tuoi annunci, vedere i tuoi stati né il tuo '
+            'ultimo accesso.',
           ),
         ],
       ),
@@ -437,25 +437,12 @@ class _PermissionsBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
-    Widget row(IconData icon, String name, String state) => ListTile(
-      contentPadding: EdgeInsets.zero,
-      dense: true,
-      leading: Icon(icon),
-      title: Text(name),
-      subtitle: Text(state),
-    );
     return SectionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Permessi del telefono', style: theme.textTheme.titleSmall),
-          row(Icons.notifications_outlined, 'Notifiche',
-              'Gestite nelle impostazioni del telefono'),
-          row(Icons.photo_library_outlined, 'Foto',
-              'Nessun accesso alla galleria: scegli tu ogni singola foto'),
-          row(Icons.contacts_outlined, 'Contatti', 'Letti solo con la rubrica attiva, mai inviati in chiaro'),
-          row(Icons.place_outlined, 'Posizione', 'Non usata (servirà alla Mappa, Fase 3)'),
-          row(Icons.mic_none_rounded, 'Microfono', 'Non usato (vocali e chiamate, Fase 4)'),
+          const PhonePermissionsList(),
           const Divider(height: 24),
           Text('Consensi dati nell\'app', style: theme.textTheme.titleSmall),
           const SizedBox(height: 6),
@@ -481,8 +468,8 @@ class _PermissionsBody extends StatelessWidget {
               key: ValueKey<String>('nessun_consenso'),
             ),
           const _Note(
-            'Qui compariranno, con la data e il pulsante «Revoca», i consensi per la rubrica, '
-            'il GPS in tempo reale e le notifiche delle promozioni vicine.',
+            'Qui trovi, con la data e il pulsante «Revoca», i consensi che hai dato dentro '
+            'l\'app. Puoi revocarli quando vuoi.',
           ),
         ],
       ),

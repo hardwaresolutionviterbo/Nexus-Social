@@ -51,7 +51,12 @@ class AuthGate extends StatefulWidget {
     this.social,
     this.market,
     this.chat,
+    this.isAdmin,
   });
+
+  /// Vero solo per gli amministratori di Piazly: vedono lo stato dei servizi e la diagnostica.
+  final Future<bool> Function()? isAdmin;
+
 
   final AuthGateway gateway;
 
@@ -322,6 +327,7 @@ class _AuthGateState extends State<AuthGate> {
               social: widget.social,
               market: widget.market,
               chat: _uid == null ? null : _chatFor(_uid!),
+              isAdmin: widget.isAdmin,
             );
             final ContactsRepository? contacts = widget.contacts;
             final Widget synced = contacts == null

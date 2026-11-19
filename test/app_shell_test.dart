@@ -73,7 +73,7 @@ void main() {
 
     await tester.drag(find.text('Stato dei servizi'), const Offset(0, -400));
     await tester.pumpAndSettle();
-    expect(find.text('Posizione approssimata'), findsOneWidget);
+    expect(find.text('Versione'), findsOneWidget);
   });
 
   testWidgets('le icone di sistema seguono il tema chiaro e scuro', (

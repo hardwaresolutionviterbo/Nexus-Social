@@ -457,6 +457,8 @@ void main() {
 
     await tester.tap(find.byKey(ValueKey<String>('chat_$conv')));
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey<String>('chat_altro')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey<String>('silenzia_chat')));
     await tester.pumpAndSettle();
     expect(find.text('Silenzia per 8 ore'), findsOneWidget);
@@ -472,6 +474,8 @@ void main() {
     expect(find.byKey(ValueKey<String>('silenziata_$conv')), findsOneWidget);
 
     await tester.tap(find.byKey(ValueKey<String>('chat_$conv')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey<String>('chat_altro')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey<String>('silenzia_chat')));
     await tester.pumpAndSettle();

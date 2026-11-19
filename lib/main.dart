@@ -76,6 +76,16 @@ Future<void> main() async {
             )
           : null,
       social: profilesReady ? SupabaseSocialRepository(Supabase.instance.client) : null,
+      // Stato dei servizi e diagnostica: solo per gli amministratori (tabella admin_users).
+      isAdmin: profilesReady
+          ? () async {
+              try {
+                return await Supabase.instance.client.rpc('is_admin') == true;
+              } catch (_) {
+                return false;
+              }
+            }
+          : null,
       market: profilesReady
           ? SupabaseMarketRepository(
               Supabase.instance.client,

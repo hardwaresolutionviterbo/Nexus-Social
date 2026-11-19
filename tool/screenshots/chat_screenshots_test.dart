@@ -512,6 +512,8 @@ void main() {
     await tester.runAsync(() => me.setMute(conv[bruno]!));
     await shoot(tester, 'chat_16_silenzia',
         ChatThreadScreen(chat: me, conversationId: conv[bruno]!, now: () => now), before: () async {
+      await tester.tap(find.byKey(const ValueKey<String>('chat_altro')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey<String>('silenzia_chat')));
       await tester.pumpAndSettle();
     });

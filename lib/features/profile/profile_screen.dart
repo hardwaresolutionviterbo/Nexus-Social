@@ -35,7 +35,12 @@ class ProfileScreen extends StatelessWidget {
     this.biometricLock,
     this.contacts,
     this.feedback,
+    this.isAdmin,
   });
+
+  /// Vero solo per gli amministratori di Piazly: vedono lo stato dei servizi e la diagnostica.
+  final Future<bool> Function()? isAdmin;
+
 
   final BackendStatus backend;
 
@@ -355,76 +360,88 @@ class ProfileScreen extends StatelessWidget {
             ),
           ),
         ],
-        const SizedBox(height: AppSpacing.md),
-        SectionCard(
+        // Stato dei servizi, versione e diagnostica: solo per gli amministratori (decisione del
+        // titolare, 19/11/2026). Senza account (configurazione iniziale) restano visibili.
+        _AdminOnly(
+          isAdmin: isAdmin,
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.cloud_queue_rounded,
-                    size: 18,
-                    color: scheme.primary,
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Text('Stato dei servizi', style: theme.textTheme.titleSmall),
-                ],
-              ),
-              const SizedBox(height: 14),
-              _ServiceRow(
-                name: 'Supabase',
-                detail: 'Annunci, distanza, foto, segnalazioni',
-                state: backend.supabase,
-              ),
-              const Divider(height: 22),
-              _ServiceRow(
-                name: 'Firebase',
-                detail: 'Accesso SMS, chat, chiamate, notifiche',
-                state: backend.firebase,
-              ),
-              if (!backend.anyConnected) ...[
-                const SizedBox(height: 14),
-                Text(
-                  'Aggiungi le chiavi in env.json (o nei segreti di GitHub Actions '
-                  'e Codemagic) per collegare i servizi.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
+              const SizedBox(height: AppSpacing.md),
+              SectionCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.cloud_queue_rounded,
+                          size: 18,
+                          color: scheme.primary,
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Text('Stato dei servizi', style: theme.textTheme.titleSmall),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    _ServiceRow(
+                      name: 'Supabase',
+                      detail: 'Annunci, distanza, foto, segnalazioni',
+                      state: backend.supabase,
+                    ),
+                    const Divider(height: 22),
+                    _ServiceRow(
+                      name: 'Firebase',
+                      detail: 'Accesso SMS, chat, chiamate, notifiche',
+                      state: backend.firebase,
+                    ),
+                    const Divider(height: 22),
+                    _InfoRow(label: 'Versione', value: AppInfo.versionLabel),
+                    if (!backend.anyConnected) ...[
+                      const SizedBox(height: 14),
+                      Text(
+                        'Aggiungi le chiavi in env.json (o nei segreti di GitHub Actions '
+                        'e Codemagic) per collegare i servizi.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                    if (backend.message != null) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        backend.message!,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.error,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-              ],
-              if (backend.message != null) ...[
-                const SizedBox(height: 10),
-                Text(
-                  backend.message!,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: scheme.error,
+              ),
+              if (kDebugMode && AppConfig.hasFirebase) ...[
+                const SizedBox(height: AppSpacing.md),
+                SectionCard(
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      Icons.notifications_active_outlined,
+                      color: scheme.primary,
+                    ),
+                    title: const Text('Diagnostica push (debug)'),
+                    subtitle: const Text('FID, permessi e canale notifiche'),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const PushDiagnosticsScreen(),
+                      ),
+                    ),
                   ),
                 ),
               ],
             ],
           ),
         ),
-        if (kDebugMode && AppConfig.hasFirebase) ...[
-          const SizedBox(height: AppSpacing.md),
-          SectionCard(
-            child: ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(
-                Icons.notifications_active_outlined,
-                color: scheme.primary,
-              ),
-              title: const Text('Diagnostica push (debug)'),
-              subtitle: const Text('FID, permessi e canale notifiche'),
-              trailing: const Icon(Icons.chevron_right_rounded),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const PushDiagnosticsScreen(),
-                ),
-              ),
-            ),
-          ),
-        ],
         const SizedBox(height: AppSpacing.md),
         SectionCard(
           child: Column(
@@ -448,42 +465,38 @@ class ProfileScreen extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: AppSpacing.md),
-        SectionCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Informazioni', style: theme.textTheme.titleSmall),
-              const SizedBox(height: 14),
-              _InfoRow(label: 'Versione', value: AppInfo.versionLabel),
-              const SizedBox(height: 10),
-              _InfoRow(label: 'Fase', value: AppInfo.phaseLabel),
-              const SizedBox(height: 10),
-              _InfoRow(label: 'Privacy', value: 'Posizione approssimata'),
-            ],
-          ),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.lock_outline_rounded,
-              size: 14,
-              color: scheme.onSurfaceVariant,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              'Costruito una fase alla volta',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: scheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
       ],
     );
   }
+}
+
+/// Mostra il contenuto solo se il server dice che l'utente è amministratore.
+class _AdminOnly extends StatefulWidget {
+  const _AdminOnly({required this.isAdmin, required this.child});
+
+  final Future<bool> Function()? isAdmin;
+  final Widget child;
+
+  @override
+  State<_AdminOnly> createState() => _AdminOnlyState();
+}
+
+class _AdminOnlyState extends State<_AdminOnly> {
+  late bool _show = widget.isAdmin == null;
+
+  @override
+  void initState() {
+    super.initState();
+    final Future<bool> Function()? check = widget.isAdmin;
+    if (check != null) {
+      check().then((bool ok) {
+        if (mounted && ok) setState(() => _show = true);
+      }, onError: (Object _) {});
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => _show ? widget.child : const SizedBox.shrink();
 }
 
 class _ServiceRow extends StatelessWidget {

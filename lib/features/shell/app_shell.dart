@@ -52,7 +52,12 @@ class AppShell extends StatefulWidget {
     this.social,
     this.market,
     this.chat,
+    this.isAdmin,
   });
+
+  /// Vero solo per gli amministratori di Piazly: vedono lo stato dei servizi e la diagnostica.
+  final Future<bool> Function()? isAdmin;
+
 
   final BackendStatus backend;
 
@@ -140,6 +145,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       security: widget.security,
       biometricLock: widget.biometricLock,
       contacts: widget.contacts,
+      isAdmin: widget.isAdmin,
       // Media dei feedback sul profilo dei privati (Fase 5, Blocco 4).
       feedback: widget.market == null || widget.profile == null || widget.profile!.isBusiness
           ? null

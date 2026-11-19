@@ -375,7 +375,39 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   }
 
   Future<void> _more(String choice, ChatConversation c) async {
-    if (choice == 'incontro') {
+    if (choice == 'silenzia') {
+      final DateTime now = widget.now();
+      final String? pick = await showModalBottomSheet<String>(
+        context: context,
+        showDragHandle: true,
+        builder: (BuildContext s) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (c.isMuted)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
+                  child: Text(mutedLabel(c.mutedUntil!, now), style: Theme.of(s).textTheme.titleSmall),
+                ),
+              for (final (String v, String t) in const <(String, String)>[
+                ('8h', 'Silenzia per 8 ore'),
+                ('1w', 'Silenzia per 1 settimana'),
+                ('sempre', 'Silenzia sempre'),
+              ])
+                ListTile(title: Text(t), onTap: () => Navigator.of(s).pop(v)),
+              if (c.isMuted)
+                ListTile(
+                  key: const ValueKey<String>('riattiva_notifiche'),
+                  leading: const Icon(Icons.notifications_active_outlined),
+                  title: const Text('Riattiva le notifiche'),
+                  onTap: () => Navigator.of(s).pop('riattiva'),
+                ),
+            ],
+          ),
+        ),
+      );
+      if (pick != null) await _mute(pick);
+    } else if (choice == 'incontro') {
       await ShareMeetingScreen.open(
         context,
         widget.chat,
@@ -470,20 +502,31 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                   if (group && c != null)
                     GroupAvatar(chat: widget.chat, conversation: c, size: 38)
                   else
-                    AvatarView(name: name, repository: widget.profiles, path: c?.peerAvatarPath, size: 38),
-                  const SizedBox(width: 10),
+                    AvatarView(name: name, repository: widget.profiles, path: c?.peerAvatarPath, size: 36),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(name, maxLines: 1, overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-                        if (c != null)
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                            ),
+                            if (c != null && c.isMuted) ...[
+                              const SizedBox(width: 4),
+                              Icon(Icons.notifications_off_outlined, size: 16, color: theme.colorScheme.onSurfaceVariant),
+                            ],
+                          ],
+                        ),
+                        // Come su WhatsApp: sotto il nome solo «online» o l'ultimo accesso.
+                        if (c != null && (group || presenceLabel(_presence, now) != null))
                           Text(
                             group
                                 ? '${c.members} ${c.members == 1 ? 'membro' : 'membri'} · tocca per le info'
-                                : (presenceLabel(_presence, now) ?? '@${c.peerUsername}'),
+                                : presenceLabel(_presence, now)!,
                             key: const ValueKey<String>('chat_stato_persona'),
                             style: _presence?.online == true
                                 ? theme.textTheme.bodySmall?.copyWith(
@@ -517,35 +560,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                   onPressed: () => _call(c, video: true),
                 ),
               ],
-              if (c != null && !c.isRequest)
-                PopupMenuButton<String>(
-                  key: const ValueKey<String>('silenzia_chat'),
-                  tooltip: c.isMuted ? 'Notifiche silenziate' : 'Silenzia',
-                  icon: Icon(c.isMuted ? Icons.notifications_off_outlined : Icons.notifications_none_rounded),
-                  onSelected: _mute,
-                  itemBuilder: (_) => <PopupMenuEntry<String>>[
-                    if (c.isMuted)
-                      PopupMenuItem<String>(
-                        enabled: false,
-                        child: Text(mutedLabel(c.mutedUntil!, now)),
-                      ),
-                    const PopupMenuItem<String>(value: '8h', child: Text('Silenzia per 8 ore')),
-                    const PopupMenuItem<String>(value: '1w', child: Text('Silenzia per 1 settimana')),
-                    const PopupMenuItem<String>(value: 'sempre', child: Text('Silenzia sempre')),
-                    if (c.isMuted)
-                      const PopupMenuItem<String>(
-                        key: ValueKey<String>('riattiva_notifiche'),
-                        value: 'riattiva',
-                        child: Text('Riattiva le notifiche'),
-                      ),
-                  ],
-                ),
               if (c != null)
                 PopupMenuButton<String>(
                   key: const ValueKey<String>('chat_altro'),
                   tooltip: 'Altro',
                   onSelected: (String v) => _more(v, c),
                   itemBuilder: (_) => <PopupMenuEntry<String>>[
+                    // Silenzia: nel menu, come su WhatsApp, per lasciare spazio al nome.
+                    if (!c.isRequest)
+                      PopupMenuItem<String>(
+                        key: const ValueKey<String>('silenzia_chat'),
+                        value: 'silenzia',
+                        child: ListTile(
+                          leading: Icon(c.isMuted ? Icons.notifications_off_outlined : Icons.notifications_none_rounded),
+                          title: Text(c.isMuted ? 'Notifiche silenziate' : 'Silenzia notifiche'),
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      ),
                     if (!c.isGroup)
                       const PopupMenuItem<String>(
                         key: ValueKey<String>('menu_incontro'),
