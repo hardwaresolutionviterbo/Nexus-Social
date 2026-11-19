@@ -34,7 +34,8 @@ dependencies:
   maplibre_gl: ^0.28.0
   geolocator: ^14.0.2
   # Stato vero dei permessi in Privacy → Autorizzazioni (Blocco 14).
-  permission_handler: ">=11.3.1 <14.0.0"
+  # 12.x: la 13 richiede di compilare con Android 37, non ancora disponibile qui.
+  permission_handler: ">=12.0.1 <13.0.0"
   # Fase 3, Blocco 4: «Condividi» un annuncio nelle altre app.
   share_plus: ^13.3.1
   # Fase 4: cifratura delle chat con MLS (RFC 9420), licenza MIT.
