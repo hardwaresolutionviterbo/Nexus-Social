@@ -289,6 +289,16 @@ class SupabaseContactsRepository implements ContactsRepository {
   /// Quale numero della rubrica corrisponde a quale persona: serve per mostrare i nomi della
   /// rubrica nelle chat. Il nome non lascia mai il telefono.
   Future<void> _saveNumbers(List<String> numbers, List<String> tags) async {
+    // Le coppie numero → codice restano nell'archivio sicuro del telefono: così i nomi della
+    // rubrica si possono ricalcolare senza consumare gli aggiornamenti del giorno.
+    try {
+      await _storage.write(
+        key: _tagsKey,
+        value: jsonEncode(<String, String>{
+          for (int i = 0; i < tags.length && i < numbers.length; i++) numbers[i]: tags[i],
+        }),
+      );
+    } catch (_) {}
     try {
       final Object? rows = await _client.rpc('match_contact_tags', params: <String, Object?>{'p_tags': tags});
       final Map<String, String> byTag = <String, String>{
@@ -335,6 +345,21 @@ class SupabaseContactsRepository implements ContactsRepository {
   }
 
   static const String _limitedKey = 'piazly_contacts_limit_day';
+  static const String _tagsKey = 'piazly_contacts_tags';
+
+  /// Ricalcola «persona → numeri» con i codici già salvati (nessun limite giornaliero).
+  Future<bool> _remapFromSavedTags() async {
+    try {
+      final String? raw = await _storage.read(key: _tagsKey);
+      if (raw == null) return false;
+      final Map<String, dynamic> j = jsonDecode(raw) as Map<String, dynamic>;
+      if (j.isEmpty) return false;
+      await _saveNumbers(<String>[...j.keys], <String>[for (final Object? t in j.values) '$t']);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 
   static String _today() {
     final DateTime n = DateTime.now();
@@ -398,7 +423,10 @@ class SupabaseContactsRepository implements ContactsRepository {
       )) {
         return false;
       }
-      if (await _limitedToday()) return false;
+      if (await _limitedToday()) {
+        if (await _remapFromSavedTags()) ContactsEvents.namesChanged.value++;
+        return false;
+      }
       try {
         await sync();
       } on ProfileFailure catch (f) {
