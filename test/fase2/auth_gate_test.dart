@@ -74,7 +74,9 @@ void main() {
     await openSection(tester, 'Profilo');
     expect(find.text('Accesso effettuato'), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(ListTile, 'Esci'));
+    await tester.ensureVisible(find.text('Esci'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Esci'));
     await tester.pumpAndSettle();
     expect(find.text('Uscire da Piazly?'), findsOneWidget);
     await tester.tap(find.widgetWithText(FilledButton, 'Esci'));

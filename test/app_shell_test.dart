@@ -39,7 +39,7 @@ void main() {
       3,
     );
     expect(tester.widget<IndexedStack>(find.byType(IndexedStack).first).index, 3);
-    expect(find.text('Vendita tra privati'), findsOneWidget);
+    expect(find.text('Annunci vicino a te'), findsOneWidget);
   });
 
   testWidgets('la campanella apre il foglio delle notifiche vuote', (

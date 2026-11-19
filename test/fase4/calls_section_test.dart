@@ -132,10 +132,10 @@ void main() {
     final CallRecord r = a.calls!.log.records.single;
     await tester.tap(find.byKey(ValueKey<String>('chiamata_menu_${r.id}')));
     await tester.pumpAndSettle();
-    await tester.runAsync(() async {
-      await tester.tap(find.byKey(ValueKey<String>('richiama_${r.id}')));
-      await settle();
-    });
+    await tester.tap(find.byKey(ValueKey<String>('richiama_${r.id}')));
+    await tester.pump();
+    await tester.runAsync(settle);
+    await tester.pumpAndSettle();
     expect(a.calls!.state!.phase, CallPhase.outgoing);
     expect(hub.rings.last.$1, io);
     await tester.runAsync(() => a.calls!.hangUp());

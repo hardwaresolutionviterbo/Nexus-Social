@@ -102,6 +102,7 @@ void main() {
     ]..sort();
     expect(users, <String>[
       'lib/features/calls/call_screen.dart',
+      'lib/features/calls/calls_list.dart',
       'lib/features/chat/chat_backup_screen.dart',
       'lib/features/chat/chat_group_screens.dart',
       'lib/features/chat/chat_media_widgets.dart',

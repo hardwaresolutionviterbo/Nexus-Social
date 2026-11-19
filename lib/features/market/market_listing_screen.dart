@@ -479,7 +479,10 @@ class _MarketListingScreenState extends State<MarketListingScreen> {
                       const SizedBox(height: 14),
                       SoftCard(
                         margin: EdgeInsets.zero,
-                        child: Row(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                        Row(
                           children: [
                             AvatarView(name: l.ownerPublicName, path: l.ownerAvatarThumbPath, size: 54),
                             const SizedBox(width: 12),
@@ -490,14 +493,6 @@ class _MarketListingScreenState extends State<MarketListingScreen> {
                                   Text(l.ownerIsBusiness ? 'Azienda' : 'Venditore', style: theme.textTheme.bodySmall),
                                   Text(l.ownerPublicName, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
                                   Text('@${l.ownerUsername}', style: theme.textTheme.bodySmall),
-                                  // Media dei feedback sul profilo dei privati (PDF, Fase 5).
-                                  if (!l.ownerIsBusiness)
-                                    FeedbackSummaryTile(
-                                      repository: widget.repository,
-                                      userId: l.ownerId,
-                                      name: l.ownerPublicName,
-                                      dense: true,
-                                    ),
                                 ],
                               ),
                             ),
@@ -513,6 +508,19 @@ class _MarketListingScreenState extends State<MarketListingScreen> {
                                 icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
                                 label: const Text('Contatta'),
                               ),
+                          ],
+                        ),
+                        // Media dei feedback sul profilo dei privati (PDF, Fase 5).
+                        if (!l.ownerIsBusiness)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 66, top: 2),
+                            child: FeedbackSummaryTile(
+                              repository: widget.repository,
+                              userId: l.ownerId,
+                              name: l.ownerPublicName,
+                              dense: true,
+                            ),
+                          ),
                           ],
                         ),
                       ),

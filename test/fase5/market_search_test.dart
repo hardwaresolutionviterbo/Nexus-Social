@@ -104,6 +104,12 @@ void main() {
       await tester.pumpAndSettle();
     }
 
+    /// Posizione nell'ordine di lettura delle schede (riga, poi colonna).
+    double readingOrder(WidgetTester tester, String id) {
+      final Offset o = tester.getTopLeft(find.byKey(ValueKey<String>('risultato_$id')));
+      return o.dy.roundToDouble() * 10000 + o.dx;
+    }
+
     Future<void> tapVisible(WidgetTester tester, Finder f) async {
       FocusManager.instance.primaryFocus?.unfocus();
       await tester.pumpAndSettle();
@@ -145,11 +151,8 @@ void main() {
       }
       expect(find.text('350 €'), findsOneWidget);
       expect(find.byKey(const ValueKey<String>('avviso_antitruffa')), findsOneWidget);
-      // Il più recente per primo.
-      expect(
-        tester.getTopLeft(find.byKey(const ValueKey<String>('risultato_b'))).dy,
-        lessThan(tester.getTopLeft(find.byKey(const ValueKey<String>('risultato_c'))).dy),
-      );
+      // Il più recente per primo (a schede su due colonne: si legge riga per riga).
+      expect(readingOrder(tester, 'b'), lessThan(readingOrder(tester, 'c')));
     });
 
     testWidgets('barra di ricerca: parola, poi «Più pertinenti» (D4); nessun risultato', (
@@ -220,7 +223,7 @@ void main() {
       await tapVisible(tester, find.byKey(const ValueKey<String>('filtri_azzera')));
       await tapVisible(tester, find.byKey(const ValueKey<String>('filtri_mostra')));
       expect(repo.searches.last.$2.activeFilters, 0);
-      expect(find.text('Filtri'), findsOneWidget);
+      expect(find.byTooltip('Filtri'), findsOneWidget);
     });
 
     testWidgets('Scambia: tipologie Scambio, Regalo e Cerco; conguaglio', (WidgetTester tester) async {
@@ -284,8 +287,8 @@ void main() {
       await tapVisible(tester, find.byKey(const ValueKey<String>('mercato_ordina')));
       await tester.tap(find.byKey(const ValueKey<String>('ordina_price_asc')));
       await tester.pumpAndSettle();
-      double y(String id) => tester.getTopLeft(find.byKey(ValueKey<String>('risultato_$id'))).dy;
-      expect(y('b') < y('c') && y('c') < y('a'), isTrue);
+      expect(readingOrder(tester, 'b') < readingOrder(tester, 'c') && readingOrder(tester, 'c') < readingOrder(tester, 'a'),
+          isTrue);
     });
 
     testWidgets('pagine da 20 (D9): «Mostra altri» carica il resto', (WidgetTester tester) async {
