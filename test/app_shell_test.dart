@@ -38,7 +38,7 @@ void main() {
       tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
       3,
     );
-    expect(tester.widget<IndexedStack>(find.byType(IndexedStack)).index, 3);
+    expect(tester.widget<IndexedStack>(find.byType(IndexedStack).first).index, 3);
     expect(find.text('Vendita tra privati'), findsOneWidget);
   });
 

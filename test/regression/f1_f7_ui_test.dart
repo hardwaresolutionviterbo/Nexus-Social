@@ -21,7 +21,7 @@ void main() {
     for (final MapEntry<String, String> section in sectionMarkers.entries) {
       await openSection(tester, section.key);
       final IndexedStack stack = tester.widget<IndexedStack>(
-        find.byType(IndexedStack),
+        find.byType(IndexedStack).first,
       );
       final int selected = tester
           .widget<NavigationBar>(find.byType(NavigationBar))
