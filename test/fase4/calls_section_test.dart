@@ -7,7 +7,6 @@ import 'package:nexus_social/core/theme/app_theme.dart';
 import 'package:nexus_social/features/calls/call_log.dart';
 import 'package:nexus_social/features/calls/call_service.dart';
 import 'package:nexus_social/features/calls/calls_list.dart';
-import 'package:nexus_social/features/chat/chat_models.dart';
 import 'package:nexus_social/features/chat/chat_screen.dart';
 import 'package:nexus_social/features/chat/chat_service.dart';
 
