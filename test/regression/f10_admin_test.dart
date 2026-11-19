@@ -101,8 +101,11 @@ void main() {
         if (file.readAsStringSync().contains('Navigator.')) rel(file),
     ]..sort();
     expect(users, <String>[
+      'lib/features/calls/call_screen.dart',
+      'lib/features/chat/chat_backup_screen.dart',
       'lib/features/chat/chat_group_screens.dart',
       'lib/features/chat/chat_media_widgets.dart',
+      'lib/features/chat/chat_safety_screens.dart',
       'lib/features/chat/chat_screen.dart',
       'lib/features/chat/chat_thread_screen.dart',
       'lib/features/map/comments_screen.dart',

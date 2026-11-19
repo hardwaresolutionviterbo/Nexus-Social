@@ -128,6 +128,10 @@ abstract final class PushDeviceRegistry {
   static bool get _firebaseEnabled =>
       _firebaseEnabledOverride ?? AppConfig.hasFirebase;
 
+  /// Sostituisce il collegamento predefinito (va chiamato prima di [start]): con il server
+  /// collegato il telefono si registra anche su Supabase per le notifiche (Fase 4, Blocco 5).
+  static void useBackend(PushDeviceBackend backend) => _defaultBackend = backend;
+
   /// Percorso Firestore del dispositivo: `profiles/{uid}/devices/{fid}`.
   static String devicePath(String uid, String fid) =>
       'profiles/$uid/devices/$fid';

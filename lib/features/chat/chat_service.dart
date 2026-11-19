@@ -5,9 +5,13 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 
+import '../calls/call_service.dart';
+import 'chat_backup.dart';
+import 'chat_backup_service.dart';
 import 'chat_crypto.dart';
 import 'chat_media.dart';
 import 'chat_models.dart';
+import 'chat_preview.dart';
 import 'chat_server.dart';
 import 'chat_store.dart';
 
@@ -26,7 +30,44 @@ class ChatService extends ChangeNotifier {
     this.files,
     this.fastPoll = const Duration(seconds: 3),
     this.slowPoll = const Duration(seconds: 10),
-  }) : _openCrypto = crypto;
+    BackupServer? backupServer,
+    BackupKeyStore? backupKeys,
+    BackupKdf backupKdf = const BackupKdf(),
+    DateTime Function()? clock,
+    CallService Function(ChatService chat)? calls,
+    PreviewKeyStore? previews,
+  }) : _previews = previews == null ? null : PreviewKeys(previews),
+       _openCrypto = crypto,
+       _clock = clock ?? DateTime.now {
+    backup = backupServer != null && backupKeys != null
+        ? ChatBackup(chat: this, server: backupServer, keys: backupKeys, kdf: backupKdf)
+        : null;
+    this.calls = calls?.call(this);
+  }
+
+  /// Chiavi delle anteprime nelle notifiche (Blocco 10); null nei test che non le usano.
+  final PreviewKeys? _previews;
+
+  /// Chiamate vocali e video (Blocco 8); null senza server.
+  late final CallService? calls;
+
+  /// Passaggi delle chiamate arrivati (offerta, risposta, chiusura), decifrati.
+  final StreamController<CallEnvelope> _callSignals = StreamController<CallEnvelope>.broadcast();
+  Stream<CallEnvelope> get callSignals => _callSignals.stream;
+
+  /// Durante una chiamata si controlla il server ogni secondo.
+  bool _inCall = false;
+  set inCall(bool value) {
+    if (_inCall == value) return;
+    _inCall = value;
+    _schedule();
+    if (value) unawaited(refresh());
+  }
+
+  DateTime now() => _clock();
+
+  /// Backup cifrato con password (Blocco 6); null senza server.
+  late final ChatBackup? backup;
 
   final ChatServer server;
   final ChatStore store;
@@ -40,6 +81,9 @@ class ChatService extends ChangeNotifier {
   final Duration slowPoll;
 
   final Future<ChatCrypto> Function() _openCrypto;
+
+  /// Ora per il limite di «elimina per tutti» (nei test e nelle anteprime: quella del server finto).
+  final DateTime Function() _clock;
   ChatCrypto? _crypto;
   String? _myKey;
 
@@ -96,8 +140,11 @@ class ChatService extends ChangeNotifier {
     try {
       await _run(_init);
       _ready = true;
+      _listenLive();
       await refresh();
       _schedule();
+      final ChatBackup? b = backup;
+      if (b != null) unawaited(b.load());
     } on ChatFailure catch (f) {
       _startError = f.message;
     } catch (_) {
@@ -142,13 +189,21 @@ class ChatService extends ChangeNotifier {
     _timer?.cancel();
     _timer = null;
     if (!_ready || !_foreground || _disposed) return;
-    _timer = Timer.periodic(_open == null ? slowPoll : fastPoll, (_) => unawaited(refresh()));
+    // Con il tempo reale i controlli periodici servono solo di riserva.
+    final Duration every = _inCall
+        ? (live ? const Duration(seconds: 3) : const Duration(seconds: 1))
+        : (_open == null ? (live ? slowPoll * 3 : slowPoll) : (live ? fastPoll * 3 : fastPoll));
+    _timer = Timer.periodic(every, (_) => unawaited(refresh()));
   }
 
   @override
   void dispose() {
     _disposed = true;
     _timer?.cancel();
+    unawaited(_wake?.cancel());
+    backup?.dispose();
+    calls?.dispose();
+    unawaited(_callSignals.close());
     super.dispose();
   }
 
@@ -207,8 +262,14 @@ class ChatService extends ChangeNotifier {
 
   /// Nuovi messaggi e stato delle chat. Silenzioso: gli errori di rete si riprovano dopo.
   Future<void> refresh() async {
-    if (!_ready || _polling) return;
+    if (!_ready) return;
+    if (_polling) {
+      // Arrivato un tocco mentre si sincronizzava: si rifà subito dopo.
+      _again = true;
+      return;
+    }
     _polling = true;
+    _again = false;
     try {
       await _run(() async {
         await _syncInbox();
@@ -222,6 +283,21 @@ class ChatService extends ChangeNotifier {
       _changed();
     }
     unawaited(_runAutoDownloads());
+    if (_again && !_disposed) unawaited(refresh());
+  }
+
+  bool _again = false;
+
+  /// Tocchi del server in tempo reale (Blocco 9): c'è qualcosa di nuovo, si sincronizza subito.
+  StreamSubscription<void>? _wake;
+
+  /// Il tempo reale è collegato: i controlli periodici diventano di riserva e più radi.
+  bool get live => server.live;
+
+  void _listenLive() {
+    _wake ??= server.wakeUps(myId).listen((_) {
+      if (!_disposed) unawaited(refresh());
+    });
   }
 
   Future<void> _loadConversations() async {
@@ -384,6 +460,26 @@ class ChatService extends ChangeNotifier {
     if (s != null && s.generation == e.generation) {
       final List<int>? plain = await crypto.decrypt(s.groupId, e.payload);
       if (plain != null) content = ChatContent.decode(plain);
+    }
+    if (content != null && content.type == 'pk') {
+      try {
+        await _previews?.savePeer(e.conversationId, e.senderId, base64Decode(content.body));
+      } catch (_) {
+        // Chiave rovinata: le notifiche di questa persona resteranno senza testo.
+      }
+      return;
+    }
+    if (content != null && content.type == 'call') {
+      final CallSignal? signal = CallSignal.decode(content.body);
+      if (signal != null && !_callSignals.isClosed) {
+        _callSignals.add(CallEnvelope(
+          conversationId: e.conversationId,
+          senderId: e.senderId,
+          at: e.createdAt,
+          signal: signal,
+        ));
+      }
+      return;
     }
     if (content != null && (content.type == 'del' || content.type == 'react')) {
       await _appendEvent(ChatEvent(
@@ -681,6 +777,7 @@ class ChatService extends ChangeNotifier {
     }
     final File? have = await localFileOf(m);
     if (have != null) return have;
+    if (m.fromBackup) throw const ChatFailure('Gli allegati non sono nel backup: questo non si può più aprire.');
     final Future<File>? running = _downloading[m.localId];
     if (running != null) return running;
     final Future<File> job = _fetch(m, md, store, server);
@@ -726,7 +823,7 @@ class ChatService extends ChangeNotifier {
 
   /// «Elimina per tutti»: solo i propri messaggi, entro 48 ore.
   Future<void> deleteForEveryone(ChatMessage message) async {
-    if (!message.canDeleteForEveryone(DateTime.now())) {
+    if (!message.canDeleteForEveryone(_clock())) {
       throw const ChatFailure('Questo messaggio non si può più eliminare per tutti.');
     }
     await _event(
@@ -781,14 +878,68 @@ class ChatService extends ChangeNotifier {
     }
   }
 
+  /// Manda un passaggio di una chiamata, cifrato come i messaggi.
+  Future<void> sendCallSignal(String conversationId, CallSignal signal) async {
+    await _run(() => _transmit(
+      conversationId,
+      ChatContent.call(signal.encode(), localId: _localId()),
+      // Squilla solo l'inizio della chiamata: l'offerta nelle chat a due, l'invito nei gruppi.
+      call: (
+        ring: signal.action == CallAction.invite ||
+            (signal.action == CallAction.offer && !(_conversations[conversationId]?.isGroup ?? false)),
+        video: signal.video,
+      ),
+    ));
+  }
+
+  /// Riga «Chiamata persa», «Chiamata vocale · 2:31»… nella conversazione (solo su questo telefono).
+  Future<void> logCall(String conversationId, String text) async {
+    await _run(() => _append(ChatMessage(
+      localId: 'call-${_localId()}',
+      conversationId: conversationId,
+      mine: false,
+      kind: MessageKind.notice,
+      body: text,
+      at: _noticeTime(conversationId).isAfter(_clock()) ? _noticeTime(conversationId) : _clock(),
+    )));
+    _changed();
+  }
+
   /// Cifra e invia [content]; se la chat è cambiata nel frattempo si ricarica e si riprova.
   /// Da chiamare dentro [_run].
-  Future<(int, DateTime)> _transmit(String conversationId, ChatContent content) async {
+  Future<(int, DateTime)> _transmit(
+    String conversationId,
+    ChatContent content, {
+    ({bool ring, bool video})? call,
+    String? preview,
+  }) async {
     Future<(int, DateTime)> attempt() async {
       final ChatConversation c = await _fresh(conversationId);
       final LocalSession s = await _ensureSession(c);
+      String? sealed;
+      final PreviewKeys? keys = _previews;
+      if (preview != null && keys != null) {
+        try {
+          final List<int> mine = await keys.mine(c.id);
+          // La prima volta in questa generazione della chat la chiave va agli altri membri.
+          if (!await keys.sent(c.id, s.generation)) {
+            final String pk = await _crypto!.encrypt(
+              s.groupId,
+              ChatContent.previewKey(base64Encode(mine), localId: _localId()).encode(),
+            );
+            await server.send(c.id, s.generation, pk);
+            await keys.markSent(c.id, s.generation);
+          }
+          sealed = await PreviewCipher.seal(mine, preview);
+        } on ChatFailure {
+          rethrow;
+        } catch (_) {
+          sealed = null;
+        }
+      }
       final String payload = await _crypto!.encrypt(s.groupId, content.encode());
-      return server.send(c.id, s.generation, payload);
+      if (call != null) return server.callSignal(c.id, s.generation, payload, ring: call.ring, video: call.video);
+      return server.send(c.id, s.generation, payload, preview: sealed);
     }
 
     try {
@@ -850,6 +1001,7 @@ class ChatService extends ChangeNotifier {
         final ChatMedia? md = ready.media;
         final (int, DateTime) sent = await _transmit(
           ready.conversationId,
+          preview: previewOf(body: ready.body, media: md?.kind),
           md == null
               ? ChatContent.text(
                   ready.body,
@@ -1205,6 +1357,121 @@ class ChatService extends ChangeNotifier {
     await server.groupUpdate(conversationId, c.title, c.description, photoChanged: true);
     await _afterGroupChange();
   }
+
+  /// Silenzia le notifiche di una chat per [duration] (null = sempre) o le riattiva.
+  Future<void> setMute(String conversationId, {Duration? duration, bool unmute = false}) async {
+    final String? until = unmute
+        ? null
+        : (duration == null ? 'infinity' : DateTime.now().add(duration).toUtc().toIso8601String());
+    await server.setMute(conversationId, until);
+    await _run(_loadConversations);
+    _changed();
+  }
+
+  /// Motivi della segnalazione (gli stessi accettati dal server).
+  static const Map<String, String> reportReasons = <String, String>{
+    'spam': 'Spam o pubblicità',
+    'truffa': 'Truffa o richiesta di soldi',
+    'molestie': 'Molestie, insulti o minacce',
+    'contenuti': 'Contenuti inappropriati',
+    'minore': 'Coinvolge un minorenne',
+    'altro': 'Altro',
+  };
+
+  /// Segnala la chat agli amministratori con i soli messaggi scelti; se [block], blocca anche.
+  Future<void> report(
+    String conversationId, {
+    required String reason,
+    String details = '',
+    List<ChatMessage> messages = const <ChatMessage>[],
+    bool block = false,
+  }) async {
+    if (!reportReasons.containsKey(reason)) throw const ChatFailure('Scegli un motivo.');
+    if (messages.length > 50) throw const ChatFailure('Puoi allegare al massimo 50 messaggi.');
+    if (details.length > 1000) throw const ChatFailure('Descrizione troppo lunga (massimo 1.000 caratteri).');
+    final ChatConversation? c = _conversations[conversationId];
+    final List<Map<String, String>> chosen = <Map<String, String>>[
+      for (final ChatMessage m in messages)
+        <String, String>{
+          'a': m.at.toUtc().toIso8601String(),
+          'da': m.mine ? 'io' : (m.senderId.isNotEmpty ? m.senderId : (c?.peerId ?? '')),
+          't': reportText(m),
+        },
+    ];
+    await server.report(conversationId, reason, details, chosen);
+    final String? peer = c == null || c.isGroup ? null : c.peerId;
+    if (block && peer != null && peer.isNotEmpty) {
+      await server.blockUser(peer);
+      await _run(_loadConversations);
+      _changed();
+    }
+  }
+
+  /// Testo di un messaggio allegato a una segnalazione (per gli allegati solo tipo e didascalia).
+  static String reportText(ChatMessage m) {
+    final String kind = switch (m.media?.kind) {
+      MediaKind.image => '[foto]',
+      MediaKind.video => '[video]',
+      MediaKind.audio => '[vocale]',
+      MediaKind.file => '[documento]',
+      null => '',
+    };
+    final String body = m.media == null ? m.body : (m.body.trim().isEmpty ? kind : '$kind ${m.body.trim()}');
+    return body.length > 4000 ? body.substring(0, 4000) : body;
+  }
+
+  /// «Condividi l'incontro» (Blocco 7): luogo e orario vanno, cifrati, alla persona fidata.
+  Future<String> shareMeeting({
+    required String trustedId,
+    required String withName,
+    required String place,
+    required DateTime when,
+    String note = '',
+  }) async {
+    if (place.trim().isEmpty) throw const ChatFailure('Scrivi dove vi incontrate.');
+    final String conv = await openDirect(trustedId);
+    await send(conv, meetingText(withName: withName, place: place, when: when, note: note));
+    return conv;
+  }
+
+  static const List<String> _days = <String>['lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato', 'domenica'];
+
+  /// Testo del messaggio dell'incontro.
+  static String meetingText({
+    required String withName,
+    required String place,
+    required DateTime when,
+    String note = '',
+  }) {
+    final DateTime l = when.toLocal();
+    final String hm = '${l.hour.toString().padLeft(2, '0')}:${l.minute.toString().padLeft(2, '0')}';
+    final StringBuffer b = StringBuffer()
+      ..writeln('📍 Incontro condiviso con te')
+      ..writeln('Vedo: $withName')
+      ..writeln('Quando: ${_days[l.weekday - 1]} ${l.day}/${l.month} alle $hm')
+      ..write('Dove: ${place.trim()}');
+    if (note.trim().isNotEmpty) b.write('\nNota: ${note.trim()}');
+    b.write('\nSe non ti scrivo dopo l\'incontro, contattami.');
+    return b.toString();
+  }
+
+  /// Tutta la cronologia del telefono, per il backup.
+  Future<Map<String, List<Map<String, Object?>>>> exportHistory() => _run(store.exportAll);
+
+  /// Rimette la cronologia di un backup (senza doppioni) e ricarica le chat.
+  Future<int> importHistory(Map<String, List<Map<String, Object?>>> chats) async {
+    final int added = await _run(() async {
+      final int n = await store.importAll(chats);
+      _messages.clear();
+      if (_ready) await _loadConversations();
+      return n;
+    });
+    _changed();
+    return added;
+  }
+
+  /// Un messaggio è appena arrivato con l'app aperta (notifica): si controlla subito.
+  void ping() => unawaited(refresh());
 
   Future<String> inviteCode(String conversationId, {bool renew = false}) =>
       server.groupInviteCode(conversationId, renew: renew);

@@ -12,6 +12,7 @@ import '../map/listing_repository.dart';
 import '../map/map_screen.dart';
 import '../map/social_repository.dart';
 import '../market/market_repository.dart';
+import '../notifications/notification_settings.dart';
 import '../privacy/privacy_checkup_screen.dart';
 import '../privacy/privacy_controller.dart';
 import '../privacy/privacy_repository.dart';
@@ -41,6 +42,7 @@ class AuthGate extends StatefulWidget {
     this.profiles,
     this.pickImage = pickFromGallery,
     this.privacy,
+    this.pushSettings,
     this.security,
     this.biometricLock,
     this.contacts,
@@ -59,6 +61,9 @@ class AuthGate extends StatefulWidget {
 
   /// Impostazioni privacy (Blocco 3): con il server collegato.
   final PrivacyRepository? privacy;
+
+  /// Preferenze delle notifiche (Fase 4, Blocco 5).
+  final PushSettingsRepository? pushSettings;
 
   /// Verifica in due passaggi (Blocco 4): con il server collegato.
   final SecurityRepository? security;
@@ -308,6 +313,7 @@ class _AuthGateState extends State<AuthGate> {
               profiles: repo,
               onProfileChanged: _loadProfile,
               privacy: widget.privacy,
+              pushSettings: widget.pushSettings,
               security: widget.security,
               biometricLock: widget.biometricLock,
               contacts: widget.contacts,

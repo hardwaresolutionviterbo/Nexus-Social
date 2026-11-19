@@ -1,12 +1,17 @@
 // Server della chat in memoria, con le stesse regole delle migrazioni 0019–0021, e una
 // «cifratura» finta per i test di interfaccia (i test del motore usano MLS vero).
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:material_ui/material_ui.dart' show Widget;
+import 'package:nexus_social/features/calls/call_service.dart';
+import 'package:nexus_social/features/chat/chat_backup.dart';
 import 'package:nexus_social/features/chat/chat_crypto.dart';
 import 'package:nexus_social/features/chat/chat_media.dart';
 import 'package:nexus_social/features/chat/chat_models.dart';
+import 'package:nexus_social/features/chat/chat_preview.dart';
 import 'package:nexus_social/features/chat/chat_server.dart';
 import 'package:nexus_social/features/chat/chat_service.dart';
 import 'package:nexus_social/features/chat/chat_store.dart';
@@ -34,6 +39,7 @@ class FakeConv {
   final Map<String, String> mls = <String, String>{};
   final Map<String, int> fromId = <String, int>{};
   final Map<String, String> invitedBy = <String, String>{};
+  final Map<String, DateTime?> muted = <String, DateTime?>{};
   String other(String uid) => uid == a ? b : a;
   bool has(String uid) => group ? status.containsKey(uid) : (uid == a || uid == b);
   Iterable<String> inside() => status.keys.where((u) => status[u] == 'active' && mls[u] == 'in');
@@ -100,6 +106,27 @@ class FakeChatHub {
   /// owner → persone che ha in rubrica.
   final Map<String, Set<String>> contacts = <String, Set<String>>{};
   final Set<String> blocks = <String>{};
+
+  /// Tempo reale finto (Blocco 9): spento di base, i test lo accendono.
+  bool live = false;
+  final Map<String, StreamController<void>> _pokes = <String, StreamController<void>>{};
+
+  Stream<void> pokes(String uid) => (_pokes[uid] ??= StreamController<void>.broadcast()).stream;
+
+  /// «C'è qualcosa di nuovo» per [uid], come il database con Supabase Realtime.
+  void poke(String uid) {
+    if (live) _pokes[uid]?.add(null);
+  }
+
+  /// Anteprime cifrate arrivate con i messaggi (chi, chat, anteprima): vanno nella notifica.
+  final List<(String, String, String)> previews = <(String, String, String)>[];
+
+  /// Squilli (chi chiama, chat, video): sul server vero fanno partire la notifica.
+  final List<(String, String, bool)> rings = <(String, String, bool)>[];
+
+  /// Segnalazioni ricevute (chi, chat, motivo, descrizione, messaggi scelti).
+  final List<(String, String, String, String, List<Map<String, String>>)> reports =
+      <(String, String, String, String, List<Map<String, String>>)>[];
   int _seq = 0;
   int _conv = 0;
 
@@ -107,7 +134,8 @@ class FakeChatHub {
   final Map<String, String> invites = <String, String>{};
 
   String newId() => '00000000-0000-4000-8000-${(++_conv).toString().padLeft(12, '0')}';
-  DateTime clock = DateTime(2026, 11, 16, 18, 30);
+  // Un'ora fa: «elimina per tutti» (48 ore) confronta l'ora vera con quella del server.
+  DateTime clock = DateTime.now().subtract(const Duration(hours: 1));
 
   void addPerson(String id, String username, String name) =>
       people[id] = FakePerson(id, username, name);
@@ -229,8 +257,9 @@ class FakeChatServer implements ChatServer {
   }
 
   @override
-  Future<(int, DateTime)> send(String conversationId, int generation, String payload) async {
+  Future<(int, DateTime)> send(String conversationId, int generation, String payload, {String? preview}) async {
     final FakeConv c = _member(conversationId);
+    if (preview != null) hub.previews.add((uid, conversationId, preview));
     if (c.group) {
       if (c.status[uid] != 'active' || c.mls[uid] != 'in') {
         throw const ChatFailure('Non fai più parte di questo gruppo.');
@@ -246,7 +275,29 @@ class FakeChatServer implements ChatServer {
     final int id = _push((int id) => FakeMsg(id, c.id, generation, uid, null, payload, hub.clock));
     c.lastId = id;
     c.lastAt = hub.clock;
+    for (final String u in c.status.keys.where((String u) => u != uid)) {
+      hub.poke(u);
+    }
     return (id, hub.clock);
+  }
+
+  @override
+  bool get live => hub.live;
+
+  @override
+  Stream<void> wakeUps(String uid) => hub.pokes(uid);
+
+  @override
+  Future<(int, DateTime)> callSignal(String conversationId, int generation, String payload,
+      {required bool ring, required bool video}) async {
+    final FakeConv c = _member(conversationId);
+    if (c.group) {
+      if (c.status[uid] != 'active' || c.mls[uid] != 'in') throw const ChatFailure('Chiamata non possibile in questa chat.');
+    } else if (c.status[uid] != 'active' || c.status[c.other(uid)] != 'active' || hub.blocked(uid, c.other(uid))) {
+      throw const ChatFailure('Chiamata non possibile in questa chat.');
+    }
+    if (ring) hub.rings.add((uid, conversationId, video));
+    return send(conversationId, generation, payload);
   }
 
   bool _visible(FakeMsg m, FakeConv c) {
@@ -316,6 +367,7 @@ class FakeChatServer implements ChatServer {
                   c.mls[u] == 'to_remove')
               .length,
           invitedBy: c.invitedBy[uid],
+          mutedUntil: c.muted[uid],
         )
       else if (!c.group && c.has(uid) && c.status[uid] != 'declined' && !hub.blocked(c.a, c.b))
         ChatConversation(
@@ -335,6 +387,7 @@ class FakeChatServer implements ChatServer {
           lastMessageId: c.lastId,
           lastMessageAt: c.lastAt,
           createdAt: c.createdAt,
+          mutedUntil: c.muted[uid],
         ),
   ];
 
@@ -620,6 +673,22 @@ class FakeChatServer implements ChatServer {
   }
 
   @override
+  Future<void> report(String conversationId, String reason, String details, List<Map<String, String>> messages) async {
+    _member(conversationId);
+    if (messages.length > 50) throw const ChatFailure('Al massimo 50 messaggi.');
+    hub.reports.add((uid, conversationId, reason, details, messages));
+  }
+
+  @override
+  Future<void> blockUser(String userId) async => hub.blocks.add('$uid>$userId');
+
+  @override
+  Future<void> setMute(String conversationId, String? until) async {
+    final FakeConv c = _member(conversationId);
+    c.muted[uid] = until == null ? null : (until == 'infinity' ? DateTime(9999) : DateTime.parse(until).toLocal());
+  }
+
+  @override
   Future<void> groupRejoin(String conversationId) async {
     final FakeConv c = _group(conversationId);
     if (c.mls[uid] == 'in') c.mls[uid] = 'to_readd';
@@ -701,8 +770,23 @@ class FakeChatCrypto implements ChatCrypto {
 }
 
 /// Telefono finto pronto all'uso (cifratura finta, messaggi in memoria, nessun timer utile).
-Future<ChatService> fakePhone(FakeChatHub hub, String uid, {String key = 'chiave', Directory? files}) async {
+Future<ChatService> fakePhone(
+  FakeChatHub hub,
+  String uid, {
+  String key = 'chiave',
+  Directory? files,
+  BackupServer? backup,
+  BackupKeyStore? backupKeys,
+  CallService Function(ChatService chat)? calls,
+  PreviewKeyStore? previews,
+}) async {
   final ChatService s = ChatService(
+    previews: previews,
+    calls: calls,
+    clock: () => hub.clock,
+    backupServer: backup,
+    backupKeys: backup == null ? null : (backupKeys ?? MemoryBackupKeyStore()),
+    backupKdf: fastKdfForTests(),
     media: hub.media,
     files: files == null ? null : ChatMediaFiles(Future<Directory>.value(files)),
     server: hub.serverFor(uid),
@@ -719,3 +803,186 @@ Future<ChatService> fakePhone(FakeChatHub hub, String uid, {String key = 'chiave
   await s.start();
   return s;
 }
+
+/// Server finto del backup (Blocco 6): un file per account, come il bucket `chat-backups`.
+class FakeBackupServer implements BackupServer {
+  FakeBackupServer({DateTime Function()? now}) : now = now ?? DateTime.now;
+
+  final DateTime Function() now;
+  Uint8List? file;
+  DateTime? at;
+  int uploads = 0;
+  bool offline = false;
+
+  @override
+  Future<BackupInfo?> info() async {
+    if (offline) throw Exception('rete');
+    final Uint8List? f = file;
+    return f == null ? null : BackupInfo(at: at!, size: f.length);
+  }
+
+  @override
+  Future<void> upload(Uint8List bytes) async {
+    if (offline) throw const ChatFailure('Backup non caricato. Riprova.');
+    file = Uint8List.fromList(bytes);
+    at = now();
+    uploads++;
+  }
+
+  @override
+  Future<Uint8List> download() async {
+    final Uint8List? f = file;
+    if (f == null || offline) throw const ChatFailure('Backup non scaricato. Controlla la connessione.');
+    return f;
+  }
+
+  @override
+  Future<void> remove() async {
+    file = null;
+    at = null;
+  }
+}
+
+
+/// Audio e video finti (Blocco 8): si «collega» quando arriva la risposta.
+class FakeCallMedia implements CallMedia {
+  static int opened = 0;
+  final StreamController<bool> _up = StreamController<bool>.broadcast();
+  bool video = false;
+  bool mic = true;
+  bool camera = true;
+  bool speaker = false;
+  bool closed = false;
+
+  @override
+  Stream<bool> get connected => _up.stream;
+
+  @override
+  Future<void> open({required List<IceServer> ice, required bool video}) async {
+    opened++;
+    this.video = video;
+  }
+
+  @override
+  Future<String> createOffer() async => 'v=0 offerta';
+
+  @override
+  Future<String> answer(String offer) async {
+    scheduleMicrotask(() => _up.isClosed ? null : _up.add(true));
+    return 'v=0 risposta a ($offer)';
+  }
+
+  @override
+  Future<void> acceptAnswer(String answer) async => scheduleMicrotask(() => _up.isClosed ? null : _up.add(true));
+
+  void drop() => _up.add(false);
+
+  @override
+  Future<void> setMicrophone(bool on) async => mic = on;
+
+  @override
+  Future<void> setCamera(bool on) async => camera = on;
+
+  @override
+  Future<void> setSpeaker(bool on) async => speaker = on;
+
+  @override
+  Future<void> switchCamera() async {}
+
+  @override
+  Widget? remoteView() => null;
+
+  @override
+  Widget? localView() => null;
+
+  @override
+  Future<void> close() async {
+    closed = true;
+    await _up.close();
+  }
+}
+
+/// Chiamata di gruppo finta: ogni collegamento si «accende» quando arriva la risposta.
+class FakeGroupCallMedia implements GroupCallMedia {
+  final StreamController<(String, bool)> _up = StreamController<(String, bool)>.broadcast();
+  final Set<String> peers = <String>{};
+
+  void _on(String peer) => scheduleMicrotask(() => _up.isClosed ? null : _up.add((peer, true)));
+
+  @override
+  Stream<(String, bool)> get connected => _up.stream;
+
+  @override
+  Future<void> open({required List<IceServer> ice, required bool video}) async {}
+
+  @override
+  Future<String> offerTo(String peer) async {
+    peers.add(peer);
+    return 'v=0 offerta per $peer';
+  }
+
+  @override
+  Future<String> answerFrom(String peer, String offer) async {
+    peers.add(peer);
+    _on(peer);
+    return 'v=0 risposta a $peer';
+  }
+
+  @override
+  Future<void> acceptAnswer(String peer, String answer) async => _on(peer);
+
+  @override
+  Future<void> drop(String peer) async => peers.remove(peer);
+
+  @override
+  Future<void> setMicrophone(bool on) async {}
+
+  @override
+  Future<void> setCamera(bool on) async {}
+
+  @override
+  Future<void> switchCamera() async {}
+
+  @override
+  Future<void> setSpeaker(bool on) async {}
+
+  @override
+  Widget? remoteView(String peer) => null;
+
+  @override
+  Widget? localView() => null;
+
+  @override
+  Future<void> close() async => _up.close();
+}
+
+class FakeIce implements IceProvider {
+  @override
+  Future<List<IceServer>> servers() async => const <IceServer>[IceServer(urls: <String>['stun:stun.example.org'])];
+}
+
+class FakeRinger implements CallRinger {
+  bool ringing = false;
+  int rings = 0;
+
+  @override
+  Future<void> start(String conversationId) async {
+    ringing = true;
+    rings++;
+  }
+
+  @override
+  Future<void> stop(String conversationId) async => ringing = false;
+}
+
+/// Telefono finto con le chiamate.
+CallService Function(ChatService) fakeCalls({Duration ring = const Duration(seconds: 45), FakeRinger? ringer}) =>
+    (ChatService chat) =>
+        CallService(
+          chat: chat,
+          ice: FakeIce(),
+          media: FakeCallMedia.new,
+          groupMedia: FakeGroupCallMedia.new,
+          ringTimeout: ring,
+          ringer: ringer,
+        );

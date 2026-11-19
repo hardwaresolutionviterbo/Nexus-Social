@@ -6,6 +6,9 @@ import '../../core/services/backend_bootstrap.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/nexus_ui.dart';
 import '../contacts/contacts_sync.dart';
+import '../chat/chat_backup_screen.dart';
+import '../chat/chat_thread_screen.dart' show ChatRegistry;
+import '../notifications/notification_settings.dart';
 import '../privacy/privacy_repository.dart';
 import '../privacy/privacy_screen.dart';
 import '../security/app_lock.dart';
@@ -27,6 +30,7 @@ class ProfileScreen extends StatelessWidget {
     this.profiles,
     this.onProfileChanged,
     this.privacy,
+    this.pushSettings,
     this.security,
     this.biometricLock,
     this.contacts,
@@ -45,6 +49,9 @@ class ProfileScreen extends StatelessWidget {
 
   /// Pagina Privacy (Blocco 3): presente quando il server è collegato.
   final PrivacyRepository? privacy;
+
+  /// Preferenze delle notifiche (Fase 4, Blocco 5).
+  final PushSettingsRepository? pushSettings;
 
   /// Sicurezza dell'account (Blocco 4).
   final SecurityRepository? security;
@@ -293,6 +300,32 @@ class ProfileScreen extends StatelessWidget {
                     subtitle: const Text('Numero, profilo, persone bloccate e autorizzazioni'),
                     trailing: const Icon(Icons.chevron_right_rounded),
                     onTap: () => _openPrivacy(context),
+                  ),
+                ],
+                if (ChatRegistry.current?.backup != null) ...[
+                  const Divider(height: 1),
+                  ListTile(
+                    key: const ValueKey<String>('apri_backup_chat'),
+                    leading: const Icon(Icons.cloud_upload_outlined),
+                    title: const Text('Backup delle chat'),
+                    subtitle: const Text('Ritrovi i messaggi se cambi telefono'),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => ChatBackupScreen.open(context, ChatRegistry.current!.backup!),
+                  ),
+                ],
+                if (pushSettings != null) ...[
+                  const Divider(height: 1),
+                  ListTile(
+                    key: const ValueKey<String>('apri_notifiche'),
+                    leading: const Icon(Icons.notifications_none_rounded),
+                    title: const Text('Notifiche'),
+                    subtitle: const Text('Messaggi, commenti, scambi e Non disturbare'),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => NotificationSettingsScreen(repository: pushSettings!),
+                      ),
+                    ),
                   ),
                 ],
                 if (security != null && biometricLock != null) ...[

@@ -2,11 +2,14 @@ import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/services/backend_bootstrap.dart';
+import '../../core/services/push_notifications.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/nexus_ui.dart';
+import '../calls/call_screen.dart';
+import '../calls/call_service.dart';
 import '../chat/chat_screen.dart';
 import '../chat/chat_service.dart';
-import '../chat/chat_thread_screen.dart' show ChatRegistry;
+import '../chat/chat_thread_screen.dart' show ChatRegistry, openChatFromNotification;
 import '../map/listing_repository.dart';
 import '../map/map_screen.dart';
 import '../market/market_models.dart';
@@ -18,6 +21,7 @@ import '../market/swap_proposals_screen.dart';
 import '../map/notifications_screen.dart';
 import '../map/social_repository.dart';
 import '../contacts/contacts_sync.dart';
+import '../notifications/notification_settings.dart';
 import '../privacy/privacy_repository.dart';
 import '../security/app_lock.dart';
 import '../security/security_repository.dart';
@@ -38,6 +42,7 @@ class AppShell extends StatefulWidget {
     this.profiles,
     this.onProfileChanged,
     this.privacy,
+    this.pushSettings,
     this.security,
     this.biometricLock,
     this.contacts,
@@ -56,6 +61,9 @@ class AppShell extends StatefulWidget {
   final ProfileRepository? profiles;
   final Future<void> Function()? onProfileChanged;
   final PrivacyRepository? privacy;
+
+  /// Preferenze delle notifiche (Fase 4, Blocco 5).
+  final PushSettingsRepository? pushSettings;
   final SecurityRepository? security;
   final BiometricLock? biometricLock;
   final ContactsRepository? contacts;
@@ -128,6 +136,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       profiles: widget.profiles,
       onProfileChanged: widget.onProfileChanged,
       privacy: widget.privacy,
+      pushSettings: widget.pushSettings,
       security: widget.security,
       biometricLock: widget.biometricLock,
       contacts: widget.contacts,
@@ -151,13 +160,43 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     _refreshUnread();
     _attachChat();
     WidgetsBinding.instance.addObserver(this);
+    PushNotifications.openChat.addListener(_openFromPush);
+    PushNotifications.chatPings.addListener(_ping);
+    PushNotifications.openNotification.addListener(_openNotificationFromPush);
+    // App aperta toccando la notifica: la chat si apre appena la schermata è pronta.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _openFromPush();
+      _openNotificationFromPush();
+    });
   }
+
+  /// Notifica toccata (Fase 4, Blocco 5): si apre la chat giusta.
+  void _openFromPush() {
+    final String? id = PushNotifications.openChat.value;
+    final ChatService? chat = widget.chat;
+    if (id == null || chat == null || !mounted) return;
+    PushNotifications.openChat.value = null;
+    setState(() => _index = 0);
+    openChatFromNotification(context, chat: chat, conversationId: id, profiles: widget.profiles);
+  }
+
+  /// Notifica di un commento o di uno scambio toccata: si apre il suo annuncio.
+  void _openNotificationFromPush() {
+    final String? id = PushNotifications.openNotification.value;
+    if (id == null || widget.social == null || !mounted) return;
+    PushNotifications.openNotification.value = null;
+    _openNotifications(openId: id);
+  }
+
+  /// Messaggio arrivato con l'app aperta: la chat si aggiorna subito.
+  void _ping() => widget.chat?.ping();
 
   @override
   void didUpdateWidget(AppShell old) {
     super.didUpdateWidget(old);
     if (old.chat != widget.chat) {
       old.chat?.removeListener(_onChat);
+      old.chat?.calls?.removeListener(_onCall);
       _attachChat();
     }
   }
@@ -165,7 +204,11 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    PushNotifications.openChat.removeListener(_openFromPush);
+    PushNotifications.chatPings.removeListener(_ping);
+    PushNotifications.openNotification.removeListener(_openNotificationFromPush);
     widget.chat?.removeListener(_onChat);
+    widget.chat?.calls?.removeListener(_onCall);
     if (ChatRegistry.current == widget.chat) {
       ChatRegistry.current = null;
       ChatRegistry.profiles = null;
@@ -180,7 +223,18 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     ChatRegistry.profiles = widget.profiles;
     if (chat == null) return;
     chat.addListener(_onChat);
+    chat.calls?.addListener(_onCall);
     chat.start();
+  }
+
+  /// C'è una chiamata (in arrivo o appena partita): si apre la schermata a tutto schermo.
+  bool _callOpen = false;
+
+  void _onCall() {
+    final CallService? calls = widget.chat?.calls;
+    if (calls == null || !calls.showing || _callOpen || !mounted) return;
+    _callOpen = true;
+    CallScreen.open(context, calls).whenComplete(() => _callOpen = false);
   }
 
   void _onChat() {
@@ -209,11 +263,12 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _openNotifications() async {
+  Future<void> _openNotifications({String? openId}) async {
     final MarketRepository? market = widget.market;
     await NotificationsScreen.open(
       context,
       widget.social!,
+      openId: openId,
       openSwaps: market == null ? null : (BuildContext c) => SwapProposalsScreen.open(c, market),
       openDeals: market == null ? null : (BuildContext c) => MarketDealsScreen.open(c, market),
     );

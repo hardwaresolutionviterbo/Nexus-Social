@@ -11,6 +11,7 @@ import 'features/map/listing_repository.dart';
 import 'features/map/map_screen.dart';
 import 'features/map/social_repository.dart';
 import 'features/market/market_repository.dart';
+import 'features/notifications/notification_settings.dart';
 import 'features/privacy/privacy_repository.dart';
 import 'features/profile/profile_repository.dart';
 import 'features/security/app_lock.dart';
@@ -24,6 +25,7 @@ class NexusApp extends StatelessWidget {
     this.authGateway,
     this.profiles,
     this.privacy,
+    this.pushSettings,
     this.security,
     this.biometricLock,
     this.contacts,
@@ -46,6 +48,9 @@ class NexusApp extends StatelessWidget {
 
   /// Impostazioni privacy e blocchi (Blocco 3): null finché il server non è collegato.
   final PrivacyRepository? privacy;
+
+  /// Preferenze delle notifiche (Fase 4, Blocco 5): con il server collegato.
+  final PushSettingsRepository? pushSettings;
 
   /// Verifica in due passaggi e sblocco con impronta (Blocco 4).
   final SecurityRepository? security;
@@ -87,6 +92,7 @@ class NexusApp extends StatelessWidget {
               backend: backend,
               profiles: profiles,
               privacy: privacy,
+              pushSettings: pushSettings,
               security: security,
               biometricLock: biometricLock,
               contacts: contacts,

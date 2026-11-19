@@ -8,13 +8,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:material_ui/material_ui.dart';
 import 'package:nexus_social/core/theme/app_theme.dart';
+import 'package:nexus_social/features/calls/call_screen.dart';
+import 'package:nexus_social/features/chat/chat_backup.dart';
+import 'package:nexus_social/features/chat/chat_backup_screen.dart';
+import 'package:nexus_social/features/chat/chat_backup_service.dart';
 import 'package:nexus_social/features/chat/chat_group_screens.dart';
 import 'package:nexus_social/features/chat/chat_media.dart';
 import 'package:nexus_social/features/chat/chat_media_picker.dart';
 import 'package:nexus_social/features/chat/chat_models.dart';
+import 'package:nexus_social/features/chat/chat_safety_screens.dart';
 import 'package:nexus_social/features/chat/chat_screen.dart';
 import 'package:nexus_social/features/chat/chat_service.dart';
 import 'package:nexus_social/features/chat/chat_thread_screen.dart';
+import 'package:nexus_social/features/notifications/notification_settings.dart';
 import 'package:nexus_social/features/shell/app_shell.dart';
 
 import '../../test/fase4/fake_chat.dart';
@@ -92,7 +98,7 @@ const String marco = 'utenteMarco00000000000000005';
 const String dario = 'utenteDario00000000000000004';
 
 /// Dati di prova: tre chat (una letta, una con messaggi nuovi, una di ieri) e una richiesta.
-Future<(ChatService, Map<String, ChatService>, Map<String, String>)> _scene() async {
+Future<(ChatService, Map<String, ChatService>, Map<String, String>)> _scene({BackupServer? backup}) async {
   final FakeChatHub hub = FakeChatHub()
     ..addPerson(io, 'anna.r', 'Anna R.')
     ..addPerson(bruno, 'bruno_b', 'Bruno B.')
@@ -103,7 +109,7 @@ Future<(ChatService, Map<String, ChatService>, Map<String, String>)> _scene() as
     ..contacts[bruno] = <String>{io}
     ..contacts[giulia] = <String>{io}
     ..contacts[marco] = <String>{io};
-  final ChatService me = await fakePhone(hub, io);
+  final ChatService me = await fakePhone(hub, io, backup: backup);
   final Map<String, ChatService> others = <String, ChatService>{
     for (final String id in <String>[bruno, giulia, marco, dario]) id: await fakePhone(hub, id),
   };
@@ -457,4 +463,115 @@ void main() {
       o.dispose();
     }
   });
+
+  testWidgets('chat 16 · Silenzia una chat', (tester) async {
+    final (ChatService me, Map<String, ChatService> others, Map<String, String> conv) =
+        (await tester.runAsync(_scene))!;
+    await tester.runAsync(() => me.setMute(conv[bruno]!));
+    await shoot(tester, 'chat_16_silenzia',
+        ChatThreadScreen(chat: me, conversationId: conv[bruno]!, now: () => now), before: () async {
+      await tester.tap(find.byKey(const ValueKey<String>('silenzia_chat')));
+      await tester.pumpAndSettle();
+    });
+    await tester.pumpWidget(const SizedBox());
+    await shoot(tester, 'chat_17_lista_silenziata', AppShell(chat: me));
+    me.dispose();
+    for (final ChatService o in others.values) {
+      o.dispose();
+    }
+  });
+
+  testWidgets('chat 19-22 · backup delle chat', (tester) async {
+    final FakeBackupServer cloud = FakeBackupServer(now: () => DateTime(2026, 11, 17, 23, 5));
+    final (ChatService me, Map<String, ChatService> others, _) =
+        (await tester.runAsync(() => _scene(backup: cloud)))!;
+    final ChatBackup fresh = me.backup!;
+    await tester.runAsync(() => fresh.load(auto: false));
+    await shoot(tester, 'chat_19_backup_attiva', ChatBackupScreen(backup: fresh, now: () => now));
+
+    // Backup fatto dal vecchio telefono: quello nuovo propone di ripristinarlo.
+    final ChatBackup old = ChatBackup(chat: me, server: cloud, keys: MemoryBackupKeyStore(), kdf: fastKdfForTests());
+    await tester.runAsync(() => old.enable('Bici2026!'));
+    await tester.runAsync(() => fresh.load(auto: false));
+    await tester.pumpWidget(const SizedBox());
+    await shoot(tester, 'chat_20_ripristina_lista', AppShell(chat: me));
+    await tester.pumpWidget(const SizedBox());
+    await shoot(tester, 'chat_21_ripristino', ChatBackupScreen(backup: fresh, now: () => now));
+    await tester.pumpWidget(const SizedBox());
+    await shoot(tester, 'chat_22_backup_attivo', ChatBackupScreen(backup: old, now: () => now));
+    old.dispose();
+    me.dispose();
+    for (final ChatService o in others.values) {
+      o.dispose();
+    }
+  });
+
+  testWidgets('chat 23-24 · Segnala e Condividi l\'incontro', (tester) async {
+    final (ChatService me, Map<String, ChatService> others, Map<String, String> conv) =
+        (await tester.runAsync(_scene))!;
+    await shoot(tester, 'chat_23_segnala',
+        ReportChatScreen(chat: me, conversationId: conv[dario]!, now: () => now), before: () async {
+      await tester.tap(find.byKey(const ValueKey<String>('motivo_truffa')));
+      await tester.pumpAndSettle();
+    });
+    await tester.pumpWidget(const SizedBox());
+    await shoot(tester, 'chat_24_incontro',
+        ShareMeetingScreen(chat: me, withName: 'Bruno B. (@bruno_b)', excludeId: bruno, now: () => now),
+        before: () async {
+      await tester.enterText(find.byKey(const ValueKey<String>('incontro_luogo')), 'Bar Centrale, piazza Roma');
+      await tester.tap(find.byKey(ValueKey<String>('fidato_$giulia')));
+      await tester.pumpAndSettle();
+    });
+    me.dispose();
+    for (final ChatService o in others.values) {
+      o.dispose();
+    }
+  });
+
+  testWidgets('chat 25-26 · chiamata in arrivo e in corso', (tester) async {
+    final FakeChatHub hub = FakeChatHub()
+      ..addPerson(io, 'anna.r', 'Anna R.')
+      ..addPerson(bruno, 'bruno_b', 'Bruno B.')
+      ..contacts[io] = <String>{bruno}
+      ..contacts[bruno] = <String>{io};
+    final (ChatService a, ChatService b, String conv) = (await tester.runAsync(() async {
+      final ChatService a = await fakePhone(hub, io, calls: fakeCalls());
+      final ChatService b = await fakePhone(hub, bruno, calls: fakeCalls());
+      final String conv = await a.openDirect(bruno);
+      await a.send(conv, 'Ciao');
+      await b.refresh();
+      await b.send(conv, 'Ciao Anna');
+      await a.refresh();
+      await b.calls!.start(conv, video: false);
+      await a.refresh();
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+      return (a, b, conv);
+    }))!;
+    await shoot(tester, 'chat_25_chiamata_in_arrivo', CallScreen(calls: a.calls!));
+    await tester.runAsync(() async {
+      await a.calls!.accept();
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+    });
+    await tester.pumpWidget(const SizedBox());
+    await shoot(tester, 'chat_26_chiamata_in_corso', CallScreen(calls: a.calls!));
+    await tester.pumpWidget(const SizedBox());
+    await tester.runAsync(() async {
+      a.dispose();
+      b.dispose();
+    });
+    expect(conv, isNotEmpty);
+  });
+
+  testWidgets('chat 18 · Profilo → Notifiche', (tester) async {
+    await shoot(tester, 'chat_18_notifiche',
+        NotificationSettingsScreen(repository: _Prefs()));
+  });
+}
+
+class _Prefs implements PushSettingsRepository {
+  @override
+  Future<PushSettings> load() async => const PushSettings(dndEnabled: true, comments: false);
+
+  @override
+  Future<void> save(PushSettings settings) async {}
 }

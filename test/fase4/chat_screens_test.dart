@@ -443,6 +443,52 @@ void main() {
     await finish(tester, <ChatService>[me, b, d]);
   });
 
+  testWidgets('Blocco 5 · «Silenzia» una chat: menu, campanella barrata, riattiva', (WidgetTester tester) async {
+    tall(tester);
+    final ChatService me = await fakePhone(hub, io);
+    final ChatService b = await fakePhone(hub, bruno);
+    final String conv = await b.openDirect(io);
+    await b.send(conv, 'Ciao!');
+    await me.refresh();
+    await tester.pumpWidget(app(Scaffold(body: ChatScreen(service: me, now: () => now))));
+    await tester.pumpAndSettle();
+    expect(find.byKey(ValueKey<String>('silenziata_$conv')), findsNothing);
+
+    await tester.tap(find.byKey(ValueKey<String>('chat_$conv')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey<String>('silenzia_chat')));
+    await tester.pumpAndSettle();
+    expect(find.text('Silenzia per 8 ore'), findsOneWidget);
+    expect(find.text('Riattiva le notifiche'), findsNothing);
+    await tester.tap(find.text('Silenzia per 8 ore'));
+    await tester.pumpAndSettle();
+    expect(find.text('Chat silenziata'), findsOneWidget);
+    expect(me.conversation(conv)!.isMuted, isTrue);
+    expect(find.byIcon(Icons.notifications_off_outlined), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.byKey(ValueKey<String>('silenziata_$conv')), findsOneWidget);
+
+    await tester.tap(find.byKey(ValueKey<String>('chat_$conv')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey<String>('silenzia_chat')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Silenziata fino'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey<String>('riattiva_notifiche')));
+    await tester.pumpAndSettle();
+    expect(me.conversation(conv)!.isMuted, isFalse);
+    expect(find.text('Notifiche riattivate'), findsOneWidget);
+    await finish(tester, <ChatService>[me, b]);
+  });
+
+  test('Blocco 5 · testo «Silenziata fino…»', () {
+    final DateTime n = DateTime(2026, 11, 18, 10);
+    expect(mutedLabel(DateTime(9999), n), 'Silenziata per sempre');
+    expect(mutedLabel(DateTime(2026, 11, 18, 18, 5), n), 'Silenziata fino alle 18:05');
+    expect(mutedLabel(DateTime(2026, 11, 25, 10, 0), n), 'Silenziata fino al 25/11 alle 10:00');
+  });
+
   testWidgets('Blocco 4 · invito a un gruppo da chi non è in rubrica: Entra', (WidgetTester tester) async {
     tall(tester);
     final ChatService me = await fakePhone(hub, io);

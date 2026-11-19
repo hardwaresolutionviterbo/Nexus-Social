@@ -47,6 +47,7 @@ class ChatConversation {
     this.members = 2,
     this.pending = 0,
     this.invitedBy,
+    this.mutedUntil,
   });
 
   final String id;
@@ -81,6 +82,11 @@ class ChatConversation {
   /// Modifiche al gruppo cifrato in attesa (persone da aggiungere o togliere).
   final int pending;
   final String? invitedBy;
+
+  /// Notifiche silenziate fino a (anno 9999 = sempre). Null: attive.
+  final DateTime? mutedUntil;
+
+  bool get isMuted => mutedUntil != null && mutedUntil!.isAfter(DateTime.now());
 
   bool get isRequest => status == ChatStatus.request;
 
@@ -128,6 +134,7 @@ class ChatConversation {
     members: members,
     pending: pending ?? this.pending,
     invitedBy: invitedBy,
+    mutedUntil: mutedUntil,
   );
 
   factory ChatConversation.fromRow(Map<String, dynamic> r) {
@@ -159,6 +166,11 @@ class ChatConversation {
       members: r['members'] == null ? 2 : asInt(r['members']),
       pending: asInt(r['pending']),
       invitedBy: r['invited_by'] as String?,
+      mutedUntil: r['muted_until'] == null
+          ? null
+          : ('${r['muted_until']}'.contains('infinity')
+                ? DateTime(9999)
+                : DateTime.tryParse('${r['muted_until']}')?.toLocal()),
     );
   }
 }
@@ -318,6 +330,24 @@ class ChatContent {
       body = '',
       quote = null,
       forwarded = false,
+      media = null;
+
+  /// Chiave delle anteprime nelle notifiche (Blocco 10): [body] in base64, non si mostra.
+  const ChatContent.previewKey(this.body, {required this.localId})
+    : type = 'pk',
+      quote = null,
+      forwarded = false,
+      target = null,
+      emoji = null,
+      media = null;
+
+  /// Passaggio di una chiamata (offerta, risposta, chiusura): [body] è il JSON del segnale.
+  const ChatContent.call(this.body, {required this.localId})
+    : type = 'call',
+      quote = null,
+      forwarded = false,
+      target = null,
+      emoji = null,
       media = null;
 
   const ChatContent._(
@@ -503,6 +533,7 @@ class ChatMessage {
     this.localFile = '',
     this.senderId = '',
     this.reactions = const <String, String>{},
+    this.fromBackup = false,
   });
 
   final String localId;
@@ -536,6 +567,9 @@ class ChatMessage {
   /// Reazioni degli altri membri del gruppo (chi → emoji). Nelle chat a due c'è solo
   /// [peerReaction].
   final Map<String, String> reactions;
+
+  /// Recuperato da un backup (Blocco 6): gli allegati non sono nel backup.
+  final bool fromBackup;
 
   /// Tutte le reazioni da mostrare: le mie e quelle degli altri.
   List<String> get allReactions => <String>[
@@ -579,6 +613,7 @@ class ChatMessage {
     localFile: (deleted ?? this.deleted) ? '' : (localFile ?? this.localFile),
     senderId: senderId,
     reactions: reactions ?? this.reactions,
+    fromBackup: fromBackup,
   );
 
   Map<String, Object?> toJson() => <String, Object?>{
@@ -593,6 +628,7 @@ class ChatMessage {
     'a': at.toUtc().toIso8601String(),
     if (quote != null) 'q': <String, String>{'id': quote!.localId, 'a': quote!.authorId, 'x': quote!.text},
     if (forwarded) 'f': true,
+    if (fromBackup) 'bk': true,
   };
 
   static ChatMessage? fromJson(String conversationId, Map<String, dynamic> j) {
@@ -615,6 +651,7 @@ class ChatMessage {
       media: ChatMedia.fromJson(j['md']),
       localFile: (j['lf'] as String?) ?? '',
       senderId: (j['sd'] as String?) ?? '',
+      fromBackup: j['bk'] == true,
     );
   }
 

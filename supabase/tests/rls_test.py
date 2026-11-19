@@ -2400,6 +2400,459 @@ def check_chat_groups_phase4() -> None:
           f"{up_admin}, {up_member}, {see_member}, {see_out}, {media_in}, {media_out}, {view.get('title')}")
 
 
+def check_backup_phase4() -> None:
+    """V · Backup della chat cifrato (Fase 4, Blocco 6): un file per account, solo del proprietario."""
+    ta, tb = token(UID_A), token(UID_B)
+    blob = bytes(range(256)) * 16  # byte illeggibili, come un backup cifrato
+    bin_type = "application/octet-stream"
+    own = f"chat-backups/{UID_A}/backup.bin"
+
+    def info(tok) -> list:
+        status, body = rpc("chat_backup_info", {}, tok)
+        return body if status == 200 and isinstance(body, list) else [status]
+
+    s_own = storage("POST", own, ta, blob, content_type=bin_type)
+    s_other = storage("POST", f"chat-backups/{UID_B}/backup.bin", ta, blob, content_type=bin_type)
+    s_name = storage("POST", f"chat-backups/{UID_A}/altro.bin", ta, blob, content_type=bin_type)
+    s_plain = storage("POST", f"chat-backups/{UID_B}/backup.bin", tb, b"{}", content_type="application/json")
+    s_big = storage("POST", f"chat-backups/{UID_B}/backup.bin", tb, b"x" * (20971520 + 1), content_type=bin_type)
+    check("V1", "Backup caricato solo nel proprio file, cifrato, ≤ 20 MB",
+          s_own == 200 and s_other >= 400 and s_name >= 400 and s_plain >= 400 and s_big >= 400,
+          f"{s_own}, {s_other}, {s_name}, {s_plain}, {s_big}")
+
+    g_a = storage("GET", f"authenticated/{own}", ta)
+    g_b = storage("GET", f"authenticated/{own}", tb)
+    g_anon = storage("GET", f"authenticated/{own}", None)
+    g_public = storage("GET", f"public/{own}", None)
+    listed = storage("POST", "list/chat-backups", tb, json.dumps({"prefix": f"{UID_A}/"}).encode(),
+                     content_type="application/json")
+    check("V2", "Il backup lo scarica solo il proprietario; altri utenti, anonimi e link pubblici no",
+          g_a == 200 and g_b >= 400 and g_anon >= 400 and g_public >= 400,
+          f"{g_a}, {g_b}, {g_anon}, {g_public}, elenco={listed}")
+
+    ia, ib = info(ta), info(tb)
+    anon_info = rpc("chat_backup_info", {}, None)[0]
+    check("V3", "Data e dimensione del backup solo per il proprietario",
+          len(ia) == 1 and isinstance(ia[0], dict) and int(ia[0].get("size") or 0) == len(blob)
+          and ib == [] and anon_info >= 400,
+          f"{ia}, {ib}, {anon_info}")
+
+    up_b = storage("PUT", own, tb, b"rovinato", content_type=bin_type)
+    del_b = storage("DELETE", own, tb)
+    replaced = storage("PUT", own, ta, blob[:1000], content_type=bin_type)
+    size_after = info(ta)
+    removed = storage("DELETE", own, ta)
+    check("V4", "Solo il proprietario sostituisce o cancella il backup",
+          up_b >= 400 and replaced == 200 and size_after and isinstance(size_after[0], dict)
+          and int(size_after[0].get("size") or 0) == 1000 and removed == 200 and info(ta) == [],
+          f"{up_b}, {del_b}, {replaced}, {size_after}, {removed}")
+
+
+def check_chat_reports_phase4() -> None:
+    """W · Segnalazione di una chat (Fase 4, Blocco 7): solo i messaggi scelti, solo agli admin."""
+    ta, tb, tc, td = token(UID_A), token(UID_B), token(UID_C), token(UID_D)
+    for t, other in ((ta, UID_B), (tb, UID_A)):
+        rpc("unblock_user", {"p_user_id": other}, t)
+    _, conv = rpc("chat_open_direct", {"p_user": UID_B}, ta)
+    chosen = [{"a": "2026-11-18T18:00:00Z", "da": UID_B, "t": "Mandami prima i soldi con una ricarica"},
+              {"a": "2026-11-18T18:01:00Z", "da": "io", "t": "No, preferisco di persona"}]
+
+    def report(tok, c=conv, reason="truffa", msgs=None, details="Chiede soldi in anticipo"):
+        return rpc("chat_report", {"p_conversation": c, "p_reason": reason, "p_details": details,
+                                   "p_messages": chosen if msgs is None else msgs}, tok)
+
+    ok = report(ta)
+    outsider = report(tc)
+    bad_reason = report(ta, reason="antipatico")
+    too_many = report(ta, msgs=[chosen[0]] * 51)
+    too_long = report(ta, msgs=[{"a": "2026-11-18T18:00:00Z", "da": "io", "t": "x" * 4001}])
+    anon = report(None)
+    check("W1", "Segnala solo chi è nella chat, con un motivo valido e al massimo 50 messaggi scelti",
+          ok[0] == 200 and isinstance(ok[1], str) and outsider[0] >= 400 and bad_reason[0] >= 400
+          and too_many[0] >= 400 and too_long[0] >= 400 and anon[0] >= 400,
+          f"{ok[0]}, {outsider[0]}, {bad_reason[0]}, {too_many[0]}, {too_long[0]}, {anon[0]}")
+
+    reads = [rows(get("/rest/v1/chat_reports?select=*", t)) for t in (ta, tb, tc)]
+    sql(f"insert into public.admin_users (user_id, role) values ('{UID_D}', 'moderator') on conflict do nothing;")
+    seen = rows(get("/rest/v1/chat_reports?select=*", td))
+    sql(f"delete from public.admin_users where user_id = '{UID_D}';")
+    mine = [r for r in seen if r.get("id") == ok[1]]
+    check("W2", "Le segnalazioni le leggono solo gli amministratori: solo i messaggi scelti",
+          reads == [[], [], []] and len(mine) == 1 and mine[0].get("reported_user_id") == UID_B
+          and [m.get("t") for m in mine[0].get("messages") or []] == [m["t"] for m in chosen]
+          and mine[0].get("reason") == "truffa",
+          f"{[len(r) for r in reads]}, {len(mine)}")
+
+    again = report(ta, reason="molestie", msgs=[chosen[0]])
+    count = sql(f"select count(*) from public.chat_reports where reporter_id = '{UID_A}' "
+                f"and conversation_id = '{conv}' and status = 'open';")
+    sql(f"insert into public.chat_reports (reporter_id, conversation_id, reason, status) "
+        f"select '{UID_B}', '{conv}', 'spam', 'closed' from generate_series(1, 10);")
+    limited = report(tb)
+    sql(f"delete from public.chat_reports where reporter_id = '{UID_B}';")
+    check("W3", "Una sola segnalazione aperta per chat (si aggiorna); al massimo 10 al giorno",
+          again[0] == 200 and again[1] == ok[1] and count == "1" and limited[0] >= 400,
+          f"{again[0]}, {count}, {limited[0]}")
+
+    direct = [
+        request("POST", "/rest/v1/chat_reports", jwt=ta,
+                body={"reporter_id": UID_A, "conversation_id": conv, "reason": "spam"}),
+        request("PATCH", f"/rest/v1/chat_reports?id=eq.{ok[1]}", jwt=ta, prefer="return=representation",
+                body={"status": "closed"}),
+        request("DELETE", f"/rest/v1/chat_reports?id=eq.{ok[1]}", jwt=tb, prefer="return=representation"),
+    ]
+    still = sql(f"select status from public.chat_reports where id = '{ok[1]}';")
+    check("W4", "Nessuno scrive, cambia o cancella le segnalazioni direttamente",
+          all(denied(d) for d in direct) and still == "open", f"{[d[0] for d in direct]}, {still}")
+
+
+def check_calls_phase4() -> None:
+    """X · Chiamate (Fase 4, Blocco 8): solo nelle chat a due accettate, squillo solo per l'offerta."""
+    ta, tb, tc, td = token(UID_A), token(UID_B), token(UID_C), token(UID_D)
+    for t, other in ((ta, UID_B), (tb, UID_A)):
+        rpc("unblock_user", {"p_user_id": other}, t)
+    _, conv = rpc("chat_open_direct", {"p_user": UID_A}, tb)
+    sql(f"update public.chat_members set status = 'active', muted_until = null where conversation_id = '{conv}';")
+    gen = int(sql(f"select generation from public.chat_conversations where id = '{conv}';") or 0)
+    if gen == 0:
+        sql(f"update public.chat_conversations set generation = 1 where id = '{conv}';")
+        gen = 1
+    rpc("push_set_settings", {"p_messages": True, "p_comments": True, "p_market": True, "p_preview": True,
+                              "p_dnd_enabled": False, "p_dnd_from": "22:00", "p_dnd_to": "07:00",
+                              "p_time_zone": "Europe/Rome"}, ta)
+    fid = "fidTelefonoChiamateA_" + "x" * 12
+    rpc("push_register", {"p_fid": fid, "p_platform": "android"}, ta)
+
+    def queue() -> list:
+        out = sql(f"select kind || '|' || body from private.push_queue where user_id = '{UID_A}' order by id;")
+        return [line for line in out.splitlines() if line]
+
+    def signal(tok, c=conv, ring=False, video=False):
+        payload = base64.b64encode(bytes([9]) * 60).decode()
+        return rpc("call_signal", {"p_conversation": c, "p_generation": gen, "p_payload": payload,
+                                   "p_ring": ring, "p_video": video}, tok)
+
+    sql("delete from private.push_queue;")
+    sql(f"delete from private.call_rings where user_id = '{UID_B}';")
+    offer = signal(tb, ring=True)
+    after_offer = queue()
+    sql("delete from private.push_queue;")
+    quiet = [signal(tb)[0], signal(tb)[0]]
+    after_quiet = queue()
+    video = signal(tb, ring=True, video=True)
+    after_video = queue()
+    check("X1", "L'offerta fa squillare («Chiamata in arrivo»); risposta e chiusura non mandano notifiche",
+          offer[0] == 200 and after_offer == ["call|Chiamata in arrivo"] and quiet == [200, 200]
+          and after_quiet == [] and video[0] == 200 and after_video == ["call|Videochiamata in arrivo"],
+          f"{offer[0]}, {after_offer}, {quiet}, {after_quiet}, {video[0]}, {after_video}")
+
+    _, req = rpc("chat_open_direct", {"p_user": UID_A}, td)
+    sql(f"update public.chat_conversations set generation = greatest(generation, 1) where id = '{req}';")
+    stranger = rpc("call_signal", {"p_conversation": req, "p_generation": 1,
+                                   "p_payload": base64.b64encode(bytes([9]) * 60).decode(),
+                                   "p_ring": True, "p_video": False}, td)
+    outsider = signal(tc, ring=True)
+    rpc("block_user", {"p_user_id": UID_B}, ta)
+    blocked = signal(tb, ring=True)
+    rpc("unblock_user", {"p_user_id": UID_B}, ta)
+    anon = signal(None, ring=True)
+    check("X2", "Non si chiama da una richiesta di messaggio, da fuori, con un blocco o senza accesso",
+          stranger[0] >= 400 and outsider[0] >= 400 and blocked[0] >= 400 and anon[0] >= 400,
+          f"{stranger[0]}, {outsider[0]}, {blocked[0]}, {anon[0]}")
+
+    sql(f"insert into private.call_rings (user_id) select '{UID_B}' from generate_series(1, 30);")
+    limited = signal(tb, ring=True)
+    still_quiet = signal(tb)
+    sql(f"delete from private.call_rings where user_id = '{UID_B}';")
+    check("X3", "Al massimo 30 squilli l'ora (le chiusure passano comunque)",
+          limited[0] >= 400 and still_quiet[0] == 200, f"{limited[0]}, {still_quiet[0]}")
+
+    sql("delete from private.push_queue;")
+    sql(f"update public.chat_members set muted_until = 'infinity' where conversation_id = '{conv}' and user_id = '{UID_A}';")
+    muted = signal(tb, ring=True)
+    muted_queue = queue()
+    sql(f"update public.chat_members set muted_until = null where conversation_id = '{conv}';")
+    direct = request("POST", "/rest/v1/rpc/push_enqueue", jwt=tb, body={})
+    check("X4", "Chat silenziata: la chiamata arriva ma non squilla; la coda non si tocca da fuori",
+          muted[0] == 200 and muted_queue == [] and direct[0] >= 400, f"{muted[0]}, {muted_queue}, {direct[0]}")
+    rpc("push_unregister", {"p_fid": fid}, ta)
+
+
+def check_realtime_phase4() -> None:
+    """RT · Tempo reale (Fase 4, Blocco 9): tocchi vuoti sul canale privato, solo per il proprietario."""
+    ta, tb = token(UID_A), token(UID_B)
+    for t, other in ((ta, UID_B), (tb, UID_A)):
+        rpc("unblock_user", {"p_user_id": other}, t)
+    _, conv = rpc("chat_open_direct", {"p_user": UID_A}, tb)
+    sql(f"update public.chat_members set status = 'active' where conversation_id = '{conv}';")
+    gen = int(sql(f"select generation from public.chat_conversations where id = '{conv}';") or 0)
+    if gen == 0:
+        sql(f"update public.chat_conversations set generation = 1 where id = '{conv}';")
+        gen = 1
+
+    def pokes(user) -> int:
+        return int(sql(f"select count(*) from realtime.messages where topic = 'u:{user}' "
+                       "and inserted_at > now() - interval '10 minutes';") or 0)
+
+    a0, b0 = pokes(UID_A), pokes(UID_B)
+    sent = rpc("chat_send", {"p_conversation": conv, "p_generation": gen,
+                             "p_payload": base64.b64encode(bytes([5]) * 60).decode()}, tb)
+    a1, b1 = pokes(UID_A), pokes(UID_B)
+    # realtime.send aggiunge solo un identificativo casuale del tocco: nessun contenuto.
+    with_content = sql(f"select count(*) from realtime.messages where topic like 'u:%' "
+                       "and (payload - 'id') <> '{}'::jsonb;")
+    check("RT1", "Messaggio → tocco vuoto sul canale di chi riceve (non di chi scrive)",
+          sent[0] == 200 and a1 == a0 + 1 and b1 == b0 and with_content == "0",
+          f"{sent[0]}, {a0}->{a1}, {b0}->{b1}, con contenuto={with_content}")
+
+    first = sent[1][0]["id"] if isinstance(sent[1], list) and sent[1] else 0
+    rpc("chat_mark", {"p_conversation": conv, "p_delivered": first, "p_read": 0}, ta)
+    b2 = pokes(UID_B)
+    check("RT2", "Spunte: anche chi ha scritto riceve un tocco", b2 >= b1 + 1, f"{b1}->{b2}")
+
+    # La regola del canale (applicata da Supabase Realtime per ogni ascoltatore).
+    policies = sql("select count(*) || '|' || coalesce(string_agg(qual, ' '), '') from pg_policies "
+                   "where schemaname = 'realtime' and tablename = 'messages' and cmd in ('SELECT', 'ALL') "
+                   "and permissive = 'PERMISSIVE';")
+    count, _, qual = policies.partition("|")
+
+    def allowed(sub: str | None, topic: str) -> str:
+        now = int(time.time())
+        claims = "" if sub is None else json.dumps({
+            "iss": f"https://securetoken.google.com/{PROJECT}", "aud": PROJECT, "sub": sub,
+            "iat": now - 10, "exp": now + 3600})
+        out = sql("begin; "
+                  f"select set_config('request.jwt.claims', '{claims}', true); "
+                  f"select set_config('realtime.topic', '{topic}', true); "
+                  "select coalesce((select realtime.topic()) = 'u:' || public.current_uid_raw(), false); rollback;")
+        vals = [line.strip() for line in out.splitlines() if line.strip() in ("t", "f")]
+        return vals[-1] if vals else "?"
+
+    own, other, anon = allowed(UID_A, f"u:{UID_A}"), allowed(UID_B, f"u:{UID_A}"), allowed(None, f"u:{UID_A}")
+    check("RT3", "Il canale u:<uid> lo ascolta solo il proprietario; altri utenti e anonimi no",
+          count == "1" and "current_uid_raw" in qual and "topic" in qual
+          and (own, other, anon) == ("t", "f", "f"),
+          f"regole={count}, {own}, {other}, {anon}")
+
+
+def check_preview_phase4() -> None:
+    """AP · Anteprima cifrata nella notifica (Fase 4, Blocco 10): passa solo con il consenso."""
+    ta, tb, tc = token(UID_A), token(UID_B), token(UID_C)
+    for t, other in ((ta, UID_B), (tb, UID_A)):
+        rpc("unblock_user", {"p_user_id": other}, t)
+    _, conv = rpc("chat_open_direct", {"p_user": UID_A}, tb)
+    sql(f"update public.chat_members set status = 'active', muted_until = null where conversation_id = '{conv}';")
+    gen = int(sql(f"select generation from public.chat_conversations where id = '{conv}';") or 0)
+    if gen == 0:
+        sql(f"update public.chat_conversations set generation = 1 where id = '{conv}';")
+        gen = 1
+    fid = "fidTelefonoAnteprimaA_" + "x" * 12
+    rpc("push_register", {"p_fid": fid, "p_platform": "android"}, ta)
+
+    def settings(preview: bool):
+        rpc("push_set_settings", {"p_messages": True, "p_comments": True, "p_market": True, "p_preview": preview,
+                                  "p_dnd_enabled": False, "p_dnd_from": "22:00", "p_dnd_to": "07:00",
+                                  "p_time_zone": "Europe/Rome"}, ta)
+
+    def send(tok, preview, c=conv):
+        return rpc("chat_send_preview", {"p_conversation": c, "p_generation": gen,
+                                         "p_payload": base64.b64encode(bytes([6]) * 60).decode(),
+                                         "p_preview": preview}, tok)
+
+    def queued() -> list:
+        out = sql(f"select coalesce(preview, '-') || '|' || coalesce(sender_id, '-') from private.push_queue "
+                  f"where user_id = '{UID_A}' and kind = 'chat';")
+        return [line for line in out.splitlines() if line]
+
+    sealed = base64.b64encode(bytes(range(60))).decode()
+    settings(True)
+    sql("delete from private.push_queue;")
+    ok = send(tb, sealed)
+    with_consent = queued()
+    bad = [send(tb, "non è base64!")[0], send(tb, "A" * 601)[0]]
+    outsider = send(tc, sealed)[0]
+    check("AP1", "Anteprima cifrata in coda così com'è, con chi l'ha scritta; formati strani e estranei rifiutati",
+          ok[0] == 200 and with_consent == [f"{sealed}|{UID_B}"] and all(b >= 400 for b in bad) and outsider >= 400,
+          f"{ok[0]}, {with_consent}, {bad}, {outsider}")
+
+    settings(False)
+    sql("delete from private.push_queue;")
+    send(tb, sealed)
+    without = queued()
+    settings(True)
+    check("AP2", "Con «Mostra chi scrive» spento l'anteprima non parte", without == ["-|-"], f"{without}")
+
+    sql("delete from private.push_queue;")
+    plain = rpc("chat_send", {"p_conversation": conv, "p_generation": gen,
+                              "p_payload": base64.b64encode(bytes([6]) * 60).decode()}, tb)
+    check("AP3", "Senza anteprima (app vecchia) la notifica resta generica",
+          plain[0] == 200 and queued() == ["-|-"], f"{plain[0]}, {queued()}")
+    rpc("push_unregister", {"p_fid": fid}, ta)
+
+
+def check_group_calls_phase4() -> None:
+    """GC · Chiamate di gruppo (Fase 4, Blocco 10): solo chi è dentro il gruppo, squillo ai membri."""
+    ta, tb, tc = token(UID_A), token(UID_B), token(UID_C)
+    for t, other in ((ta, UID_B), (tb, UID_A)):
+        rpc("unblock_user", {"p_user_id": other}, t)
+    _, conv = rpc("chat_create_group", {"p_title": "Calcetto", "p_members": [UID_B]}, ta)
+    sql(f"update public.chat_members set status = 'active', mls_state = 'in', muted_until = null "
+        f"where conversation_id = '{conv}';")
+    sql(f"update public.chat_conversations set generation = 1 where id = '{conv}';")
+    fid = "fidTelefonoGruppoB_" + "x" * 12
+    rpc("push_register", {"p_fid": fid, "p_platform": "android"}, tb)
+    rpc("push_set_settings", {"p_messages": True, "p_comments": True, "p_market": True, "p_preview": True,
+                              "p_dnd_enabled": False, "p_dnd_from": "22:00", "p_dnd_to": "07:00",
+                              "p_time_zone": "Europe/Rome"}, tb)
+
+    def signal(tok, ring=True, video=False):
+        return rpc("call_signal", {"p_conversation": conv, "p_generation": 1,
+                                   "p_payload": base64.b64encode(bytes([8]) * 60).decode(),
+                                   "p_ring": ring, "p_video": video}, tok)
+
+    def queue() -> list:
+        out = sql(f"select kind || '|' || title || '|' || body from private.push_queue where user_id = '{UID_B}';")
+        return [line for line in out.splitlines() if line]
+
+    sql("delete from private.push_queue;")
+    sql(f"delete from private.call_rings where user_id = '{UID_A}';")
+    ring = signal(ta, video=True)
+    rung = queue()
+    sql("delete from private.push_queue;")
+    join = signal(tb, ring=False)
+    after_join = queue()
+    outsider = signal(tc)
+    check("GC1", "Chiamata di gruppo: squilla ai membri («Calcetto · Videochiamata di gruppo»); entrare non squilla; da fuori no",
+          ring[0] == 200 and len(rung) == 1 and rung[0].startswith("call|Calcetto|")
+          and rung[0].endswith("Videochiamata di gruppo") and join[0] == 200 and after_join == [] and outsider[0] >= 400,
+          f"{ring[0]}, {rung}, {join[0]}, {after_join}, {outsider[0]}")
+
+    sql(f"update public.chat_members set mls_state = 'to_add' where conversation_id = '{conv}' and user_id = '{UID_B}';")
+    not_in = signal(tb)
+    sql(f"update public.chat_members set mls_state = 'in' where conversation_id = '{conv}' and user_id = '{UID_B}';")
+    sql("delete from private.push_queue;")
+    sql(f"update public.chat_members set muted_until = 'infinity' where conversation_id = '{conv}' and user_id = '{UID_B}';")
+    muted = signal(ta)
+    muted_queue = queue()
+    sql(f"update public.chat_members set muted_until = null where conversation_id = '{conv}';")
+    check("GC2", "Chi non è ancora dentro la cifratura non chiama; gruppo silenziato: nessuno squillo",
+          not_in[0] >= 400 and muted[0] == 200 and muted_queue == [], f"{not_in[0]}, {muted[0]}, {muted_queue}")
+    rpc("push_unregister", {"p_fid": fid}, tb)
+
+
+def check_push_phase4() -> None:
+    """U · Notifiche (Fase 4, Blocco 5): coda server, silenzia, non disturbare, mai i Mi piace."""
+    ta, tb = token(UID_A), token(UID_B)
+    for t, other in ((ta, UID_B), (tb, UID_A)):
+        rpc("unblock_user", {"p_user_id": other}, t)
+    fid_a = "fidTelefonoA_" + "x" * 20
+
+    def queue(user=UID_A) -> list:
+        out = sql(f"select kind || '|' || title || '|' || body || '|' || count from private.push_queue "
+                  f"where user_id = '{user}' order by id;")
+        return [line for line in out.splitlines() if line]
+
+    def clear() -> None:
+        sql("delete from private.push_queue;")
+
+    def b64(n: int) -> str:
+        return base64.b64encode(bytes([n]) * 60).decode()
+
+    reg = rpc("push_register", {"p_fid": fid_a, "p_platform": "android"}, ta)
+    bad = rpc("push_register", {"p_fid": "x", "p_platform": "android"}, ta)
+    steal = rpc("push_register", {"p_fid": fid_a, "p_platform": "android"}, tb)
+    owner_b = sql(f"select user_id from public.push_devices where fid = '{fid_a}';")
+    rpc("push_register", {"p_fid": fid_a, "p_platform": "android"}, ta)
+    owner_a = sql(f"select user_id from public.push_devices where fid = '{fid_a}';")
+    direct = [get(f"/rest/v1/{t}?select=*", ta) for t in ("push_devices", "push_settings")]
+    server_fns = [rpc(f, {}, ta)[0] for f in ("push_claim", "push_server_config")]
+    check("U1", "Telefono registrato per le notifiche (uno per account); tabelle e funzioni del server chiuse",
+          reg[0] in (200, 204) and bad[0] >= 400 and steal[0] in (200, 204) and owner_b == UID_B
+          and owner_a == UID_A and all(denied(d) for d in direct) and all(x >= 400 for x in server_fns),
+          f"{reg[0]}, {bad[0]}, {owner_b == UID_B}, {owner_a == UID_A}, {[d[0] for d in direct]}, {server_fns}"
+          + ("" if reg[0] in (200, 204) else f" · {str(reg[1])[:300]}"))
+
+    _, conv = rpc("chat_open_direct", {"p_user": UID_A}, tb)
+    gen = int(sql(f"select generation from public.chat_conversations where id = '{conv}';") or 0)
+    if gen == 0:
+        sql(f"update public.chat_conversations set generation = 1 where id = '{conv}';")
+        gen = 1
+    rpc("push_set_settings", {"p_messages": True, "p_comments": True, "p_market": True, "p_preview": True,
+                              "p_dnd_enabled": False, "p_dnd_from": "22:00", "p_dnd_to": "07:00",
+                              "p_time_zone": "Europe/Rome"}, ta)
+
+    def send() -> int:
+        return rpc("chat_send", {"p_conversation": conv, "p_generation": gen, "p_payload": b64(7)}, tb)[0]
+
+    clear()
+    s1, s2 = send(), send()
+    q = queue()
+    check("U2", "Messaggio → notifica per chi riceve (non per chi scrive), raggruppata, senza testo",
+          s1 == 200 and s2 == 200 and len(q) == 1 and q[0].startswith("chat|")
+          and q[0].endswith("|2 nuovi messaggi|2") and queue(UID_B) == [],
+          f"{s1}, {s2}, {q}, {queue(UID_B)}")
+
+    clear()
+    mute = rpc("chat_set_mute", {"p_conversation": conv, "p_until": "infinity"}, ta)
+    send()
+    muted = queue()
+    past = rpc("chat_set_mute", {"p_conversation": conv, "p_until": "2020-01-01T00:00:00Z"}, ta)
+    rpc("chat_set_mute", {"p_conversation": conv, "p_until": None}, ta)
+    send()
+    check("U3", "Chat silenziata: nessuna notifica; riattivata: di nuovo",
+          mute[0] in (200, 204) and muted == [] and past[0] >= 400 and len(queue()) == 1,
+          f"{mute[0]}, {muted}, {past[0]}, {queue()}")
+
+    clear()
+    now_rome = sql("select to_char(now() at time zone 'Europe/Rome', 'HH24:MI');")
+    hour = int(now_rome[:2])
+    dnd = rpc("push_set_settings", {"p_messages": True, "p_comments": True, "p_market": True, "p_preview": True,
+                                    "p_dnd_enabled": True, "p_dnd_from": f"{(hour - 1) % 24:02d}:00",
+                                    "p_dnd_to": f"{(hour + 2) % 24:02d}:00", "p_time_zone": "Europe/Rome"}, ta)
+    send()
+    quiet = queue()
+    bad_tz = rpc("push_set_settings", {"p_messages": True, "p_comments": True, "p_market": True,
+                                       "p_preview": True, "p_dnd_enabled": False, "p_dnd_from": "22:00",
+                                       "p_dnd_to": "07:00", "p_time_zone": "Luna/Base"}, ta)
+    rpc("push_set_settings", {"p_messages": False, "p_comments": True, "p_market": True, "p_preview": False,
+                              "p_dnd_enabled": False, "p_dnd_from": "22:00", "p_dnd_to": "07:00",
+                              "p_time_zone": "Europe/Rome"}, ta)
+    send()
+    off = queue()
+    rpc("push_set_settings", {"p_messages": True, "p_comments": True, "p_market": True, "p_preview": False,
+                              "p_dnd_enabled": False, "p_dnd_from": "22:00", "p_dnd_to": "07:00",
+                              "p_time_zone": "Europe/Rome"}, ta)
+    send()
+    hidden = queue()
+    check("U4", "Non disturbare e messaggi spenti: nessuna notifica; senza anteprima nemmeno il nome",
+          dnd[0] in (200, 204) and quiet == [] and bad_tz[0] >= 400 and off == []
+          and hidden == ["chat|Piazly|Hai un nuovo messaggio|1"],
+          f"{dnd[0]}, {quiet}, {bad_tz[0]}, {off}, {hidden}")
+    rpc("push_set_settings", {"p_messages": True, "p_comments": True, "p_market": True, "p_preview": True,
+                              "p_dnd_enabled": False, "p_dnd_from": "22:00", "p_dnd_to": "07:00",
+                              "p_time_zone": "Europe/Rome"}, ta)
+
+    clear()
+    listing = sql("select id from public.listings order by created_at limit 1;")
+    likes = comments = []
+    if listing:
+        sql("insert into public.notifications (recipient_id, kind, listing_id, actor_id) values "
+            f"('{UID_A}', 'listing_like', '{listing}', '{UID_B}');")
+        likes = queue()
+        sql("insert into public.notifications (recipient_id, kind, listing_id, actor_id) values "
+            f"('{UID_A}', 'listing_comment', '{listing}', '{UID_B}');")
+        comments = queue()
+    check("U5", "Mi piace: nessuna notifica; commento: notifica «ha commentato il tuo annuncio»",
+          bool(listing) and likes == [] and len(comments) == 1 and comments[0].startswith("comment|Piazly|")
+          and "ha commentato il tuo annuncio" in comments[0],
+          f"{bool(listing)}, {likes}, {comments}")
+
+    claimed = sql("select count(*) from public.push_claim(50);")
+    left = sql("select count(*) from private.push_queue;")
+    check("U6", "La funzione del server prende le notifiche (una per telefono) e svuota la coda",
+          claimed == "1" and left == "0", f"{claimed}, {left}")
+
+
 def main() -> int:
     try:
         ids = setup()
@@ -2424,6 +2877,13 @@ def main() -> int:
     check_chat_phase4()
     check_chat_media_phase4()
     check_chat_groups_phase4()
+    check_push_phase4()
+    check_backup_phase4()
+    check_chat_reports_phase4()
+    check_calls_phase4()
+    check_realtime_phase4()
+    check_preview_phase4()
+    check_group_calls_phase4()
     failed = [r for r in results if not r[2]]
     print(f"{'Caso':6} {'Esito':9} Descrizione")
     for case, desc, ok, detail in results:

@@ -1,4 +1,7 @@
-import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException, SupabaseClient;
+import 'dart:async';
+
+import 'package:supabase_flutter/supabase_flutter.dart'
+    show PostgrestException, RealtimeChannel, RealtimeChannelConfig, RealtimeSubscribeStatus, SupabaseClient;
 
 import 'chat_models.dart';
 
@@ -21,7 +24,19 @@ abstract class ChatServer {
   /// Nuova generazione della chat cifrata. [ChatFailure.conflict] se è già cambiata.
   Future<int> start(String conversationId, int generation, String groupId, String welcome);
 
-  Future<(int, DateTime)> send(String conversationId, int generation, String payload);
+  /// [preview]: anteprima cifrata per la notifica (Blocco 10), che il server non legge.
+  Future<(int, DateTime)> send(String conversationId, int generation, String payload, {String? preview});
+
+  /// Tocchi in tempo reale sul canale privato (Blocco 9): «c'è qualcosa di nuovo».
+  Stream<void> wakeUps(String uid);
+
+  /// Il canale in tempo reale è collegato.
+  bool get live;
+
+  /// Messaggio di una chiamata (Blocco 8): come [send], ma [ring] fa squillare il telefono
+  /// dell'altra persona e gli altri passaggi non mandano notifiche.
+  Future<(int, DateTime)> callSignal(String conversationId, int generation, String payload,
+      {required bool ring, required bool video});
 
   Future<List<ChatEnvelope>> sync(int after);
 
@@ -68,6 +83,15 @@ abstract class ChatServer {
   });
 
   Future<void> groupRejoin(String conversationId);
+
+  /// «Silenzia» (Blocco 5): [until] ISO 8601, 'infinity' per sempre, null per riattivare.
+  Future<void> setMute(String conversationId, String? until);
+
+  /// Segnalazione (Blocco 7): solo i messaggi scelti da chi segnala, in chiaro.
+  Future<void> report(String conversationId, String reason, String details, List<Map<String, String>> messages);
+
+  /// Blocca una persona (stessa funzione della Privacy, Fase 2).
+  Future<void> blockUser(String userId);
 }
 
 class SupabaseChatServer implements ChatServer {
@@ -152,13 +176,62 @@ class SupabaseChatServer implements ChatServer {
       })) as num).toInt();
 
   @override
-  Future<(int, DateTime)> send(String conversationId, int generation, String payload) async {
-    final rows = _rows(await _rpc('chat_send', {
+  Future<(int, DateTime)> send(String conversationId, int generation, String payload, {String? preview}) async {
+    final rows = _rows(await _rpc(preview == null ? 'chat_send' : 'chat_send_preview', {
       'p_conversation': conversationId,
       'p_generation': generation,
       'p_payload': payload,
+      'p_preview': ?preview,
     }));
     if (rows.isEmpty) throw const ChatFailure('Messaggio non inviato. Riprova.');
+    return (
+      (rows.first['id'] as num).toInt(),
+      DateTime.tryParse('${rows.first['created_at']}')?.toLocal() ?? DateTime.now(),
+    );
+  }
+
+  bool _live = false;
+
+  @override
+  bool get live => _live;
+
+  @override
+  Stream<void> wakeUps(String uid) {
+    RealtimeChannel? channel;
+    late final StreamController<void> out;
+    out = StreamController<void>.broadcast(
+      onListen: () {
+        channel = _client.channel('u:$uid', opts: const RealtimeChannelConfig(private: true))
+          ..onBroadcast(event: 'nuovo', callback: (_) {
+            if (!out.isClosed) out.add(null);
+          })
+          ..subscribe((RealtimeSubscribeStatus status, [Object? error]) {
+            _live = status == RealtimeSubscribeStatus.subscribed;
+            // Appena collegato si controlla subito: qualcosa può essere arrivato nel frattempo.
+            if (_live && !out.isClosed) out.add(null);
+          });
+      },
+      onCancel: () async {
+        final RealtimeChannel? c = channel;
+        channel = null;
+        _live = false;
+        if (c != null) await _client.removeChannel(c);
+      },
+    );
+    return out.stream;
+  }
+
+  @override
+  Future<(int, DateTime)> callSignal(String conversationId, int generation, String payload,
+      {required bool ring, required bool video}) async {
+    final rows = _rows(await _rpc('call_signal', {
+      'p_conversation': conversationId,
+      'p_generation': generation,
+      'p_payload': payload,
+      'p_ring': ring,
+      'p_video': video,
+    }));
+    if (rows.isEmpty) throw const ChatFailure('Chiamata non riuscita. Riprova.');
     return (
       (rows.first['id'] as num).toInt(),
       DateTime.tryParse('${rows.first['created_at']}')?.toLocal() ?? DateTime.now(),
@@ -284,5 +357,25 @@ class SupabaseChatServer implements ChatServer {
   @override
   Future<void> groupRejoin(String conversationId) async {
     await _rpc('chat_group_rejoin', {'p_conversation': conversationId});
+  }
+
+  @override
+  Future<void> setMute(String conversationId, String? until) async {
+    await _rpc('chat_set_mute', {'p_conversation': conversationId, 'p_until': until});
+  }
+
+  @override
+  Future<void> report(String conversationId, String reason, String details, List<Map<String, String>> messages) async {
+    await _rpc('chat_report', {
+      'p_conversation': conversationId,
+      'p_reason': reason,
+      'p_details': details.trim().isEmpty ? null : details.trim(),
+      'p_messages': messages,
+    });
+  }
+
+  @override
+  Future<void> blockUser(String userId) async {
+    await _rpc('block_user', {'p_user_id': userId});
   }
 }

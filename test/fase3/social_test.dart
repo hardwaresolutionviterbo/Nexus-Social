@@ -373,6 +373,22 @@ void main() {
       expect(after.isLabelVisible, isFalse);
     });
 
+    testWidgets('Fase 4 · notifica toccata ad app chiusa: si apre subito il commento', (WidgetTester tester) async {
+      phone(tester);
+      final FakeSocialRepository social = FakeSocialRepository()
+        ..inbox.addAll(<AppNotification>[
+          notificationOf('2', NotificationKind.commentReply, commentId: 'b'),
+        ]);
+      social.items.add(commentBy('b', 'Giulia', 'Ci vediamo alle 21'));
+      await tester.pumpWidget(MaterialApp(
+        theme: AppTheme.light,
+        home: NotificationsScreen(repository: social, now: () => now, openId: '2'),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.text('Ci vediamo alle 21'), findsOneWidget);
+      expect(social.calls, contains('markAllRead'));
+    });
+
     testWidgets('nessuna notifica: messaggio vuoto', (WidgetTester tester) async {
       phone(tester);
       await tester.pumpWidget(MaterialApp(

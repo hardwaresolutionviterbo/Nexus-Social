@@ -13,8 +13,14 @@ import 'core/config/app_config.dart';
 import 'core/services/auth_gateway.dart';
 import 'core/services/backend_bootstrap.dart';
 import 'core/services/firebase_services.dart';
+import 'core/services/push_device_registry.dart';
+import 'core/services/supabase_push_backend.dart';
+import 'features/calls/call_service.dart';
+import 'features/calls/webrtc_call_media.dart';
+import 'features/chat/chat_backup.dart';
 import 'features/chat/chat_crypto.dart';
 import 'features/chat/chat_media.dart';
+import 'features/chat/chat_preview.dart';
 import 'features/chat/chat_models.dart';
 import 'features/chat/chat_server.dart';
 import 'features/chat/chat_service.dart';
@@ -24,6 +30,7 @@ import 'features/map/listing_repository.dart';
 import 'features/map/map_screen.dart';
 import 'features/map/social_repository.dart';
 import 'features/market/market_repository.dart';
+import 'features/notifications/notification_settings.dart';
 import 'features/privacy/privacy_repository.dart';
 import 'features/profile/profile_repository.dart';
 import 'features/security/app_lock.dart';
@@ -35,6 +42,10 @@ Future<void> main() async {
 
   if (AppConfig.hasFirebase) {
     FirebaseServices.registerBackgroundHandler();
+    // Con il server collegato il telefono si registra anche su Supabase (notifiche).
+    if (AppConfig.serverLinkEnabled && backend.supabase == ServiceState.connected) {
+      PushDeviceRegistry.useBackend(SupabasePushDeviceBackend(Supabase.instance.client));
+    }
     unawaited(FirebaseServices.warmUp());
   }
 
@@ -70,6 +81,7 @@ Future<void> main() async {
             )
           : null,
       privacy: profilesReady ? SupabasePrivacyRepository(Supabase.instance.client) : null,
+      pushSettings: profilesReady ? SupabasePushSettingsRepository(Supabase.instance.client) : null,
       security: profilesReady ? SupabaseSecurityRepository(Supabase.instance.client) : null,
       biometricLock: profilesReady ? DeviceBiometricLock() : null,
       contacts: profilesReady ? SupabaseContactsRepository(Supabase.instance.client) : null,
@@ -103,6 +115,19 @@ ChatService _chatFor(String uid) {
     media: SupabaseChatMediaServer(Supabase.instance.client),
     files: ChatMediaFiles(folder.then((Directory d) => Directory('${d.path}/allegati'))),
     myId: uid,
+    // Testo nelle notifiche, cifrato per chi riceve (Blocco 10).
+    previews: const SecurePreviewKeyStore(),
+    // Chiamate vocali e video (Blocco 8): ponte TURN dalla funzione `chiamate`.
+    calls: (ChatService chat) => CallService(
+      chat: chat,
+      ice: SupabaseIceProvider(Supabase.instance.client),
+      media: WebRtcCallMedia.new,
+      groupMedia: WebRtcGroupCallMedia.new,
+      ringer: SystemCallRinger(),
+    ),
+    // Backup cifrato con password (Blocco 6): la chiave resta nell'archivio sicuro del telefono.
+    backupServer: SupabaseBackupServer(Supabase.instance.client, uid: () => uid),
+    backupKeys: SecureBackupKeyStore(const FlutterSecureStorage(), uid: uid),
     contactsLoader: () async {
       try {
         return <ChatContact>[

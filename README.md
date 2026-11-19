@@ -1,92 +1,128 @@
-# Nexus Social
+# Piazly (ex Nexus Social)
 
-App **Flutter** per Android e iPhone: mappa sociale 3D con annunci e richieste vicino a te,
-chat e chiamate cifrate end-to-end, sezioni **Scambia** e **Vendita**, profili **Privato** e
-**Azienda**, promozioni locali e gestionale di amministrazione dentro l'app.
+App **Flutter** per Android e iPhone. Contiene:
+- la **Mappa Sociale** con annunci e richieste vicino a te;
+- la **chat cifrata end-to-end**, con gruppi, foto, vocali e notifiche;
+- le sezioni **Scambia** e **Vendita**, con proposte e feedback;
+- profili **Privato** e **Azienda**, con privacy, blocchi e sicurezza dell'account.
 
-Sviluppo a fasi: alla fine di ogni fase c'è qualcosa da installare e provare sul telefono.
+Si lavora a fasi e a blocchi. Alla fine di ogni blocco c'è un APK da provare sul telefono.
+Niente arriva in `main` né sul database reale senza l'autorizzazione del titolare.
+
+*Aggiornato il 19/11/2026.*
 
 ## Stato del lavoro
 
-| Fase | Contenuto | Stato |
+| Fase | Contenuto | Stato | Documenti |
+| --- | --- | --- | --- |
+| 0 | Account, chiavi, grafica, costi, regole | **Completata** | [`docs/FASE_0_CHECKLIST.md`](docs/FASE_0_CHECKLIST.md), [`docs/fase0/`](docs/fase0/) |
+| 1 | Fondamenta: app installabile, servizi, tema, navigazione | **Completata** | [`docs/fase1/CHECKLIST.md`](docs/fase1/CHECKLIST.md) |
+| 2 | Accesso con SMS, profilo, privacy e blocchi, sicurezza (PIN, impronta), rubrica | **Completata, in `main`** | [`docs/fase2/`](docs/fase2/) |
+| 3 | Mappa Sociale 3D, annunci, annunci vicini e filtri, commenti, Mi piace, notifiche nell'app | **Completata, in `main`** | [`docs/fase3/`](docs/fase3/) |
+| 4 | Chat cifrata, allegati, gruppi, notifiche, backup, segnalazioni, chiamate e videochiamate (anche di gruppo), tempo reale | **Completata, in `main`** | [`docs/fase4/`](docs/fase4/) |
+| 5 | Scambia e Vendita: categorie, annunci, ricerca, proposte, feedback | **Completata, in `main`** | [`docs/fase5/`](docs/fase5/) |
+| 6 | Aziende, promozioni, abbonamento 9,99 €/mese | Da iniziare | |
+| 7 | Gestionale Admin dentro l'app | Da iniziare | |
+| 8 | Traduzione, gamification, ricerca avanzata | Da iniziare | |
+| 9 | Test, sicurezza, GDPR, beta chiusa | Da iniziare | |
+| 10 | Pubblicazione e lancio | Da iniziare | |
+
+Il server funziona senza piano a pagamento (niente Blaze su Firebase). Firebase resta per
+l'accesso con SMS e per l'invio delle notifiche. Tutto il resto è su Supabase. Spiegazione in
+[`docs/server/`](docs/server/).
+
+## Fase 4 · Chat (completata)
+
+| Blocco | Contenuto | Stato | Esito |
+| --- | --- | --- | --- |
+| 1 | Chat a due cifrata (MLS), richieste da chi non è in rubrica, spunte | In `main` | [`BLOCCO1_ESITO.md`](docs/fase4/BLOCCO1_ESITO.md) |
+| 2 | Rispondi, reazioni, inoltra, elimina per tutti | In `main` | [`BLOCCO2_ESITO.md`](docs/fase4/BLOCCO2_ESITO.md) |
+| 3 | Foto, video, vocali e documenti cifrati | In `main` | [`BLOCCO3_ESITO.md`](docs/fase4/BLOCCO3_ESITO.md) |
+| 4 | Gruppi cifrati, amministratori, codice d'invito | In `main` | [`BLOCCO4_ESITO.md`](docs/fase4/BLOCCO4_ESITO.md) |
+| 5 | Notifiche ad app chiusa, «Silenzia», «Non disturbare» | In `main` | [`BLOCCO5_ESITO.md`](docs/fase4/BLOCCO5_ESITO.md) |
+| 6 | Backup della chat cifrato con password | In `main` | [`BLOCCO6_ESITO.md`](docs/fase4/BLOCCO6_ESITO.md) |
+| 7 | «Segnala» con i messaggi scelti, «Condividi l'incontro», notifiche dei commenti che aprono l'annuncio | In `main` | [`BLOCCO7_ESITO.md`](docs/fase4/BLOCCO7_ESITO.md) |
+| 8 | Chiamate vocali e videochiamate (chat a due) | In `main` | [`BLOCCO8_ESITO.md`](docs/fase4/BLOCCO8_ESITO.md) |
+| 9 | Messaggi e chiamate in tempo reale | In `main` | [`BLOCCO9_ESITO.md`](docs/fase4/BLOCCO9_ESITO.md) |
+| 10 | Chiamata a tutto schermo, testo nelle notifiche, chiamate di gruppo | In `main` | [`BLOCCO10_ESITO.md`](docs/fase4/BLOCCO10_ESITO.md) |
+
+Le scelte tecniche della chat sono in [`docs/fase4/DECISIONI.md`](docs/fase4/DECISIONI.md).
+
+## Servizi esterni
+
+| Servizio | A cosa serve | Costo |
 | --- | --- | --- |
-| 0 | Account, chiavi, grafica, costi, regole | **Completata** (14/11/2026): [`docs/FASE_0_CHECKLIST.md`](docs/FASE_0_CHECKLIST.md) |
-| 1 | Fondamenta tecniche: app installabile, servizi collegati, tema, navigazione | **Fase 1 completata** (14/11/2026): [`docs/fase1/CHECKLIST.md`](docs/fase1/CHECKLIST.md). Punti aperti nella sezione 4 della checklist |
-| 2 | Account e profili (SMS, profilo, 2FA, blocchi) | Da iniziare |
-| 3 | Mappa Sociale 3D, annunci, raggio fino a 30 km | Da iniziare |
-| 4 | Chat cifrata, gruppi, chiamate, notifiche | Da iniziare |
-| 5 | Scambia, Vendita, feedback | Da iniziare |
-| 6 | Aziende, promozioni, abbonamento 9,99 €/mese | Da iniziare |
-| 7 | Gestionale Admin dentro l'app | Da iniziare |
-| 8 | Traduzione, gamification, ricerca avanzata | Da iniziare |
-| 9 | Test, sicurezza, GDPR, beta chiusa | Da iniziare |
-| 10 | Pubblicazione e lancio | Da iniziare |
+| Firebase (piano Spark) | Accesso con SMS, invio delle notifiche (FCM) | Gratuito |
+| Supabase | Database, file, funzioni del server, tempo reale | Piano gratuito |
+| Cloudflare Realtime TURN | Ponte per chiamate e videochiamate quando i telefoni non si collegano direttamente | Gratis fino a 1.000 GB al mese, poi 0,05 $/GB |
+| OpenFreeMap | Mappa | Gratuito |
 
-Il dettaglio delle fasi è nel piano di lavoro ufficiale
-(`Nexus_Social_Piano_di_Lavoro_COMPLETO_AGGIORNATO.pdf`, versione del 13 novembre 2026).
+Le chiavi segrete stanno solo nei secret di Supabase, create dal titolare:
+- `FIREBASE_SERVICE_ACCOUNT`;
+- `CLOUDFLARE_TURN_KEY_ID`;
+- `CLOUDFLARE_TURN_API_TOKEN`.
 
-Documenti da leggere insieme al piano:
-- modifiche approvate al piano: [`docs/fase1/MODIFICHE_AL_PIANO.md`](docs/fase1/MODIFICHE_AL_PIANO.md);
-- corrispondenza tra le cartelle del codice e quelle del piano:
-  [`docs/fase1/STRUTTURA_CARTELLE.md`](docs/fase1/STRUTTURA_CARTELLE.md).
+Nel repository non ce n'è nessuna.
 
-## Cosa contiene la Fase 1 (completata)
+## Cosa resta da fare
 
-**Fase 1 completata** il 14 novembre 2026: esito e prove in
-[`docs/fase1/CHECKLIST.md`](docs/fase1/CHECKLIST.md), piano in
-[`docs/fase1/PIANO_OPERATIVO.md`](docs/fase1/PIANO_OPERATIVO.md).
+- **Grafica e funzioni mancanti:** le modifiche che il titolare indicherà dopo le prove.
+- **Fase 6:** aziende, promozioni e abbonamento.
+- **Fase 7:** il gestionale. Comprende la lettura delle segnalazioni delle chat, che oggi sono
+  già salvate sul server.
+- **Fasi 8–10:** traduzione, gamification, test finali, GDPR, beta e pubblicazione.
+- **iPhone:** chiamata a tutto schermo (CallKit) e testo nelle notifiche (Notification Service
+  Extension), da fare con le build iOS.
+- **Chiamate con più di 4 persone:** servirebbe un server centrale (SFU), che costa. Per ora
+  non è previsto.
 
-Restano fuori, come decisioni del titolare elencate nei punti aperti della checklist:
-- l'applicazione dello schema Supabase `0002` al database reale;
-- il collegamento di Codemagic;
-- la questione del tipo di account Azienda (regola M6).
+## Dove trovare le cose
 
-- Progetto Flutter unico per Android e iPhone (`android/`, `ios/`).
-- Barra di navigazione in basso con **Mappa, Chat, Scambia, Vendita, Profilo** e campanella
-  delle notifiche in alto.
-  - Dal Blocco 2 (ramo `fase1/blocco2`) l'ordine è quello approvato, **Chat, Mappa, Scambia,
-    Vendita, Profilo**, con Scambia come pulsante centrale arancione e apertura su Chat (A1,
-    vedi `docs/fase1/MODIFICHE_AL_PIANO.md`).
-- Tema grafico Material 3 con **modalità scura** (e chiara), colori e tipografia del brand.
-- Schermate svuotate con l'anteprima di cosa arriverà in ogni fase.
-- Collegamento pronto a **Supabase** (annunci, ricerca per distanza, foto, segnalazioni) e
-  **Firebase** (login SMS, chat, chiamate, notifiche), attivo solo quando le chiavi ci sono.
-- Schema Supabase con **RLS** e posizione approssimata; regole **Firestore** per chat cifrate.
-  - Nello schema Supabase attuale il nome completo è leggibile da tutti gli utenti autenticati.
-  - Va corretto prima di usare dati reali (passaggio 1.7 del piano).
-- APK Android da **GitHub Actions** (decisione F11). `codemagic.yaml` è presente ma non
-  collegato: servirà solo per la build iPhone.
+| Cosa | Dove |
+| --- | --- |
+| Piano di lavoro ufficiale | `Nexus_Social_Piano_di_Lavoro_COMPLETO_AGGIORNATO.pdf` (non va modificato) |
+| Modifiche approvate al piano | [`docs/fase1/MODIFICHE_AL_PIANO.md`](docs/fase1/MODIFICHE_AL_PIANO.md) |
+| Piano e risultato di ogni blocco | `docs/faseN/PIANO_OPERATIVO.md` e `docs/faseN/BLOCCOn_ESITO.md` |
+| Bozze legali (privacy, termini, regole), **non ancora verificate da un professionista** | [`docs/fase0/`](docs/fase0/) |
+| Schema del database e regole di sicurezza | [`supabase/migrations/`](supabase/migrations/): `0001`–`0028`, tutte applicate al database reale |
+| Funzioni del server | [`supabase/functions/`](supabase/functions/): `rubrica`, `notifiche` e `chiamate` |
+| Test di sicurezza del database | [`supabase/tests/rls_test.py`](supabase/tests/rls_test.py), eseguiti su un database temporaneo (workflow Supabase RLS) |
+| Codice dell'app | [`lib/`](lib/), una cartella per sezione in `lib/features/` |
+| Test dell'app | [`test/`](test/), una cartella per fase |
+| Anteprime delle schermate | [`tool/screenshots/`](tool/screenshots/) (workflow «Anteprime schermate») |
 
 ## Struttura del repository
 
 ```
 lib/
-  main.dart                  avvio e inizializzazione dei servizi
-  app.dart                   MaterialApp, tema, localizzazione
-  core/
-    config/                  configurazione (dart-define) e costanti app
-    services/                bootstrap Firebase/Supabase
-    theme/                   colori, tipografia, tema chiaro/scuro
-    widgets/                 componenti condivisi (logo, campanella, anteprime)
+  main.dart              avvio e collegamento dei servizi
+  app.dart               tema, lingua, schermata di accesso
+  core/                  configurazione, servizi (Firebase, Supabase, notifiche), tema, componenti
   features/
-    shell/                   barra di navigazione e impalcatura dell'app
-    map/                     Mappa Sociale (Fase 3)
-    chat/                    chat e chiamate (Fase 4)
-    listings/                Scambia (Fase 5)
-    sale/                    Vendita (Fase 5)
-    profile/                 account e profilo (Fase 2)
-    admin/                   gestionale (Fase 7)
-supabase/migrations/         schema e regole di sicurezza Supabase
-firebase/firestore.rules     regole di sicurezza Firestore
-firebase/tests/              test delle regole con Firestore Emulator (CI: Firestore Rules)
-codemagic.yaml               build nel cloud
-docs/                        checklist Fase 0 e architettura
+    onboarding/          accesso con SMS e registrazione
+    shell/               barra in basso: Chat, Mappa, Scambia, Vendita, Profilo
+    chat/                chat cifrata, allegati, gruppi
+    notifications/       preferenze delle notifiche
+    map/                 Mappa Sociale, annunci, commenti, notifiche nell'app
+    market/              Scambia e Vendita
+    profile/             profilo e profilo pubblico
+    privacy/             privacy e persone bloccate
+    security/            PIN e sblocco con impronta
+    contacts/            rubrica (solo impronte dei numeri, mai i numeri in chiaro)
+    admin/               gestionale (Fase 7)
+supabase/migrations/     schema e regole di sicurezza
+supabase/functions/      funzioni del server (Deno)
+supabase/tests/          test di sicurezza del database
+firebase/                regole e test di Firestore
+test/                    test automatici dell'app
+tool/screenshots/        anteprime delle schermate
+docs/                    piani, esiti e decisioni di ogni fase
 ```
 
 ## Installare l'app sul telefono (senza PC)
 
 **GitHub Actions (Android).** `.github/workflows/android.yml` si esegue a ogni push su `main` o
-su un ramo di lavoro `fase1/...`, oppure a mano. Esegue analisi, test e build.
+su un ramo di lavoro (`fase1/...`, `fase4/...`), oppure a mano. Esegue analisi, test e build.
 
 1. Apri **Actions → Android APK** e scegli l'esecuzione.
 2. In **Artifacts** scarica il file.
@@ -123,38 +159,7 @@ flutter build apk --debug   # APK di prova installabile
 `env.json` non è versionato: copia `env.example.json` e compila i valori. Senza chiavi l'app
 si avvia normalmente e segnala nel Profilo quali servizi non sono configurati.
 
-## Verifiche della base esistente
-
-Verifiche fatte quando la base è stata creata, prima del piano della Fase 1. Le verifiche
-aggiornate di ogni build sono nel riepilogo dell'esecuzione su GitHub Actions.
-
-- `flutter analyze`: nessun problema.
-- `flutter test`: 7 test superati (navigazione, campanella, profilo, configurazione, tema).
-- Schema Supabase: 58 istruzioni con sintassi valida secondo il parser PostgreSQL; non è
-  ancora stato eseguito su un progetto Supabase reale.
-- `flutter build apk --debug`: APK generato e firmato con la chiave di debug, package
-  `com.nexussocial.app`, minSdk 24.
-- Workflow GitHub Actions: configurato per analisi, test e APK a ogni push su `main`.
-- Build Codemagic e build iOS: configurate ma non eseguite qui (servono gli account).
-
-## Collegare i servizi
-
-- **Supabase** (annunci, distanza, foto, segnalazioni, admin): crea il progetto, esegui
-  `supabase/migrations/0001_init.sql` nel SQL Editor, poi aggiungi `SUPABASE_URL` e
-  `SUPABASE_ANON_KEY` nei **Settings → Secrets and variables → Actions** di GitHub: il workflow
-  verifica la connessione e li passa alla build. L'integrazione GitHub del pannello Supabase
-  serve solo alle migrazioni. Dettagli in [`supabase/README.md`](supabase/README.md).
-- **Firebase** (SMS, chat, chiamate, notifiche): crea il progetto, aggiungi le app Android/iOS,
-  scarica i file di configurazione e genera `lib/firebase_options.dart`, poi imposta
-  `FIREBASE_ENABLED=true`. Dettagli in [`firebase/README.md`](firebase/README.md).
-- Su Codemagic le stesse variabili vanno nelle **Environment variables** del progetto, mai nel
-  repository.
-
 ## Privacy della posizione
-
-Comportamento dello schema attuale (`0001`). Con la decisione **P9** la zona approssimata resta
-predefinita, ma per ogni annuncio l'autore potrà scegliere una posizione precisa (punto d'incontro,
-locale, indirizzo). Lo schema `0002` aggiunge questa scelta (piano della Fase 1, passaggio 1.7).
 
 La posizione esatta non è mai visibile agli altri utenti: resta in una tabella leggibile solo
 dal proprietario e dagli amministratori, mentre la mappa usa una posizione approssimata a una
@@ -164,9 +169,16 @@ regolabile fino a 30 km e parte da 10 km.
 
 ## Scelte tecniche
 
-Le motivazioni sono in [`docs/ARCHITETTURA.md`](docs/ARCHITETTURA.md): un solo codice Flutter,
-Firebase per identità/chat/chiamate, Supabase per dati geografici e gestionale, MapLibre per la
-mappa 3D (nessuna chiave a pagamento).
+Le motivazioni iniziali sono in [`docs/ARCHITETTURA.md`](docs/ARCHITETTURA.md). Le scelte
+principali:
+- un solo codice Flutter per Android e iPhone;
+- MapLibre con OpenFreeMap per la mappa 3D, senza chiavi a pagamento;
+- Firebase solo per l'accesso con SMS e per l'invio delle notifiche;
+- Supabase per tutto il resto: profili, annunci, mercato, rubrica e chat.
+
+La chat è cifrata sul telefono con MLS (OpenMLS). Il server conserva i messaggi solo cifrati e
+li cancella dopo la consegna. Le decisioni sono in
+[`docs/fase4/DECISIONI.md`](docs/fase4/DECISIONI.md).
 
 ## Progetto precedente
 
