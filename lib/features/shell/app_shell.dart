@@ -15,9 +15,8 @@ import '../chat/chat_thread_screen.dart' show ChatRegistry, openChatFromNotifica
 import '../map/listing_repository.dart';
 import '../map/live_location.dart';
 import '../map/map_screen.dart';
-import '../market/market_models.dart';
 import '../market/market_repository.dart';
-import '../market/market_section_screen.dart';
+import '../market/sale_and_swap_screen.dart';
 import '../market/market_deals_screen.dart';
 import '../market/market_feedback.dart';
 import '../market/swap_proposals_screen.dart';
@@ -31,11 +30,14 @@ import '../security/security_repository.dart';
 import '../profile/profile_models.dart';
 import '../profile/profile_repository.dart';
 import '../profile/profile_screen.dart';
+import '../status/status_tab.dart';
 
 /// Impalcatura dell'app: barra in alto con marchio e notifiche, cinque sezioni in basso.
 ///
 /// Ordine e apertura decisi dal titolare (A1, schermata iniziale): Chat, Mappa,
 /// Scambia (pulsante centrale arancione), Vendita, Profilo; l'app si apre su Chat.
+/// Nuovo ordine del titolare (19/11/2026): Chat, Stati, Mappa (pulsante centrale arancione),
+/// Vendita (con dentro Scambia), Profilo.
 class AppShell extends StatefulWidget {
   const AppShell({
     super.key,
@@ -103,11 +105,14 @@ class AppShell extends StatefulWidget {
   /// Etichette nell'ordine della barra.
   static const List<String> sections = <String>[
     'Chat',
+    'Stati',
     'Mappa',
-    'Scambia',
     'Vendita',
     'Profilo',
   ];
+
+  /// Posizione della Mappa nella barra (pulsante centrale).
+  static const int mapIndex = 2;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -116,8 +121,9 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   List<Widget> get _screens => <Widget>[
     ChatScreen(service: widget.chat, profiles: widget.profiles),
+    StatusTab(chat: widget.chat, profiles: widget.profiles),
     MapScreen(
-      active: _index == 1,
+      active: _index == AppShell.mapIndex,
       services: widget.map,
       listings: widget.listings,
       isMinor: _isMinor,
@@ -125,18 +131,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       privacy: widget.privacy,
       social: widget.social,
     ),
-    MarketSectionScreen(
-      section: MarketSection.swap,
-      repository: widget.market,
-      services: widget.map,
-      social: widget.social,
-    ),
-    MarketSectionScreen(
-      section: MarketSection.sale,
-      repository: widget.market,
-      services: widget.map,
-      social: widget.social,
-    ),
+    SaleAndSwapScreen(repository: widget.market, services: widget.map, social: widget.social),
     ProfileScreen(
       backend: widget.backend,
       onSignOut: widget.onSignOut,
@@ -205,6 +200,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     super.didUpdateWidget(old);
     if (old.chat != widget.chat) {
       old.chat?.removeListener(_onChat);
+      old.chat?.statuses?.removeListener(_onChat);
       old.chat?.calls?.removeListener(_onCall);
       _attachChat();
     }
@@ -217,6 +213,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     PushNotifications.chatPings.removeListener(_ping);
     PushNotifications.openNotification.removeListener(_openNotificationFromPush);
     widget.chat?.removeListener(_onChat);
+    widget.chat?.statuses?.removeListener(_onChat);
     widget.chat?.calls?.removeListener(_onCall);
     if (ChatRegistry.current == widget.chat) {
       ChatRegistry.current = null;
@@ -232,6 +229,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     ChatRegistry.profiles = widget.profiles;
     if (chat == null) return;
     chat.addListener(_onChat);
+    chat.statuses?.addListener(_onChat);
     chat.calls?.addListener(_onCall);
     chat.start();
     // GPS in tempo reale (Blocco 15): riprende l'invio se una condivisione è ancora attiva.
@@ -255,6 +253,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   void _onChat() {
     if (mounted) setState(() {});
   }
+
+  int get _statusUnseen => widget.chat?.statuses?.unseenCount ?? 0;
 
   int get _chatUnread {
     final ChatService? chat = widget.chat;
@@ -422,15 +422,15 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                     selectedIcon: _ChatIcon(count: _chatUnread, selected: true),
                     label: 'Chat',
                   ),
-                  const NavigationDestination(
-                    icon: _NavIcon(Icons.map_outlined),
-                    selectedIcon: _NavIcon(Icons.map_rounded, selected: true),
-                    label: 'Mappa',
+                  NavigationDestination(
+                    icon: _StatusIcon(count: _statusUnseen),
+                    selectedIcon: _StatusIcon(count: _statusUnseen, selected: true),
+                    label: 'Stati',
                   ),
                   const NavigationDestination(
-                    icon: _ExchangeButton(),
-                    selectedIcon: _ExchangeButton(selected: true),
-                    label: 'Scambia',
+                    icon: _CenterButton(),
+                    selectedIcon: _CenterButton(selected: true),
+                    label: 'Mappa',
                   ),
                   const NavigationDestination(
                     icon: _NavIcon(Icons.sell_outlined),
@@ -511,9 +511,33 @@ class _ChatIcon extends StatelessWidget {
   }
 }
 
-/// Pulsante centrale «Scambia»: cerchio arancio in rilievo con bagliore.
-class _ExchangeButton extends StatelessWidget {
-  const _ExchangeButton({this.selected = false});
+/// Icona degli Stati con il numero di persone che hanno aggiornamenti nuovi.
+class _StatusIcon extends StatelessWidget {
+  const _StatusIcon({required this.count, this.selected = false});
+
+  final int count;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget icon = _NavIcon(
+      selected ? Icons.motion_photos_on_rounded : Icons.motion_photos_on_outlined,
+      selected: selected,
+    );
+    if (count <= 0) return icon;
+    return Badge(
+      key: const ValueKey<String>('stati_nuovi'),
+      backgroundColor: AppColors.brandOrange,
+      offset: const Offset(-6, -2),
+      label: Text(count > 99 ? '99+' : '$count'),
+      child: icon,
+    );
+  }
+}
+
+/// Pulsante centrale «Mappa»: cerchio arancio in rilievo con bagliore.
+class _CenterButton extends StatelessWidget {
+  const _CenterButton({this.selected = false});
 
   final bool selected;
 
@@ -542,7 +566,7 @@ class _ExchangeButton extends StatelessWidget {
         ],
       ),
       child: const Icon(
-        Icons.swap_horiz_rounded,
+        Icons.map_rounded,
         color: Colors.white,
         size: 26,
       ),

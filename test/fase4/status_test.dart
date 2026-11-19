@@ -6,10 +6,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:nexus_social/core/theme/app_theme.dart';
 import 'package:nexus_social/features/chat/chat_models.dart';
-import 'package:nexus_social/features/chat/chat_screen.dart';
 import 'package:nexus_social/features/chat/chat_service.dart';
 import 'package:nexus_social/features/status/status_screens.dart';
 import 'package:nexus_social/features/status/status_service.dart';
+import 'package:nexus_social/features/status/status_tab.dart';
 
 import 'fake_chat.dart';
 import 'fake_status.dart';
@@ -204,9 +204,7 @@ void main() {
       (WidgetTester tester) async {
     await big(tester);
     final (ChatService a, ChatService b) = (await tester.runAsync(() async => (await phone(io), await phone(bruno))))!;
-    await tester.pumpWidget(MaterialApp(theme: AppTheme.light, home: Scaffold(body: ChatScreen(service: a))));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey<String>('sezione_stati')));
+    await tester.pumpWidget(MaterialApp(theme: AppTheme.light, home: Scaffold(body: StatusTab(chat: a))));
     await tester.pumpAndSettle();
     expect(find.text('Tocca per aggiungere un aggiornamento'), findsOneWidget);
     expect(find.byKey(const ValueKey<String>('stati_avviso')), findsOneWidget);
@@ -224,10 +222,8 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     // Sul telefono si ricaricano all'avvio e quando l'app torna in primo piano.
     await tester.runAsync(() => b.statuses!.load());
-    await tester.pumpWidget(MaterialApp(theme: AppTheme.light, home: Scaffold(body: ChatScreen(service: b))));
-    await tester.pumpAndSettle();
-    expect(find.text('Stati · 1'), findsOneWidget, reason: 'stati nuovi segnati sulla sezione');
-    await tester.tap(find.byKey(const ValueKey<String>('sezione_stati')));
+    expect(b.statuses!.unseenCount, 1, reason: 'il numero sulla scheda «Stati» della barra');
+    await tester.pumpWidget(MaterialApp(theme: AppTheme.light, home: Scaffold(body: StatusTab(chat: b))));
     await tester.pumpAndSettle();
     expect(find.text('Aggiornamenti recenti'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey<String>('stato_di_$io')));
@@ -255,10 +251,8 @@ void main() {
     final Uint8List png = base64Png;
     await tester.pumpWidget(MaterialApp(
       theme: AppTheme.light,
-      home: Scaffold(body: ChatScreen(service: a, statusPicker: _Picker(png))),
+      home: Scaffold(body: StatusTab(chat: a, picker: _Picker(png))),
     ));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey<String>('sezione_stati')));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey<String>('stati_privacy')));

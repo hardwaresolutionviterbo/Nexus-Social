@@ -610,7 +610,7 @@ void main() {
     final (ChatService me, List<ChatService> others, FakeStatusHub _) = (await tester.runAsync(_statusScene))!;
     final StatusService st = me.statuses!;
     await shoot(tester, 'stati_1_sezione', AppShell(chat: me), before: () async {
-      await tester.tap(find.byKey(const ValueKey<String>('sezione_stati')));
+      await tester.tap(find.descendant(of: find.byType(NavigationBar), matching: find.text('Stati')));
     });
     await shoot(tester, 'stati_2_scrivi',
         StatusTextComposer(service: st, contacts: me.contacts), before: () async {

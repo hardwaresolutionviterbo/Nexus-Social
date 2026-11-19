@@ -5,7 +5,6 @@ import '../../core/widgets/nexus_ui.dart';
 import '../calls/calls_list.dart';
 import '../profile/avatar_view.dart';
 import '../profile/profile_repository.dart';
-import '../status/status_screens.dart';
 import 'chat_backup_screen.dart';
 import 'chat_group_screens.dart';
 import 'chat_media.dart';
@@ -16,12 +15,10 @@ import 'chat_thread_screen.dart';
 /// Scheda Chat (Fase 4, Blocco 1): le chat a due cifrate, le richieste dagli sconosciuti e
 /// «Nuova chat» dalla rubrica. Senza server collegato resta l'anteprima della Fase 1.
 class ChatScreen extends StatelessWidget {
-  const ChatScreen({super.key, this.service, this.profiles, this.now = DateTime.now, this.statusPicker});
+  const ChatScreen({super.key, this.service, this.profiles, this.now = DateTime.now});
 
   final ChatService? service;
 
-  /// Foto e video per gli stati; nei test una versione finta.
-  final StatusPicker? statusPicker;
   final ProfileRepository? profiles;
   final DateTime Function() now;
 
@@ -50,18 +47,17 @@ class ChatScreen extends StatelessWidget {
     return ListenableBuilder(
       listenable: chat,
       builder: (BuildContext context, _) =>
-          _ChatList(chat: chat, profiles: profiles, now: now(), statusPicker: statusPicker),
+          _ChatList(chat: chat, profiles: profiles, now: now()),
     );
   }
 }
 
-enum _Section { chats, statuses, calls }
+enum _Section { chats, calls }
 
 class _ChatList extends StatefulWidget {
-  const _ChatList({required this.chat, required this.profiles, required this.now, this.statusPicker});
+  const _ChatList({required this.chat, required this.profiles, required this.now});
 
   final ChatService chat;
-  final StatusPicker? statusPicker;
   final ProfileRepository? profiles;
   final DateTime now;
 
@@ -70,17 +66,16 @@ class _ChatList extends StatefulWidget {
 }
 
 class _ChatListState extends State<_ChatList> {
-  /// Sezione aperta: chat, stati (Blocco 13) o chiamate (Blocco 11).
+  /// Sezione aperta: chat o chiamate (Blocco 11).
   _Section _section = _Section.chats;
 
   ChatService get chat => widget.chat;
   ProfileRepository? get profiles => widget.profiles;
   DateTime get now => widget.now;
 
-  /// «Chat | Stati | Chiamate» in alto, come le schede di WhatsApp.
+  /// «Chat | Chiamate» in alto. Gli Stati hanno la loro scheda nella barra in basso.
   Widget _sections(BuildContext context) {
     final int missed = chat.calls?.log.unseenMissed ?? 0;
-    final int fresh = chat.statuses?.unseenCount ?? 0;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
       child: SegmentedButton<_Section>(
@@ -88,11 +83,6 @@ class _ChatListState extends State<_ChatList> {
         showSelectedIcon: false,
         segments: <ButtonSegment<_Section>>[
           const ButtonSegment<_Section>(value: _Section.chats, label: Text('Chat')),
-          if (chat.statuses != null)
-            ButtonSegment<_Section>(
-              value: _Section.statuses,
-              label: Text(fresh > 0 ? 'Stati · $fresh' : 'Stati', key: const ValueKey<String>('sezione_stati')),
-            ),
           if (chat.calls != null)
             ButtonSegment<_Section>(
               value: _Section.calls,
@@ -153,8 +143,8 @@ class _ChatListState extends State<_ChatList> {
     }
     final List<ChatThread> threads = chat.threads;
     final List<ChatThread> requests = chat.requests;
-    if (chat.calls != null || chat.statuses != null) {
-      final Listenable sections = Listenable.merge(<Listenable?>[chat.calls?.log, chat.statuses]);
+    if (chat.calls != null) {
+      final Listenable sections = Listenable.merge(<Listenable?>[chat.calls?.log]);
       return Column(
         children: [
           ListenableBuilder(listenable: sections, builder: (BuildContext c, _) => _sections(c)),
@@ -162,12 +152,6 @@ class _ChatListState extends State<_ChatList> {
             child: switch (_section) {
               _Section.calls when chat.calls != null =>
                 CallsList(chat: chat, calls: chat.calls!, profiles: profiles, openChat: _openChat, now: () => now),
-              _Section.statuses when chat.statuses != null => StatusList(
-                service: chat.statuses!,
-                contacts: chat.contacts,
-                profiles: profiles,
-                picker: widget.statusPicker,
-              ),
               _ => _chats(context, theme, threads, requests),
             },
           ),

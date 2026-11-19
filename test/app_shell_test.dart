@@ -13,7 +13,7 @@ void main() {
     for (final String label in <String>[
       'Mappa',
       'Chat',
-      'Scambia',
+      'Stati',
       'Vendita',
       'Profilo',
     ]) {

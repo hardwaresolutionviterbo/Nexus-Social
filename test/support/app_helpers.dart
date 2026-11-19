@@ -1,12 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
-/// Le cinque sezioni del PDF con un testo che compare solo nella loro schermata.
+/// Le cinque sezioni della barra (ordine del titolare, 19/11/2026) con un testo che compare solo nella loro schermata.
 /// L'elenco non dipende dall'ordine della barra.
 const Map<String, String> sectionMarkers = <String, String>{
   'Mappa': 'Mappa Sociale',
   'Chat': 'Chat e chiamate',
-  'Scambia': 'Scambia vicino a te',
+  'Stati': 'Stati dei tuoi contatti',
   'Vendita': 'Vendita tra privati',
   'Profilo': 'Stato dei servizi',
 };
