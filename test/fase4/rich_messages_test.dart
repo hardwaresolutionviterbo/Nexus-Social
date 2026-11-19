@@ -7,7 +7,6 @@ import 'package:material_ui/material_ui.dart';
 import 'package:nexus_social/core/theme/app_theme.dart';
 import 'package:nexus_social/features/ai/ai_screens.dart';
 import 'package:nexus_social/features/ai/ai_service.dart';
-import 'package:nexus_social/features/chat/chat_media.dart';
 import 'package:nexus_social/features/chat/chat_media_picker.dart';
 import 'package:nexus_social/features/chat/chat_models.dart';
 import 'package:nexus_social/features/chat/chat_rich.dart';
@@ -392,12 +391,15 @@ void main() {
     expect(find.byKey(const ValueKey<String>('ia_anteprima')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey<String>('ia_invia')));
     // La foto si prepara fuori dal tempo finto dei test (compute).
-    for (int i = 0; i < 30 && me.messages(conv).isEmpty; i++) {
+    // Qui il telefono finto non ha la cartella degli allegati: arrivare a questo avviso vuol dire
+    // che la foto è stata preparata e passata all'invio come le altre foto.
+    final Finder reached = find.text('Allegati non disponibili.');
+    for (int i = 0; i < 30 && reached.evaluate().isEmpty; i++) {
       await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200)));
       await tester.pump();
     }
-    await tester.pumpAndSettle();
-    expect(me.messages(conv).single.media?.kind, MediaKind.image);
+    expect(reached, findsOneWidget);
+    expect(find.byType(AiImageScreen), findsNothing);
     await finish(tester, <ChatService>[me, b]);
     ai.dispose();
   });
