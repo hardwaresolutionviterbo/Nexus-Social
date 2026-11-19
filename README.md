@@ -45,6 +45,7 @@ l'accesso con SMS e per l'invio delle notifiche. Tutto il resto è su Supabase. 
 | 8 | Chiamate vocali e videochiamate (chat a due) | In `main` | [`BLOCCO8_ESITO.md`](docs/fase4/BLOCCO8_ESITO.md) |
 | 9 | Messaggi e chiamate in tempo reale | In `main` | [`BLOCCO9_ESITO.md`](docs/fase4/BLOCCO9_ESITO.md) |
 | 10 | Chiamata a tutto schermo, testo nelle notifiche, chiamate di gruppo | In `main` | [`BLOCCO10_ESITO.md`](docs/fase4/BLOCCO10_ESITO.md) |
+| 11 | Sezione «Chiamate», nomi come nella rubrica del telefono | Sul ramo `fase4/blocco11`, server attivo, da provare | [`BLOCCO11_ESITO.md`](docs/fase4/BLOCCO11_ESITO.md) |
 
 Le scelte tecniche della chat sono in [`docs/fase4/DECISIONI.md`](docs/fase4/DECISIONI.md).
 
@@ -84,7 +85,7 @@ Nel repository non ce n'è nessuna.
 | Modifiche approvate al piano | [`docs/fase1/MODIFICHE_AL_PIANO.md`](docs/fase1/MODIFICHE_AL_PIANO.md) |
 | Piano e risultato di ogni blocco | `docs/faseN/PIANO_OPERATIVO.md` e `docs/faseN/BLOCCOn_ESITO.md` |
 | Bozze legali (privacy, termini, regole), **non ancora verificate da un professionista** | [`docs/fase0/`](docs/fase0/) |
-| Schema del database e regole di sicurezza | [`supabase/migrations/`](supabase/migrations/): `0001`–`0028`, tutte applicate al database reale |
+| Schema del database e regole di sicurezza | [`supabase/migrations/`](supabase/migrations/): `0001`–`0029`, tutte applicate al database reale |
 | Funzioni del server | [`supabase/functions/`](supabase/functions/): `rubrica`, `notifiche` e `chiamate` |
 | Test di sicurezza del database | [`supabase/tests/rls_test.py`](supabase/tests/rls_test.py), eseguiti su un database temporaneo (workflow Supabase RLS) |
 | Codice dell'app | [`lib/`](lib/), una cartella per sezione in `lib/features/` |
