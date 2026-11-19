@@ -19,8 +19,8 @@ import '../support/fake_map.dart';
 const String io = 'utenteAnna000000000000000001';
 const String bar = 'utenteBar00000000000000000002';
 
-/// Martedì 18 novembre 2026, ore 10:30.
-final DateTime martedi = DateTime(2026, 11, 18, 10, 30);
+/// Martedì 17 novembre 2026, ore 10:30.
+final DateTime martedi = DateTime(2026, 11, 17, 10, 30);
 
 Widget app(Widget home) => MaterialApp(theme: AppTheme.light, home: home);
 
@@ -63,8 +63,8 @@ void main() {
       final BusinessHours h = orariBar();
       expect(h.isOpenAt(martedi), isTrue);
       expect(h.statusLabel(martedi), 'Aperto ora · chiude alle 13:00');
-      expect(h.statusLabel(DateTime(2026, 11, 18, 14)), 'Chiuso · apre alle 16:00');
-      expect(h.statusLabel(DateTime(2026, 11, 18, 21)), 'Chiuso · apre venerdì alle 18:00');
+      expect(h.statusLabel(DateTime(2026, 11, 17, 14)), 'Chiuso · apre alle 16:00');
+      expect(h.statusLabel(DateTime(2026, 11, 17, 21)), 'Chiuso · apre venerdì alle 18:00');
       // Sabato all'1:30: aperto per la sera del venerdì.
       expect(h.isOpenAt(DateTime(2026, 11, 21, 1, 30)), isTrue);
       expect(h.statusLabel(DateTime(2026, 11, 21, 1, 30)), 'Aperto ora · chiude alle 02:00');

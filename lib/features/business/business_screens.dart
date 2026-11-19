@@ -757,12 +757,19 @@ class _BusinessPageEditScreenState extends State<BusinessPageEditScreen> {
           DropdownButtonFormField<BusinessCategory>(
             key: const ValueKey<String>('pagina_categoria'),
             initialValue: _category,
+            isExpanded: true,
             decoration: const InputDecoration(labelText: 'Categoria'),
             items: <DropdownMenuItem<BusinessCategory>>[
               for (final BusinessCategory c in BusinessCategory.values)
                 DropdownMenuItem<BusinessCategory>(
                   value: c,
-                  child: Row(children: [Icon(c.icon, size: 18), const SizedBox(width: 8), Text(c.label)]),
+                  child: Row(
+                    children: [
+                      Icon(c.icon, size: 18),
+                      const SizedBox(width: 8),
+                      Flexible(child: Text(c.label, overflow: TextOverflow.ellipsis)),
+                    ],
+                  ),
                 ),
             ],
             onChanged: (BusinessCategory? c) => setState(() => _category = c ?? _category),
