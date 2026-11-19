@@ -257,7 +257,7 @@ void main() {
         address: const BusinessAddress(street: 'Via Roma', civic: '12', city: 'Porano', cap: '05010', province: 'TR'),
         lat: 42.6851,
         lng: 12.1029,
-        status: BusinessStatus.verified,
+        status: VerificationStatus.verified,
       );
     final FakeMap map = FakeMap(noticeSeen: true, access: LocationAccess.granted);
     await tester.pumpWidget(app(Scaffold(body: MapScreen(services: map.services, businesses: repo, now: () => martedi))));

@@ -38,19 +38,19 @@ enum BusinessCategory {
 }
 
 /// Stato della verifica decisa dall'amministratore.
-enum BusinessStatus {
+enum VerificationStatus {
   pending('In verifica'),
   verified('Verificata'),
   rejected('Non approvata');
 
-  const BusinessStatus(this.label);
+  const VerificationStatus(this.label);
 
   final String label;
 
-  static BusinessStatus fromKey(Object? k) => switch (k) {
-    'verified' => BusinessStatus.verified,
-    'rejected' => BusinessStatus.rejected,
-    _ => BusinessStatus.pending,
+  static VerificationStatus fromKey(Object? k) => switch (k) {
+    'verified' => VerificationStatus.verified,
+    'rejected' => VerificationStatus.rejected,
+    _ => VerificationStatus.pending,
   };
 }
 
@@ -280,7 +280,7 @@ class MyBusiness {
 
   final String businessName;
   final String vatNumber;
-  final BusinessStatus status;
+  final VerificationStatus status;
   final String reviewNote;
   final bool hasDocument;
   final BusinessPage? page;
@@ -288,7 +288,7 @@ class MyBusiness {
   static MyBusiness fromJson(Map<String, dynamic> j) => MyBusiness(
     businessName: '${j['business_name'] ?? ''}',
     vatNumber: '${j['vat_number'] ?? ''}',
-    status: BusinessStatus.fromKey(j['status']),
+    status: VerificationStatus.fromKey(j['status']),
     reviewNote: '${j['review_note'] ?? ''}',
     hasDocument: j['has_document'] == true,
     page: j['page'] is Map<String, dynamic> ? BusinessPage.fromJson(j['page'] as Map<String, dynamic>) : null,
@@ -345,7 +345,7 @@ class BusinessReviewItem {
   final String username;
   final String businessName;
   final String vatNumber;
-  final BusinessStatus status;
+  final VerificationStatus status;
   final String displayName;
   final String city;
   final String province;
@@ -356,7 +356,7 @@ class BusinessReviewItem {
     username: '${j['username'] ?? ''}',
     businessName: '${j['business_name'] ?? ''}',
     vatNumber: '${j['vat_number'] ?? ''}',
-    status: BusinessStatus.fromKey(j['status']),
+    status: VerificationStatus.fromKey(j['status']),
     displayName: '${j['display_name'] ?? ''}',
     city: '${j['city'] ?? ''}',
     province: '${j['province'] ?? ''}',

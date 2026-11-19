@@ -22,15 +22,14 @@ import 'business_repository.dart';
 typedef PickDocument = Future<(Uint8List, bool)?> Function();
 
 Future<(Uint8List, bool)?> pickBusinessDocument() async {
-  final FilePickerResult? r = await FilePicker.platform.pickFiles(
-    type: FileType.custom,
-    allowedExtensions: const <String>['pdf', 'jpg', 'jpeg'],
-    withData: true,
-  );
-  final PlatformFile? f = r?.files.firstOrNull;
-  final Uint8List? bytes = f?.bytes;
-  if (f == null || bytes == null) return null;
-  return (bytes, (f.extension ?? '').toLowerCase() == 'pdf');
+  final List<PlatformFile> picked = await FilePicker.pickFiles();
+  final PlatformFile? f = picked.firstOrNull;
+  if (f == null) return null;
+  final String ext = f.name.contains('.') ? f.name.split('.').last.toLowerCase() : '';
+  if (!const <String>{'pdf', 'jpg', 'jpeg'}.contains(ext)) {
+    throw const BusinessFailure('Scegli un PDF o una foto JPG.');
+  }
+  return (await f.xFile.readAsBytes(), ext == 'pdf');
 }
 
 void _toast(BuildContext context, String text) {
@@ -143,7 +142,13 @@ class _MyBusinessScreenState extends State<MyBusinessScreen> {
   }
 
   Future<void> _document() async {
-    final (Uint8List, bool)? doc = await widget.pickDocument();
+    final (Uint8List, bool)? doc;
+    try {
+      doc = await widget.pickDocument();
+    } on BusinessFailure catch (f) {
+      if (mounted) _toast(context, f.message);
+      return;
+    }
     if (doc == null || !mounted) return;
     setState(() => _uploading = true);
     try {
@@ -359,18 +364,18 @@ class _StatusCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     final (Color, IconData, String) look = switch (me.status) {
-      BusinessStatus.pending => (
+      VerificationStatus.pending => (
         const Color(0xFFF59E0B),
         Icons.hourglass_top_rounded,
         'Un amministratore controlla ragione sociale e partita IVA. Intanto puoi preparare il profilo '
             'attività: è già visibile sulla Mappa.',
       ),
-      BusinessStatus.verified => (
+      VerificationStatus.verified => (
         PiazlyColors.green,
         Icons.verified_rounded,
         'Dati controllati da Piazly. Con l\'abbonamento attivo comparirà il badge «Verificato».',
       ),
-      BusinessStatus.rejected => (
+      VerificationStatus.rejected => (
         const Color(0xFFE53935),
         Icons.error_outline_rounded,
         'La verifica non è andata a buon fine. Correggi i dati: la richiesta ripartirà.',
@@ -577,7 +582,7 @@ class _BusinessPageEditScreenState extends State<BusinessPageEditScreen> {
   late double? _lat = _p?.lat;
   late double? _lng = _p?.lng;
   late _PinSource _pin = _p == null ? _PinSource.none : _PinSource.map;
-  late Map<int, List<HourSlot>> _hours = <int, List<HourSlot>>{
+  late final Map<int, List<HourSlot>> _hours = <int, List<HourSlot>>{
     for (int d = 1; d <= 7; d++) d: List<HourSlot>.of(_p?.hours.of(d) ?? const <HourSlot>[]),
   };
   late final List<String> _kept = List<String>.of(_p?.photos ?? const <String>[]);
@@ -991,11 +996,10 @@ class _PhotoThumb extends StatelessWidget {
 }
 
 class _StoredPhoto extends StatelessWidget {
-  const _StoredPhoto({required this.repository, required this.path, this.fit = BoxFit.cover});
+  const _StoredPhoto({required this.repository, required this.path});
 
   final BusinessRepository repository;
   final String path;
-  final BoxFit fit;
 
   @override
   Widget build(BuildContext context) => FutureBuilder<Uint8List?>(
@@ -1003,7 +1007,7 @@ class _StoredPhoto extends StatelessWidget {
     builder: (BuildContext context, AsyncSnapshot<Uint8List?> s) {
       final Uint8List? b = s.data;
       if (b == null) return Container(color: PiazlyColors.violetSoft);
-      return Image.memory(b, fit: fit, gaplessPlayback: true);
+      return Image.memory(b, fit: BoxFit.cover, gaplessPlayback: true);
     },
   );
 }
@@ -1454,13 +1458,13 @@ class _BusinessReviewScreenState extends State<BusinessReviewScreen> {
                             spacing: 8,
                             runSpacing: 8,
                             children: [
-                              if (it.status != BusinessStatus.verified)
+                              if (it.status != VerificationStatus.verified)
                                 FilledButton(
                                   key: ValueKey<String>('verifica_approva_${it.username}'),
                                   onPressed: () => _decide(it, true),
                                   child: const Text('Approva'),
                                 ),
-                              if (it.status != BusinessStatus.rejected)
+                              if (it.status != VerificationStatus.rejected)
                                 OutlinedButton(
                                   key: ValueKey<String>('verifica_rifiuta_${it.username}'),
                                   onPressed: () => _decide(it, false),

@@ -42,7 +42,7 @@ class FakeBusinessRepository implements BusinessRepository {
     registered[me] = MyBusiness(
       businessName: businessName.trim(),
       vatNumber: vat,
-      status: changed ? BusinessStatus.pending : old.status,
+      status: changed ? VerificationStatus.pending : old.status,
       hasDocument: old?.hasDocument ?? false,
       reviewNote: changed ? '' : old.reviewNote,
     );
@@ -105,7 +105,7 @@ class FakeBusinessRepository implements BusinessRepository {
       hours: p.hours,
       photos: p.photos,
       published: p.published,
-      verified: registered[id]?.status == BusinessStatus.verified,
+      verified: registered[id]?.status == VerificationStatus.verified,
       username: usernames[id] ?? '',
       mine: id == me,
     );
@@ -123,7 +123,7 @@ class FakeBusinessRepository implements BusinessRepository {
             category: p.category,
             lat: p.lat,
             lng: p.lng,
-            verified: registered[p.id]?.status == BusinessStatus.verified,
+            verified: registered[p.id]?.status == VerificationStatus.verified,
           ),
     ];
   }
@@ -152,7 +152,7 @@ class FakeBusinessRepository implements BusinessRepository {
     registered[id] = MyBusiness(
       businessName: b.businessName,
       vatNumber: b.vatNumber,
-      status: approve ? BusinessStatus.verified : BusinessStatus.rejected,
+      status: approve ? VerificationStatus.verified : VerificationStatus.rejected,
       reviewNote: note.trim(),
       hasDocument: b.hasDocument,
     );
@@ -170,7 +170,7 @@ class FakeBusinessRepository implements BusinessRepository {
     required BusinessAddress address,
     required double lat,
     required double lng,
-    BusinessStatus status = BusinessStatus.pending,
+    VerificationStatus status = VerificationStatus.pending,
     BusinessHours hours = const BusinessHours(),
     String description = '',
     String phone = '',
