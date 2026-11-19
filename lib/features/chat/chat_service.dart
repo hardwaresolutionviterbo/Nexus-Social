@@ -6,6 +6,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 
 import '../calls/call_service.dart';
+import '../status/status_service.dart';
 import 'chat_backup.dart';
 import 'chat_backup_service.dart';
 import 'chat_crypto.dart';
@@ -36,6 +37,7 @@ class ChatService extends ChangeNotifier {
     BackupKdf backupKdf = const BackupKdf(),
     DateTime Function()? clock,
     CallService Function(ChatService chat)? calls,
+    StatusService Function(ChatService chat)? statuses,
     PreviewKeyStore? previews,
   }) : _previews = previews == null ? null : PreviewKeys(previews),
        _openCrypto = crypto,
@@ -44,7 +46,11 @@ class ChatService extends ChangeNotifier {
         ? ChatBackup(chat: this, server: backupServer, keys: backupKeys, kdf: backupKdf)
         : null;
     this.calls = calls?.call(this);
+    this.statuses = statuses?.call(this);
   }
+
+  /// Stati di 24 ore (Blocco 13); null senza server.
+  late final StatusService? statuses;
 
   /// Chiavi delle anteprime nelle notifiche (Blocco 10); null nei test che non le usano.
   final PreviewKeys? _previews;
@@ -179,6 +185,7 @@ class ChatService extends ChangeNotifier {
       _schedule();
       final ChatBackup? b = backup;
       if (b != null) unawaited(b.load());
+      unawaited(statuses?.load());
     } on ChatFailure catch (f) {
       _startError = f.message;
     } catch (_) {
@@ -213,6 +220,7 @@ class ChatService extends ChangeNotifier {
     _heartbeat?.cancel();
     _heartbeat = null;
     if (!_ready) return;
+    if (value) unawaited(statuses?.load());
     // «Online» (Blocco 12): un segnale ogni 30 secondi mentre l'app è aperta.
     unawaited(server.presencePing(value).catchError((Object _) {}));
     if (value) {
@@ -260,6 +268,7 @@ class ChatService extends ChangeNotifier {
     unawaited(_wake?.cancel());
     backup?.dispose();
     calls?.dispose();
+    statuses?.dispose();
     unawaited(_callSignals.close());
     super.dispose();
   }

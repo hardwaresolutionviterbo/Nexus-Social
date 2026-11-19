@@ -793,8 +793,10 @@ Future<ChatService> fakePhone(
   CallService Function(ChatService chat)? calls,
   PreviewKeyStore? previews,
   Map<String, String>? localNames,
+  StatusService Function(ChatService chat)? statuses,
 }) async {
   final ChatService s = ChatService(
+    statuses: statuses,
     localNames: localNames == null ? null : () async => localNames,
     previews: previews,
     calls: calls,

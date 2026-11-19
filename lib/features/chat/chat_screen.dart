@@ -5,6 +5,7 @@ import '../../core/widgets/nexus_ui.dart';
 import '../calls/calls_list.dart';
 import '../profile/avatar_view.dart';
 import '../profile/profile_repository.dart';
+import '../status/status_screens.dart';
 import 'chat_backup_screen.dart';
 import 'chat_group_screens.dart';
 import 'chat_media.dart';
@@ -15,9 +16,12 @@ import 'chat_thread_screen.dart';
 /// Scheda Chat (Fase 4, Blocco 1): le chat a due cifrate, le richieste dagli sconosciuti e
 /// «Nuova chat» dalla rubrica. Senza server collegato resta l'anteprima della Fase 1.
 class ChatScreen extends StatelessWidget {
-  const ChatScreen({super.key, this.service, this.profiles, this.now = DateTime.now});
+  const ChatScreen({super.key, this.service, this.profiles, this.now = DateTime.now, this.statusPicker});
 
   final ChatService? service;
+
+  /// Foto e video per gli stati; nei test una versione finta.
+  final StatusPicker? statusPicker;
   final ProfileRepository? profiles;
   final DateTime Function() now;
 
@@ -45,15 +49,19 @@ class ChatScreen extends StatelessWidget {
     }
     return ListenableBuilder(
       listenable: chat,
-      builder: (BuildContext context, _) => _ChatList(chat: chat, profiles: profiles, now: now()),
+      builder: (BuildContext context, _) =>
+          _ChatList(chat: chat, profiles: profiles, now: now(), statusPicker: statusPicker),
     );
   }
 }
 
+enum _Section { chats, statuses, calls }
+
 class _ChatList extends StatefulWidget {
-  const _ChatList({required this.chat, required this.profiles, required this.now});
+  const _ChatList({required this.chat, required this.profiles, required this.now, this.statusPicker});
 
   final ChatService chat;
+  final StatusPicker? statusPicker;
   final ProfileRepository? profiles;
   final DateTime now;
 
@@ -62,35 +70,37 @@ class _ChatList extends StatefulWidget {
 }
 
 class _ChatListState extends State<_ChatList> {
-  /// Sezione aperta: false = chat, true = chiamate (Blocco 11).
-  bool _calls = false;
+  /// Sezione aperta: chat, stati (Blocco 13) o chiamate (Blocco 11).
+  _Section _section = _Section.chats;
 
   ChatService get chat => widget.chat;
   ProfileRepository? get profiles => widget.profiles;
   DateTime get now => widget.now;
 
-  /// «Chat | Chiamate» in alto, come le schede di WhatsApp.
+  /// «Chat | Stati | Chiamate» in alto, come le schede di WhatsApp.
   Widget _sections(BuildContext context) {
     final int missed = chat.calls?.log.unseenMissed ?? 0;
+    final int fresh = chat.statuses?.unseenCount ?? 0;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-      child: SegmentedButton<bool>(
+      child: SegmentedButton<_Section>(
         key: const ValueKey<String>('chat_sezioni'),
         showSelectedIcon: false,
-        segments: <ButtonSegment<bool>>[
-          const ButtonSegment<bool>(
-            value: false,
-            icon: Icon(Icons.chat_bubble_outline_rounded),
-            label: Text('Chat'),
-          ),
-          ButtonSegment<bool>(
-            value: true,
-            icon: const Icon(Icons.call_outlined),
-            label: Text(missed > 0 ? 'Chiamate · $missed' : 'Chiamate', key: const ValueKey<String>('sezione_chiamate')),
-          ),
+        segments: <ButtonSegment<_Section>>[
+          const ButtonSegment<_Section>(value: _Section.chats, label: Text('Chat')),
+          if (chat.statuses != null)
+            ButtonSegment<_Section>(
+              value: _Section.statuses,
+              label: Text(fresh > 0 ? 'Stati · $fresh' : 'Stati', key: const ValueKey<String>('sezione_stati')),
+            ),
+          if (chat.calls != null)
+            ButtonSegment<_Section>(
+              value: _Section.calls,
+              label: Text(missed > 0 ? 'Chiamate · $missed' : 'Chiamate', key: const ValueKey<String>('sezione_chiamate')),
+            ),
         ],
-        selected: <bool>{_calls},
-        onSelectionChanged: (Set<bool> v) => setState(() => _calls = v.first),
+        selected: <_Section>{_section},
+        onSelectionChanged: (Set<_Section> v) => setState(() => _section = v.first),
       ),
     );
   }
@@ -143,14 +153,23 @@ class _ChatListState extends State<_ChatList> {
     }
     final List<ChatThread> threads = chat.threads;
     final List<ChatThread> requests = chat.requests;
-    if (chat.calls != null) {
+    if (chat.calls != null || chat.statuses != null) {
+      final Listenable sections = Listenable.merge(<Listenable?>[chat.calls?.log, chat.statuses]);
       return Column(
         children: [
-          ListenableBuilder(listenable: chat.calls!.log, builder: (BuildContext c, _) => _sections(c)),
+          ListenableBuilder(listenable: sections, builder: (BuildContext c, _) => _sections(c)),
           Expanded(
-            child: _calls
-                ? CallsList(chat: chat, calls: chat.calls!, profiles: profiles, openChat: _openChat, now: () => now)
-                : _chats(context, theme, threads, requests),
+            child: switch (_section) {
+              _Section.calls when chat.calls != null =>
+                CallsList(chat: chat, calls: chat.calls!, profiles: profiles, openChat: _openChat, now: () => now),
+              _Section.statuses when chat.statuses != null => StatusList(
+                service: chat.statuses!,
+                contacts: chat.contacts,
+                profiles: profiles,
+                picker: widget.statusPicker,
+              ),
+              _ => _chats(context, theme, threads, requests),
+            },
           ),
         ],
       );

@@ -36,6 +36,7 @@ import 'features/privacy/privacy_repository.dart';
 import 'features/profile/profile_repository.dart';
 import 'features/security/app_lock.dart';
 import 'features/security/security_repository.dart';
+import 'features/status/status_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -127,6 +128,13 @@ ChatService _chatFor(String uid) {
       // Registro delle chiamate, solo su questo telefono (Blocco 11).
       logStore: FileCallLogStore(folder),
       ringer: SystemCallRinger(),
+    ),
+    // Stati di 24 ore (Blocco 13): regole sul server, la scelta del pubblico sul telefono.
+    statuses: (ChatService chat) => StatusService(
+      server: SupabaseStatusServer(Supabase.instance.client),
+      myId: uid,
+      prefs: FileStatusPrefsStore(folder),
+      localName: chat.localName,
     ),
     // Backup cifrato con password (Blocco 6): la chiave resta nell'archivio sicuro del telefono.
     backupServer: SupabaseBackupServer(Supabase.instance.client, uid: () => uid),

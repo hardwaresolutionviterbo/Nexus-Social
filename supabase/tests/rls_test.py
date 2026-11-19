@@ -2820,6 +2820,75 @@ def check_presence_phase4() -> None:
           f"{away}, {bad}, {anon}, {mine.get('last_seen') if isinstance(mine, dict) else mine}")
 
 
+def check_statuses_phase4() -> None:
+    """ST · Stati (Fase 4, Blocco 13): li vede solo chi l'autore ha scelto, per 24 ore."""
+    ta, tb, tc = token(UID_A), token(UID_B), token(UID_C)
+    for t, other in ((ta, UID_B), (tb, UID_A), (tb, UID_C), (tc, UID_B)):
+        rpc("unblock_user", {"p_user_id": other}, t)
+    sql(f"insert into private.contact_links (owner_id, contact_id, expires_at) values "
+        f"('{UID_B}', '{UID_A}', now() + interval '30 days') on conflict (owner_id, contact_id) "
+        "do update set expires_at = excluded.expires_at;")
+    sql(f"delete from private.contact_links where owner_id = '{UID_B}' and contact_id = '{UID_C}';")
+    sql(f"delete from public.statuses where user_id = '{UID_B}';")
+
+    def create(kind="testo", body="Al mare!", media=None, audience="contatti", people=None, tok=None):
+        return rpc("status_create", {"p_kind": kind, "p_body": body, "p_color": 2, "p_media_path": media,
+                                     "p_audience": audience, "p_people": people or []}, tok or tb)
+
+    def feed_ids(tok) -> set:
+        status, rows = rpc("status_feed", {}, tok)
+        return {r["id"] for r in rows} if status == 200 and isinstance(rows, list) else {"errore"}
+
+    s1 = create()
+    a_sees, c_sees = feed_ids(ta), feed_ids(tc)
+    anon = rpc("status_feed", {}, None)[0]
+    empty = create(body="   ")[0]
+    check("ST1", "«I miei contatti»: lo vede chi l'autore ha in rubrica, non gli altri",
+          s1[0] == 200 and s1[1] in a_sees and s1[1] not in c_sees and anon >= 400 and empty >= 400,
+          f"{s1[0]}, {s1[1] in a_sees}, {s1[1] in c_sees}, {anon}, {empty}")
+
+    except_a = create(audience="tranne", people=[UID_A])[1]
+    only_c_no_contact = create(audience="solo", people=[UID_C])[1]
+    c_before = only_c_no_contact in feed_ids(tc)
+    sql(f"insert into private.contact_links (owner_id, contact_id, expires_at) values "
+        f"('{UID_B}', '{UID_C}', now() + interval '30 days') on conflict (owner_id, contact_id) "
+        "do update set expires_at = excluded.expires_at;")
+    only_c = create(audience="solo", people=[UID_C])[1]
+    a2, c2 = feed_ids(ta), feed_ids(tc)
+    nobody = create(audience="solo", people=[])[0]
+    check("ST2", "«Tranne…» esclude; «Solo…» solo le persone scelte (e che l'autore ha in rubrica)",
+          except_a not in a2 and only_c in c2 and only_c not in a2 and not c_before
+          and only_c_no_contact in c2 and nobody >= 400,
+          f"{except_a in a2}, {only_c in c2}, {only_c in a2}, {c_before}, {nobody}")
+    sql(f"delete from private.contact_links where owner_id = '{UID_B}' and contact_id = '{UID_C}';")
+
+    jpg = b"\xff\xd8\xff" + bytes(200)
+    up = storage("POST", f"stati/{UID_B}/foto1.jpg", tb, jpg, content_type="image/jpeg")
+    foreign_up = storage("POST", f"stati/{UID_B}/intruso.jpg", tc, jpg, content_type="image/jpeg")
+    photo = create(kind="foto", body="", media=f"{UID_B}/foto1.jpg")
+    stolen = create(kind="foto", body="", media=f"{UID_A}/qualcosa.jpg")[0]
+    get_a = storage("GET", f"authenticated/stati/{UID_B}/foto1.jpg", ta)
+    get_c = storage("GET", f"authenticated/stati/{UID_B}/foto1.jpg", tc)
+    check("ST3", "Foto: caricata solo nella propria cartella; la apre solo chi può vedere lo stato",
+          up == 200 and foreign_up >= 400 and photo[0] == 200 and stolen >= 400 and get_a == 200 and get_c >= 400,
+          f"{up}, {foreign_up}, {photo[0]}, {stolen}, {get_a}, {get_c}")
+
+    seen = rpc("status_seen", {"p_id": s1[1]}, ta)[0]
+    seen_c = rpc("status_seen", {"p_id": s1[1]}, tc)[0]
+    _, viewers = rpc("status_viewers", {"p_id": s1[1]}, tb)
+    _, not_owner = rpc("status_viewers", {"p_id": s1[1]}, ta)
+    sql(f"update public.statuses set expires_at = now() - interval '1 second' where user_id = '{UID_B}';")
+    expired = s1[1] in feed_ids(ta)
+    get_expired = storage("GET", f"authenticated/stati/{UID_B}/foto1.jpg", ta)
+    _, cleaned = rpc("status_cleanup", {}, tb)
+    left = sql(f"select count(*) from public.statuses where user_id = '{UID_B}';")
+    check("ST4", "Chi l'ha visto lo sa solo l'autore; dopo 24 ore sparisce e i file si possono togliere",
+          seen in (200, 204) and seen_c >= 400 and [v.get("user_id") for v in viewers] == [UID_A]
+          and not_owner == [] and not expired and get_expired >= 400
+          and f"{UID_B}/foto1.jpg" in [c.get("media_path") for c in cleaned] and left == "0",
+          f"{seen}, {seen_c}, {len(viewers)}, {not_owner}, {expired}, {get_expired}, {left}")
+
+
 def check_push_phase4() -> None:
     """U · Notifiche (Fase 4, Blocco 5): coda server, silenzia, non disturbare, mai i Mi piace."""
     ta, tb = token(UID_A), token(UID_B)
@@ -2966,6 +3035,7 @@ def main() -> int:
     check_group_calls_phase4()
     check_contact_names_phase4()
     check_presence_phase4()
+    check_statuses_phase4()
     failed = [r for r in results if not r[2]]
     print(f"{'Caso':6} {'Esito':9} Descrizione")
     for case, desc, ok, detail in results:
