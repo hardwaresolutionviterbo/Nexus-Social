@@ -68,7 +68,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey<String>('anteprima_profilo')));
     await tester.pumpAndSettle();
-    expect(find.text('Come ti vedono gli altri'), findsOneWidget);
+    expect(find.text('Il mio profilo pubblico'), findsOneWidget);
     expect(find.text('Bio nascosta'), findsNothing);
     expect(find.textContaining('Bianchi'), findsNothing);
   });

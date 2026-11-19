@@ -144,6 +144,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       biometricLock: widget.biometricLock,
       contacts: widget.contacts,
       isAdmin: widget.isAdmin,
+      market: widget.market,
       // Media dei feedback sul profilo dei privati (Fase 5, Blocco 4).
       feedback: widget.market == null || widget.profile == null || widget.profile!.isBusiness
           ? null

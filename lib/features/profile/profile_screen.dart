@@ -4,6 +4,9 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/config/app_config.dart';
 import '../../core/services/backend_bootstrap.dart';
 import '../../core/theme/app_theme.dart';
+import '../market/market_repository.dart';
+import '../market/market_models.dart';
+import '../../core/widgets/piazly_ui.dart';
 import '../../core/widgets/nexus_ui.dart';
 import '../contacts/contacts_sync.dart';
 import '../chat/chat_backup_screen.dart';
@@ -36,7 +39,11 @@ class ProfileScreen extends StatelessWidget {
     this.contacts,
     this.feedback,
     this.isAdmin,
+    this.market,
   });
+
+  /// Per i numeri in alto (feedback, annunci, scambi, conclusi).
+  final MarketRepository? market;
 
   /// Vero solo per gli amministratori di Piazly: vedono lo stato dei servizi e la diagnostica.
   final Future<bool> Function()? isAdmin;
@@ -157,110 +164,13 @@ class ProfileScreen extends StatelessWidget {
     return ListView(
       padding: AppSpacing.pagePadding,
       children: [
-        FadeSlideIn(
-          child: Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: AppColors.accentGradient(AppColors.brandViolet),
-              borderRadius: BorderRadius.circular(30),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.brandViolet.withValues(alpha: 0.35),
-                  blurRadius: 30,
-                  offset: const Offset(0, 12),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                // Avatar con anello arancio luminoso.
-                if (me != null)
-                  AvatarView(
-                    name: me.publicName.isEmpty ? me.username : me.publicName,
-                    repository: profiles,
-                    path: me.avatarThumbPath,
-                    size: 64,
-                  )
-                else
-                Container(
-                  padding: const EdgeInsets.all(3),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: AppColors.orangeGradient,
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.brandOrange.withValues(alpha: 0.5),
-                        blurRadius: 18,
-                      ),
-                    ],
-                  ),
-                  child: Container(
-                    width: 64,
-                    height: 64,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white.withValues(alpha: 0.22),
-                      border: Border.all(color: Colors.white, width: 2),
-                    ),
-                    child: const Icon(
-                      Icons.person_rounded,
-                      color: Colors.white,
-                      size: 34,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (me != null) ...[
-                        Text(
-                          me.isBusiness && me.businessName != null
-                              ? me.businessName!
-                              : me.publicName,
-                          key: const ValueKey<String>('mio_nome_pubblico'),
-                          style: theme.textTheme.titleMedium?.copyWith(color: Colors.white),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '@${me.username}',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: Colors.white.withValues(alpha: 0.85),
-                          ),
-                        ),
-                      ] else ...[
-                      Text(
-                        _signedIn ? 'Accesso effettuato' : 'Profilo non configurato',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _signedIn
-                            ? AppConfig.serverLinkEnabled
-                                  ? 'Nome, foto e bio si completano nel prossimo aggiornamento.'
-                                  : 'Collegamento al server in attesa. Nome, foto e bio '
-                                        'arriveranno nei prossimi aggiornamenti.'
-                            : 'Registrati con il numero di telefono per iniziare.',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.85),
-                        ),
-                      ),
-                      ],
-                      const SizedBox(height: 10),
-                      const PhaseChip(phase: 2, onAccent: true),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+        FadeSlideIn(child: _ProfileHeader(me: me, profiles: profiles, signedIn: _signedIn, onEdit: me == null ? null : () => _openEditor(context))),
+        if (me != null && market != null)
+          Transform.translate(
+            offset: const Offset(0, -26),
+            child: _ProfileStats(repository: market!, userId: me.id),
           ),
-        ),
         if (feedback != null) ...[
-          const SizedBox(height: AppSpacing.md),
           SectionCard(
             key: const ValueKey<String>('miei_feedback'),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -274,90 +184,70 @@ class ProfileScreen extends StatelessWidget {
           ),
         ],
         if (me != null) ...[
-          const SizedBox(height: AppSpacing.md),
-          SectionCard(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-            child: Column(
-              children: [
-                ListTile(
-                  key: const ValueKey<String>('modifica_profilo'),
-                  leading: const Icon(Icons.edit_outlined),
-                  title: const Text('Modifica profilo'),
-                  subtitle: const Text('Foto, nome utente, bio e social'),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () => _openEditor(context),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  key: const ValueKey<String>('anteprima_profilo'),
-                  leading: const Icon(Icons.visibility_outlined),
-                  title: const Text('Come ti vedono gli altri'),
-                  subtitle: const Text('Anteprima del profilo pubblico'),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () => _openPreview(context),
-                ),
-                if (privacy != null) ...[
-                  const Divider(height: 1),
-                  ListTile(
-                    key: const ValueKey<String>('apri_privacy'),
-                    leading: const Icon(Icons.lock_outline_rounded),
-                    title: const Text('Privacy'),
-                    subtitle: const Text('Numero, profilo, persone bloccate e autorizzazioni'),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () => _openPrivacy(context),
-                  ),
-                ],
-                if (ChatRegistry.current?.backup != null) ...[
-                  const Divider(height: 1),
-                  ListTile(
-                    key: const ValueKey<String>('apri_backup_chat'),
-                    leading: const Icon(Icons.cloud_upload_outlined),
-                    title: const Text('Backup delle chat'),
-                    subtitle: const Text('Ritrovi i messaggi se cambi telefono'),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () => ChatBackupScreen.open(context, ChatRegistry.current!.backup!),
-                  ),
-                ],
-                if (pushSettings != null) ...[
-                  const Divider(height: 1),
-                  ListTile(
-                    key: const ValueKey<String>('apri_notifiche'),
-                    leading: const Icon(Icons.notifications_none_rounded),
-                    title: const Text('Notifiche'),
-                    subtitle: const Text('Messaggi, commenti, scambi e Non disturbare'),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => NotificationSettingsScreen(repository: pushSettings!),
-                      ),
-                    ),
-                  ),
-                ],
-                if (security != null && biometricLock != null) ...[
-                  const Divider(height: 1),
-                  ListTile(
-                    key: const ValueKey<String>('apri_sicurezza'),
-                    leading: const Icon(Icons.shield_outlined),
-                    title: const Text('Sicurezza dell\'account'),
-                    subtitle: const Text('PIN di verifica e sblocco con impronta o volto'),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () => _openSecurity(context),
-                  ),
-                ],
-              ],
-            ),
+          const SizedBox(height: AppSpacing.sm),
+          MenuCard(
+            key: const ValueKey<String>('modifica_profilo'),
+            icon: Icons.person_outline_rounded,
+            title: 'Modifica profilo',
+            subtitle: 'Foto, nome, bio e social',
+            onTap: () => _openEditor(context),
           ),
+          MenuCard(
+            key: const ValueKey<String>('anteprima_profilo'),
+            icon: Icons.visibility_outlined,
+            color: AppColors.brandOrange,
+            title: 'Il mio profilo pubblico',
+            subtitle: 'Anteprima di come ti vedono gli altri',
+            onTap: () => _openPreview(context),
+          ),
+          if (privacy != null)
+            MenuCard(
+              key: const ValueKey<String>('apri_privacy'),
+              icon: Icons.shield_outlined,
+              title: 'Privacy',
+              subtitle: 'Numero, blocchi, GPS e autorizzazioni',
+              onTap: () => _openPrivacy(context),
+            ),
+          if (security != null && biometricLock != null)
+            MenuCard(
+              key: const ValueKey<String>('apri_sicurezza'),
+              icon: Icons.lock_outline_rounded,
+              color: PiazlyColors.green,
+              title: 'Sicurezza dell\'account',
+              subtitle: 'PIN di verifica e sblocco con impronta o volto',
+              onTap: () => _openSecurity(context),
+            ),
+          if (ChatRegistry.current?.backup != null)
+            MenuCard(
+              key: const ValueKey<String>('apri_backup_chat'),
+              icon: Icons.cloud_upload_outlined,
+              color: AppColors.brandBlue,
+              title: 'Backup delle chat',
+              subtitle: 'Salva i tuoi messaggi',
+              onTap: () => ChatBackupScreen.open(context, ChatRegistry.current!.backup!),
+            ),
+          if (pushSettings != null)
+            MenuCard(
+              key: const ValueKey<String>('apri_notifiche'),
+              icon: Icons.notifications_none_rounded,
+              color: AppColors.brandOrange,
+              title: 'Notifiche',
+              subtitle: 'Messaggi, commenti, scambi e altro',
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => NotificationSettingsScreen(repository: pushSettings!),
+                ),
+              ),
+            ),
         ],
         if (_signedIn) ...[
-          const SizedBox(height: AppSpacing.md),
-          SectionCard(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-            child: ListTile(
-              leading: const Icon(Icons.logout_rounded),
-              title: const Text('Esci'),
-              subtitle: const Text('Esci dall\'account su questo telefono'),
-              onTap: () => _confirmSignOut(context),
-            ),
+          const SizedBox(height: AppSpacing.sm),
+          MenuCard(
+            icon: Icons.logout_rounded,
+            color: AppColors.brandCoral,
+            title: 'Esci',
+            subtitle: 'Esci dall\'account su questo telefono',
+            onTap: () => _confirmSignOut(context),
           ),
         ],
         // Stato dei servizi, versione e diagnostica: solo per gli amministratori (decisione del
@@ -471,6 +361,218 @@ class ProfileScreen extends StatelessWidget {
 }
 
 /// Mostra il contenuto solo se il server dice che l'utente è amministratore.
+/// Intestazione viola con onde leggere, foto grande con l'anello arancio e la fotocamera.
+class _ProfileHeader extends StatelessWidget {
+  const _ProfileHeader({required this.me, required this.profiles, required this.signedIn, this.onEdit});
+
+  final MyProfile? me;
+  final ProfileRepository? profiles;
+  final bool signedIn;
+  final VoidCallback? onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final MyProfile? p = me;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(30),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(20, 22, 20, 48),
+        decoration: const BoxDecoration(gradient: PiazlyColors.violetGradient),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            // Onde leggere sullo sfondo.
+            Positioned(
+              right: -60,
+              top: -70,
+              child: Container(
+                width: 220,
+                height: 220,
+                decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: 0.08)),
+              ),
+            ),
+            Positioned(
+              left: -40,
+              bottom: -110,
+              child: Container(
+                width: 260,
+                height: 160,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(120),
+                  color: Colors.white.withValues(alpha: 0.07),
+                ),
+              ),
+            ),
+            Row(
+              children: [
+                GestureDetector(
+                  key: const ValueKey<String>('profilo_foto'),
+                  onTap: onEdit,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: AppColors.orangeGradient,
+                          boxShadow: [BoxShadow(color: AppColors.brandOrange.withValues(alpha: 0.5), blurRadius: 18)],
+                        ),
+                        child: p != null
+                            ? AvatarView(
+                                name: p.publicName.isEmpty ? p.username : p.publicName,
+                                repository: profiles,
+                                path: p.avatarThumbPath,
+                                size: 96,
+                              )
+                            : Container(
+                                width: 96,
+                                height: 96,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.white.withValues(alpha: 0.22),
+                                ),
+                                child: const Icon(Icons.person_rounded, color: Colors.white, size: 48),
+                              ),
+                      ),
+                      if (p != null)
+                        const Positioned(
+                          right: 0,
+                          bottom: 0,
+                          child: CircleAvatar(
+                            radius: 17,
+                            backgroundColor: Colors.white,
+                            child: Icon(Icons.photo_camera_rounded, size: 19, color: Color(0xFF1F2937)),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 18),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (p != null) ...[
+                        Text(
+                          p.isBusiness && p.businessName != null ? p.businessName! : p.publicName,
+                          key: const ValueKey<String>('mio_nome_pubblico'),
+                          style: theme.textTheme.headlineSmall?.copyWith(color: Colors.white, fontWeight: FontWeight.w800),
+                        ),
+                        Text(
+                          '@${p.username}',
+                          style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white.withValues(alpha: 0.85)),
+                        ),
+                      ] else ...[
+                        Text(
+                          signedIn ? 'Accesso effettuato' : 'Profilo non configurato',
+                          style: theme.textTheme.titleMedium?.copyWith(color: Colors.white),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          signedIn
+                              ? AppConfig.serverLinkEnabled
+                                    ? 'Nome, foto e bio si completano nel prossimo aggiornamento.'
+                                    : 'Collegamento al server in attesa. Nome, foto e bio '
+                                          'arriveranno nei prossimi aggiornamenti.'
+                              : 'Registrati con il numero di telefono per iniziare.',
+                          style: theme.textTheme.bodySmall?.copyWith(color: Colors.white.withValues(alpha: 0.85)),
+                        ),
+                      ],
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.92),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.bar_chart_rounded, color: PiazlyColors.violet, size: 20),
+                            SizedBox(width: 6),
+                            Text('Fase 2', style: TextStyle(color: PiazlyColors.violet, fontWeight: FontWeight.w800)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// I numeri in alto: feedback ricevuti, annunci attivi, proposte di scambio, affari conclusi.
+class _ProfileStats extends StatefulWidget {
+  const _ProfileStats({required this.repository, required this.userId});
+
+  final MarketRepository repository;
+  final String userId;
+
+  @override
+  State<_ProfileStats> createState() => _ProfileStatsState();
+}
+
+class _ProfileStatsState extends State<_ProfileStats> {
+  int? _feedback;
+  int? _listings;
+  int? _swaps;
+  int? _deals;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.repository.feedbackSummary(widget.userId).then((FeedbackSummary s) {
+      if (mounted) setState(() => _feedback = s.count);
+    }, onError: (Object _) {});
+    widget.repository.mine().then((List<MyMarketListing> l) {
+      if (mounted) setState(() => _listings = l.where((MyMarketListing x) => x.state == MarketListingState.active).length);
+    }, onError: (Object _) {});
+    widget.repository.mySwaps().then((List<SwapProposal> l) {
+      if (mounted) setState(() => _swaps = l.length);
+    }, onError: (Object _) {});
+    widget.repository.myDeals().then((List<MarketDeal> l) {
+      if (mounted) setState(() => _deals = l.length);
+    }, onError: (Object _) {});
+  }
+
+  Widget _stat(String key, IconData icon, int? n, String label, Color color) => Expanded(
+    child: SoftCard(
+      key: ValueKey<String>('statistica_$key'),
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+      radius: 18,
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 24),
+          const SizedBox(height: 4),
+          Text(n == null ? '–' : '$n', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+          Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5)),
+        ],
+      ),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 8),
+    child: Row(
+      children: [
+        _stat('feedback', Icons.star_outline_rounded, _feedback, 'Feedback', AppColors.brandOrange),
+        _stat('annunci', Icons.article_outlined, _listings, 'Annunci', PiazlyColors.violet),
+        _stat('scambi', Icons.swap_horiz_rounded, _swaps, 'Scambi', PiazlyColors.violet),
+        _stat('conclusi', Icons.handshake_outlined, _deals, 'Conclusi', AppColors.brandCoral),
+      ],
+    ),
+  );
+}
+
 class _AdminOnly extends StatefulWidget {
   const _AdminOnly({required this.isAdmin, required this.child});
 

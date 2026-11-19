@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../core/services/auth_gateway.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/piazly_ui.dart';
 import '../../core/widgets/nexus_ui.dart';
 import 'registration_rules.dart';
 
@@ -246,7 +247,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
       case _Step.welcome:
         return _StepView(
           body: [
-            const FadeSlideIn(child: _WelcomeHero()),
+            const FadeSlideIn(child: _WelcomeMapHero()),
             const SizedBox(height: 26),
             FadeSlideIn(
               delay: 0.12,
@@ -254,20 +255,33 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
                 TextSpan(
                   children: [
                     const TextSpan(text: 'Il tuo mondo,\n'),
-                    TextSpan(
+                    const TextSpan(
                       text: 'vicino a te.',
-                      style: TextStyle(color: theme.colorScheme.primary),
+                      style: TextStyle(color: AppColors.brandOrangeDeep),
                     ),
                   ],
                 ),
-                style: theme.textTheme.headlineMedium?.copyWith(height: 1.1),
+                style: theme.textTheme.headlineLarge?.copyWith(height: 1.08, fontWeight: FontWeight.w800),
+              ),
+            ),
+            // Sottolineatura arancione sotto «vicino a te».
+            FadeSlideIn(
+              delay: 0.14,
+              child: Container(
+                margin: const EdgeInsets.only(top: 4, left: 2),
+                width: 160,
+                height: 5,
+                decoration: BoxDecoration(
+                  gradient: AppColors.orangeGradient,
+                  borderRadius: BorderRadius.circular(5),
+                ),
               ),
             ),
             const SizedBox(height: 10),
             FadeSlideIn(
               delay: 0.18,
               child: Text(
-                'Chatta con chi conosci, scopri persone ed eventi sulla Mappa Social, '
+                'Chatta con chi conosci, scopri persone ed eventi sulla Mappa Sociale, '
                 'scambia e vendi nella tua zona.',
                 style: theme.textTheme.bodyMedium?.copyWith(color: muted),
               ),
@@ -275,25 +289,13 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
             const SizedBox(height: 16),
             const FadeSlideIn(
               delay: 0.24,
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
+              child: Row(
                 children: [
-                  _FeatureChip(
-                    icon: Icons.lock_rounded,
-                    label: 'Chat cifrate',
-                    color: AppColors.brandBlue,
-                  ),
-                  _FeatureChip(
-                    icon: Icons.map_rounded,
-                    label: 'Mappa Social',
-                    color: AppColors.brandCyan,
-                  ),
-                  _FeatureChip(
-                    icon: Icons.swap_horiz_rounded,
-                    label: 'Scambia e vendi',
-                    color: AppColors.brandOrange,
-                  ),
+                  _FeatureTile(icon: Icons.lock_rounded, label: 'Chat\ncifrate', color: PiazlyColors.violet),
+                  SizedBox(width: 10),
+                  _FeatureTile(icon: Icons.map_outlined, label: 'Mappa\nSociale', color: AppColors.brandBlue),
+                  SizedBox(width: 10),
+                  _FeatureTile(icon: Icons.swap_horiz_rounded, label: 'Scambia\ne vendi', color: AppColors.brandOrange),
                 ],
               ),
             ),
@@ -826,230 +828,104 @@ class _InfoRow extends StatelessWidget {
   }
 }
 
-class _FeatureChip extends StatelessWidget {
-  const _FeatureChip({required this.icon, required this.label, required this.color});
+/// Riquadro della schermata iniziale: icona e due parole, su fondo tenue.
+class _FeatureTile extends StatelessWidget {
+  const _FeatureTile({required this.icon, required this.label, required this.color});
 
   final IconData icon;
   final String label;
   final Color color;
 
   @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+  Widget build(BuildContext context) => Expanded(
+    child: Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.35)),
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(18),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: Column(
         children: [
-          Icon(icon, size: 16, color: color),
-          const SizedBox(width: 6),
+          Icon(icon, color: color, size: 26),
+          const SizedBox(height: 4),
           Text(
             label,
-            style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700, height: 1.15),
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
 }
 
-/// Illustrazione della schermata iniziale: una piccola Mappa Social con persone,
-/// luoghi ed eventi, disegnata con widget (nessuna immagine esterna).
-class _WelcomeHero extends StatelessWidget {
-  const _WelcomeHero();
+/// Illustrazione della nuova schermata iniziale: una piccola mappa in prospettiva su un'onda
+/// viola, con il segnaposto arancione al centro e due viola.
+class _WelcomeMapHero extends StatelessWidget {
+  const _WelcomeMapHero();
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 240,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(32),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF14204A), Color(0xFF1E2A6E), Color(0xFF3A1F5C)],
-        ),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.brandBlue.withValues(alpha: 0.30),
-            blurRadius: 34,
-            offset: const Offset(0, 14),
-          ),
-        ],
-      ),
-      child: Stack(
-        children: [
-          const Positioned.fill(child: CustomPaint(painter: _MapPainter())),
-          // Persone (avatar rotondi) e luoghi (gocce colorate), come nel mockup.
-          const Positioned(left: 34, top: 40, child: _Avatar(letter: 'G', color: AppColors.brandBlue)),
-          const Positioned(right: 54, top: 30, child: _Pin(color: AppColors.brandOrange, icon: Icons.local_cafe_rounded)),
-          const Positioned(left: 120, bottom: 46, child: _Pin(color: Color(0xFF22C55E), icon: Icons.celebration_rounded)),
-          const Positioned(right: 36, bottom: 70, child: _Avatar(letter: 'M', color: AppColors.brandViolet)),
-          const Positioned(left: 50, bottom: 104, child: _Pin(color: AppColors.brandCoral, icon: Icons.sell_rounded)),
-          const Positioned(left: 156, top: 86, child: _Avatar(letter: 'S', color: AppColors.brandCyan, size: 52, me: true)),
-          // Fumetto di chat.
-          Positioned(
-            right: 18,
-            top: 98,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(16),
-                  topRight: Radius.circular(16),
-                  bottomLeft: Radius.circular(16),
-                  bottomRight: Radius.circular(4),
-                ),
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withValues(alpha: 0.25), blurRadius: 14),
-                ],
-              ),
-              child: const Text(
-                'Un caffè al bar? ☕',
-                style: TextStyle(
-                  color: Color(0xFF0F172A),
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
-                ),
-              ),
-            ),
-          ),
-          // Etichetta in basso.
-          Positioned(
-            left: 16,
-            bottom: 14,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.near_me_rounded, color: Colors.white, size: 15),
-                  SizedBox(width: 6),
-                  Text(
-                    'Persone ed eventi vicino a te',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12.5,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Strade e isolati stilizzati della mappa illustrata.
-class _MapPainter extends CustomPainter {
-  const _MapPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final Paint road = Paint()
-      ..color = Colors.white.withValues(alpha: 0.10)
-      ..strokeWidth = 10
-      ..strokeCap = StrokeCap.round;
-    final Paint lane = Paint()
-      ..color = Colors.white.withValues(alpha: 0.06)
-      ..strokeWidth = 4;
-    canvas
-      ..drawLine(Offset(0, size.height * 0.62), Offset(size.width, size.height * 0.38), road)
-      ..drawLine(Offset(size.width * 0.28, 0), Offset(size.width * 0.44, size.height), road)
-      ..drawLine(Offset(size.width * 0.72, 0), Offset(size.width * 0.86, size.height), lane)
-      ..drawLine(Offset(0, size.height * 0.2), Offset(size.width, size.height * 0.12), lane)
-      ..drawLine(Offset(0, size.height * 0.9), Offset(size.width, size.height * 0.78), lane);
-    // Zona approssimata intorno all'utente (posizione mai esatta).
-    canvas.drawCircle(
-      Offset(size.width * 0.5, size.height * 0.46),
-      70,
-      Paint()..color = AppColors.brandCyan.withValues(alpha: 0.12),
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class _Avatar extends StatelessWidget {
-  const _Avatar({
-    required this.letter,
-    required this.color,
-    this.size = 40,
-    this.me = false,
-  });
-
-  final String letter;
-  final Color color;
-  final double size;
-  final bool me;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: AppColors.accentGradient(color),
-        border: Border.all(color: me ? AppColors.brandOrange : Colors.white, width: me ? 3 : 2),
-        boxShadow: [
-          BoxShadow(color: color.withValues(alpha: 0.55), blurRadius: me ? 24 : 14),
-        ],
-      ),
-      child: Text(
-        letter,
-        style: TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.w900,
-          fontSize: size * 0.4,
-        ),
-      ),
-    );
-  }
-}
-
-class _Pin extends StatelessWidget {
-  const _Pin({required this.color, required this.icon});
-
-  final Color color;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
+    Widget pin(Color c, double size) => Icon(Icons.location_on_rounded, color: c, size: size, shadows: const <Shadow>[
+      Shadow(color: Color(0x55000000), blurRadius: 8, offset: Offset(0, 4)),
+    ]);
     return SizedBox(
-      width: 40,
-      height: 46,
+      height: 230,
       child: Stack(
-        alignment: Alignment.topCenter,
+        alignment: Alignment.center,
         children: [
-          Icon(
-            Icons.location_on_rounded,
-            size: 46,
-            color: color,
-            shadows: [Shadow(color: color.withValues(alpha: 0.6), blurRadius: 14)],
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(32),
+                gradient: const LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: <Color>[Color(0xFFF6F1FF), Color(0xFFE9DDFE)],
+                ),
+              ),
+            ),
           ),
-          Padding(
-            padding: const EdgeInsets.only(top: 9),
-            child: Icon(icon, size: 16, color: Colors.white),
+          // La mappa: un quadrato inclinato con strade e isolati.
+          Positioned(
+            bottom: 18,
+            child: Transform(
+              alignment: Alignment.center,
+              transform: Matrix4.identity()
+                ..setEntry(3, 2, 0.0012)
+                ..rotateX(0.95)
+                ..rotateZ(0.78),
+              child: Container(
+                width: 190,
+                height: 190,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: const Color(0xFFB79CF7), width: 6),
+                  boxShadow: const <BoxShadow>[BoxShadow(color: Color(0x337C3AED), blurRadius: 24, offset: Offset(0, 12))],
+                ),
+                child: GridView.count(
+                  crossAxisCount: 4,
+                  padding: const EdgeInsets.all(10),
+                  mainAxisSpacing: 8,
+                  crossAxisSpacing: 8,
+                  physics: const NeverScrollableScrollPhysics(),
+                  children: <Widget>[
+                    for (int i = 0; i < 16; i++)
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: <int>{1, 6, 11, 12}.contains(i) ? const Color(0xFF6BCB77) : const Color(0xFFEDEFF5),
+                          borderRadius: BorderRadius.circular(5),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
           ),
+          Positioned(top: 22, child: pin(AppColors.brandOrange, 96)),
+          Positioned(left: 70, top: 58, child: pin(PiazlyColors.violet, 44)),
+          Positioned(right: 70, top: 68, child: pin(PiazlyColors.violet, 40)),
         ],
       ),
     );
