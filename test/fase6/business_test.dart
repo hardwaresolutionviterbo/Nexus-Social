@@ -134,13 +134,17 @@ void main() {
     // Profilo attività.
     await tester.tap(find.byKey(const ValueKey<String>('azienda_crea_pagina')));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const ValueKey<String>('pagina_salva')));
     await tester.tap(find.byKey(const ValueKey<String>('pagina_salva')));
     await tester.pump();
     expect(find.text('Scrivi l\'insegna (da 2 a 80 caratteri).'), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const ValueKey<String>('pagina_insegna')));
     await tester.enterText(find.byKey(const ValueKey<String>('pagina_insegna')), 'Bar Centrale');
+    await tester.ensureVisible(find.byKey(const ValueKey<String>('pagina_cerca_indirizzo')));
     await tester.enterText(find.byKey(const ValueKey<String>('pagina_cerca_indirizzo')), 'Via Roma 12 Porano');
     await tester.pump(const Duration(milliseconds: 700));
     await tester.pump();
+    await tester.ensureVisible(find.text('Via Roma 12'));
     await tester.tap(find.text('Via Roma 12'));
     await tester.pumpAndSettle();
     expect(tester.widget<TextField>(find.byKey(const ValueKey<String>('pagina_via'))).controller!.text, 'Via Roma');
