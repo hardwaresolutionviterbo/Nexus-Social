@@ -506,7 +506,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 minimumSize: const Size(0, 56),
                 padding: const EdgeInsets.symmetric(horizontal: 22),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
+                textStyle: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
                 elevation: 4,
               ),
               onPressed: _publish,
