@@ -112,6 +112,8 @@ void main() {
       'lib/features/map/listing_form_screen.dart',
       'lib/features/map/listing_sheets.dart',
       'lib/features/map/listing_social_panel.dart',
+      // Blocco 14: GPS in tempo reale (scelta delle persone).
+      'lib/features/map/live_location_screens.dart',
       'lib/features/map/map_screen.dart',
       'lib/features/map/my_listings_screen.dart',
       'lib/features/map/notifications_screen.dart',
