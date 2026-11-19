@@ -632,8 +632,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
               else if (c != null && group && c.myMlsState != 'in')
                 const _WaitingBanner(),
               Expanded(
-                child: ListView.builder(
+                // Come su WhatsApp: con pochi messaggi la conversazione parte dall'alto, con
+                // l'avviso della cifratura in cima; con tanti si scorre dal fondo.
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: ListView.builder(
                   reverse: true,
+                  shrinkWrap: messages.length < 40,
                   padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
                   itemCount: messages.length + 1,
                   itemBuilder: (BuildContext context, int i) {
@@ -654,6 +659,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                           : () => _actions(m),
                     );
                   },
+                ),
                 ),
               ),
               if (_replyTo != null)
