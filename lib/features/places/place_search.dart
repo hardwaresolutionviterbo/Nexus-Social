@@ -16,7 +16,17 @@ class PlaceSuggestion {
     required this.lat,
     required this.lng,
     this.comune,
+    this.street = '',
+    this.houseNumber = '',
+    this.city = '',
+    this.postcode = '',
   });
+
+  /// Parti dell'indirizzo, quando il servizio le dà (per compilare la sede di un'attività).
+  final String street;
+  final String houseNumber;
+  final String city;
+  final String postcode;
 
   /// «Porano (TR)» oppure «Bar Centrale».
   final String title;
@@ -104,6 +114,10 @@ class PhotonPlaceLookup implements PlaceLookup {
         subtitle: where.join(', '),
         lat: (coords[1] as num).toDouble(),
         lng: (coords[0] as num).toDouble(),
+        street: s('street'),
+        houseNumber: s('housenumber'),
+        city: city.isNotEmpty ? city : (const <String>{'city', 'town', 'village'}.contains(s('osm_value')) ? name : ''),
+        postcode: s('postcode'),
       );
       if (!out.contains(sug)) out.add(sug);
     }

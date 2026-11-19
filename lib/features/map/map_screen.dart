@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../business/business_models.dart';
+import '../business/business_repository.dart';
+import '../business/business_screens.dart';
 import '../profile/profile_form_screen.dart' show PickImage, pickFromGallery;
 import '../privacy/privacy_repository.dart';
 import '../profile/profile_repository.dart';
@@ -52,7 +55,11 @@ class MapScreen extends StatefulWidget {
     this.privacy,
     this.now = DateTime.now,
     this.social,
+    this.businesses,
   });
+
+  /// Attività con sede fissa (Fase 6); se manca si usa [BusinessRegistry.current].
+  final BusinessRepository? businesses;
 
   /// Vero quando la scheda Mappa è quella aperta: solo allora si crea la mappa e si
   /// ascolta la posizione.
@@ -298,6 +305,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   void _onSurfaceReady(MapSurfaceHandle handle) {
     _handle = handle;
     if (_nearby.isNotEmpty) unawaited(handle.showListings(_nearby, _openListingById));
+    if (_businesses.isNotEmpty) unawaited(handle.showBusinesses(_businesses, _openBusiness));
     final LiveLocationService? live = _live;
     if (live != null && live.people.isNotEmpty) unawaited(handle.showPeople(live.people, _openPerson));
     final GeoFix? fix = _lastFix;
@@ -325,7 +333,33 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   }
 
   /// Annunci intorno alla posizione attuale con i filtri scelti (solo con il server).
+  /// Sedi delle attività intorno (Fase 6): segnaposti fissi, entro 20 km.
+  List<BusinessPin> _businesses = const <BusinessPin>[];
+
+  Future<void> _refreshBusinesses() async {
+    final BusinessRepository? repo = widget.businesses ?? BusinessRegistry.current;
+    final GeoPoint? origin = _currentPoint;
+    if (repo == null || origin == null || !widget.active) return;
+    try {
+      final List<BusinessPin> pins = await repo.nearby(origin.latitude, origin.longitude);
+      if (!mounted) return;
+      _businesses = pins;
+      await _handle?.showBusinesses(pins, _openBusiness);
+    } on BusinessFailure {
+      // Si riprova al prossimo spostamento.
+    }
+  }
+
+  Future<void> _openBusiness(String id) async {
+    final BusinessRepository? repo = widget.businesses ?? BusinessRegistry.current;
+    if (repo == null || !mounted) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(builder: (_) => BusinessProfileScreen(repository: repo, id: id, now: widget.now)),
+    );
+  }
+
   Future<void> _refreshNearby() async {
+    unawaited(_refreshBusinesses());
     final MapListingRepository? repo = widget.listings;
     final GeoPoint? origin = _currentPoint;
     if (repo == null || origin == null || !widget.active) return;

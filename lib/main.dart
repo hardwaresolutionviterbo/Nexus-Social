@@ -16,6 +16,7 @@ import 'core/services/firebase_services.dart';
 import 'core/services/push_device_registry.dart';
 import 'core/services/supabase_push_backend.dart';
 import 'features/ai/ai_service.dart';
+import 'features/business/business_repository.dart';
 import 'features/calls/call_log.dart';
 import 'features/calls/call_service.dart';
 import 'features/calls/webrtc_call_media.dart';
@@ -74,6 +75,11 @@ Future<void> main() async {
     LiveRegistry.current = LiveLocationService(
       server: SupabaseLiveLocationServer(Supabase.instance.client),
       location: const GeolocatorDeviceLocation(),
+    );
+    // Aziende (Fase 6): profilo attività con sede fissa e verifica.
+    BusinessRegistry.current = SupabaseBusinessRepository(
+      Supabase.instance.client,
+      uid: () => FirebaseAuth.instance.currentUser?.uid ?? '',
     );
     // Piazly AI (Blocco 18): chat e Immagini IA con Cloudflare Workers AI, tramite la funzione `ia`.
     AiRegistry.current = AiService(

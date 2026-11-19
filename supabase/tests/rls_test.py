@@ -41,6 +41,7 @@ PUBLIC_PROFILE_KEYS = {
     "avatar_thumb_path", "bio", "social_links", "rating_avg", "rating_count", "created_at",
 }
 VALID_VAT = "01234567897"  # partita IVA inventata con cifra di controllo corretta
+VALID_VAT_2 = "11111111115"  # un'altra partita IVA inventata valida
 JPEG = bytes.fromhex("ffd8ffe000104a46494600010100000100010000ffd9")  # JPEG minimo
 
 results: list[tuple[str, str, bool, str]] = []
@@ -2962,6 +2963,79 @@ def check_ai_limits_phase4() -> None:
           f"{user_try[0]}, {text}, {image}, {other[0]}")
 
 
+def check_business_phase6() -> None:
+    """BZ · Aziende (Fase 6, Blocco 1): pagina con sede fissa, dati privati, verifica dell'admin."""
+    ta, tb, td = token(UID_A), token(UID_B), token(UID_D)
+    for t, other in ((ta, UID_D), (td, UID_A)):
+        rpc("unblock_user", {"p_user_id": other}, t)
+    page = {
+        "p_display_name": "Bottega Verdi", "p_category": "negozio", "p_description": "Prova",
+        "p_street": "Via Roma", "p_civic": "12", "p_city": "Porano", "p_cap": "05010",
+        "p_province": "tr", "p_lat": 42.6851, "p_lng": 12.1029, "p_phone": "0763 000000",
+        "p_booking_url": "https://esempio.it/prenota",
+        "p_hours": {"1": [[420, 780], [960, 1200]], "5": [[1080, 1560]]},
+        "p_photos": [], "p_published": True,
+    }
+    saved = rpc("business_page_save", page, td)[0]
+    private_user = rpc("business_page_save", page, ta)[0]
+    abroad = rpc("business_page_save", {**page, "p_lat": 48.85, "p_lng": 2.35}, td)[0]
+    bad_hours = rpc("business_page_save", {**page, "p_hours": {"1": [[900, 600]]}}, td)[0]
+    bad_photo = rpc("business_page_save", {**page, "p_photos": [f"{UID_A}/foto-abcdefgh12.jpg"]}, td)[0]
+    anon = rpc("business_page_save", page, None)[0]
+    direct = request("POST", "/rest/v1/business_pages", jwt=td,
+                     body={"id": UID_D, "display_name": "x", "category": "bar", "street": "Via",
+                           "civic": "1", "city": "X", "cap": "00100", "province": "RM",
+                           "lat": 42.0, "lng": 12.0})[0]
+    check("BZ1", "Pagina attività solo per le Aziende, sede in Italia, orari e foto controllati",
+          saved in (200, 204) and private_user >= 400 and abroad >= 400 and bad_hours >= 400
+          and bad_photo >= 400 and anon >= 400 and direct >= 400,
+          f"{saved}, {private_user}, {abroad}, {bad_hours}, {bad_photo}, {anon}, {direct}")
+
+    s_get, got = rpc("business_page_get", {"p_id": UID_D}, ta)
+    s_near, near = rpc("businesses_nearby", {"p_lat": 42.69, "p_lng": 12.10, "p_radius_km": 5}, ta)
+    far = rpc("businesses_nearby", {"p_lat": 45.46, "p_lng": 9.19, "p_radius_km": 5}, ta)[1]
+    private_rows = rows(get(f"/rest/v1/business_private?select=*&id=eq.{UID_D}", ta))
+    text = json.dumps(got)
+    check("BZ2", "Insegna e sede pubbliche; ragione sociale e partita IVA restano private",
+          s_get == 200 and isinstance(got, dict) and got.get("province") == "TR"
+          and got.get("verified") is False and "Bottega Verdi Srl" not in text and VALID_VAT not in text
+          and s_near == 200 and [r.get("id") for r in near] == [UID_D] and far == [] and private_rows == [],
+          f"{s_get}, {s_near}, {len(near) if isinstance(near, list) else near}, {far}, {len(private_rows)}")
+
+    rpc("block_user", {"p_user_id": UID_D}, ta)
+    blocked_near = rpc("businesses_nearby", {"p_lat": 42.69, "p_lng": 12.10, "p_radius_km": 5}, ta)[1]
+    blocked_get = rpc("business_page_get", {"p_id": UID_D}, ta)[1]
+    rpc("unblock_user", {"p_user_id": UID_D}, ta)
+    check("BZ3", "Chi ha bloccato (o è bloccato) non vede la pagina né il segnaposto",
+          blocked_near == [] and blocked_get is None, f"{blocked_near}, {blocked_get}")
+
+    dup = rpc("business_register", {"p_business_name": "Copia Srl", "p_vat_number": VALID_VAT}, ta)[0]
+    user_review = rpc("business_review", {"p_id": UID_D, "p_approve": True}, ta)[0]
+    user_queue = rpc("business_review_queue", {}, ta)[0]
+    sql(f"insert into public.admin_users (user_id, role) values ('{UID_B}', 'moderator') "
+        "on conflict (user_id) do nothing;")
+    s_queue, queue = rpc("business_review_queue", {}, tb)
+    approve = rpc("business_review", {"p_id": UID_D, "p_approve": True, "p_note": "ok"}, tb)[0]
+    verified = rpc("business_page_get", {"p_id": UID_D}, ta)[1]
+    sql(f"delete from public.admin_users where user_id = '{UID_B}';")
+    changed = rpc("business_register", {"p_business_name": "Bottega Verdi Srl", "p_vat_number": "12345678903"}, td)[0]
+    after_change = rpc("business_page_get", {"p_id": UID_D}, ta)[1]
+    check("BZ4", "Solo un amministratore approva; cambiare partita IVA fa ripartire la verifica; IVA unica",
+          dup >= 400 and user_review >= 400 and user_queue >= 400 and s_queue == 200
+          and UID_D in [r.get("id") for r in queue] and approve in (200, 204)
+          and isinstance(verified, dict) and verified.get("verified") is True
+          and changed in (200, 204) and isinstance(after_change, dict) and after_change.get("verified") is False,
+          f"{dup}, {user_review}, {user_queue}, {s_queue}, {approve}, {verified}, {changed}")
+
+    convert = rpc("business_register", {"p_business_name": "Mario Rossi Bar", "p_vat_number": VALID_VAT_2}, ta)[0]
+    kind = sql(f"select account_type from public.profiles where id = '{UID_A}';")
+    sql("select set_config('nexus.internal', 'on', false); "
+        f"delete from public.business_private where id = '{UID_A}'; "
+        f"update public.profiles set account_type = 'private' where id = '{UID_A}';")
+    check("BZ5", "Un Privato maggiorenne può registrare l'attività e diventa Azienda",
+          convert in (200, 204) and kind == "business", f"{convert}, {kind}")
+
+
 def check_push_phase4() -> None:
     """U · Notifiche (Fase 4, Blocco 5): coda server, silenzia, non disturbare, mai i Mi piace."""
     ta, tb = token(UID_A), token(UID_B)
@@ -3111,6 +3185,7 @@ def main() -> int:
     check_statuses_phase4()
     check_live_location_phase4()
     check_ai_limits_phase4()
+    check_business_phase6()
     failed = [r for r in results if not r[2]]
     print(f"{'Caso':6} {'Esito':9} Descrizione")
     for case, desc, ok, detail in results:

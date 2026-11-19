@@ -4,6 +4,7 @@ import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../business/business_models.dart';
 import 'listing_models.dart';
 import 'live_location.dart';
 import 'map_location.dart';
@@ -30,6 +31,10 @@ abstract class MapSurfaceHandle {
   /// Persone che condividono con me il GPS in tempo reale (Blocco 15): segnaposti viola con
   /// l'iniziale; toccandoli si riceve l'identificativo della persona.
   Future<void> showPeople(List<LivePerson> people, ValueChanged<String> onTap);
+
+  /// Sedi delle attività (Fase 6): segnaposti fissi arancio con l'iniziale dell'insegna,
+  /// bordo blu se verificata; toccandoli si riceve l'identificativo dell'attività.
+  Future<void> showBusinesses(List<BusinessPin> businesses, ValueChanged<String> onTap);
 }
 
 typedef MapSurfaceBuilder =
@@ -55,6 +60,8 @@ class _MapLibreSurfaceState extends State<MapLibreSurface> implements MapSurface
   MapLibreMapController? _controller;
   ValueChanged<String>? _onListingTap;
   ValueChanged<String>? _onPersonTap;
+  ValueChanged<String>? _onBusinessTap;
+  List<BusinessPin> _businesses = const <BusinessPin>[];
   List<NearbyListing> _listings = const <NearbyListing>[];
   List<LivePerson> _people = const <LivePerson>[];
 
@@ -66,6 +73,15 @@ class _MapLibreSurfaceState extends State<MapLibreSurface> implements MapSurface
     if (id is String) _onListingTap?.call(id);
     final Object? person = data?['persona'];
     if (person is String) _onPersonTap?.call(person);
+    final Object? business = data?['attivita'];
+    if (business is String) _onBusinessTap?.call(business);
+  }
+
+  @override
+  Future<void> showBusinesses(List<BusinessPin> businesses, ValueChanged<String> onTap) async {
+    _onBusinessTap = onTap;
+    _businesses = businesses;
+    await _redraw();
   }
 
   @override
@@ -90,6 +106,32 @@ class _MapLibreSurfaceState extends State<MapLibreSurface> implements MapSurface
     final List<LivePerson> people = _people;
     await c.clearSymbols();
     await c.clearCircles();
+    final List<BusinessPin> shops = _businesses;
+    if (shops.isNotEmpty) {
+      final List<Map<String, dynamic>> what = <Map<String, dynamic>>[
+        for (final BusinessPin b in shops) <String, dynamic>{'attivita': b.id},
+      ];
+      await c.addCircles(<CircleOptions>[
+        for (final BusinessPin b in shops)
+          CircleOptions(
+            geometry: LatLng(b.lat, b.lng),
+            circleRadius: 15,
+            circleColor: '#F97316',
+            circleStrokeWidth: 4,
+            circleStrokeColor: b.verified ? '#1D9BF0' : '#FFFFFF',
+          ),
+      ], what);
+      await c.addSymbols(<SymbolOptions>[
+        for (final BusinessPin b in shops)
+          SymbolOptions(
+            geometry: LatLng(b.lat, b.lng),
+            textField: b.initial,
+            textSize: 14,
+            textColor: '#FFFFFF',
+            fontNames: const <String>['Noto Sans Bold'],
+          ),
+      ], what);
+    }
     if (people.isNotEmpty) {
       final List<Map<String, dynamic>> who = <Map<String, dynamic>>[
         for (final LivePerson p in people) <String, dynamic>{'persona': p.userId},

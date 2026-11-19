@@ -103,6 +103,8 @@ void main() {
     expect(users, <String>[
       // Blocco 18: Piazly AI (chat e Immagini IA).
       'lib/features/ai/ai_screens.dart',
+      // Fase 6: Aziende.
+      'lib/features/business/business_screens.dart',
       'lib/features/calls/call_screen.dart',
       'lib/features/calls/calls_list.dart',
       'lib/features/chat/chat_backup_screen.dart',
