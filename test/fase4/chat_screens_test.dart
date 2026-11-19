@@ -220,7 +220,8 @@ void main() {
     await tester.tap(find.text('Contatta'));
     await tester.pumpAndSettle();
     expect(find.text('Dario V.'), findsOneWidget);
-    expect(find.text('@dario88'), findsOneWidget);
+    // Sotto il nome: «online» (Blocco 12) oppure lo username.
+    expect(find.textContaining(RegExp(r'^(@dario88|online)$')), findsOneWidget);
     await tester.enterText(find.byKey(const ValueKey<String>('chat_testo')), 'Ciao, mi interessa');
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey<String>('chat_invia')));
