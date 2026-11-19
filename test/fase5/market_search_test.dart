@@ -172,7 +172,10 @@ void main() {
 
     testWidgets('categoria dalla fila in alto', (WidgetTester tester) async {
       await openSection(tester, MarketSection.sale, three);
-      await tester.ensureVisible(find.byKey(const ValueKey<String>('categoria_musica-strumenti')));
+      // Nuova grafica: quattro categorie in vista, le altre in «Altre».
+      await tester.ensureVisible(find.byKey(const ValueKey<String>('categoria_altre')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey<String>('categoria_altre')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey<String>('categoria_musica-strumenti')));
       await tester.pumpAndSettle();
@@ -205,7 +208,7 @@ void main() {
       expect(q.seller, SellerKind.private);
       expect(q.openToSwap, isTrue);
       expect(q.published, MarketPublished.week);
-      expect(find.text('Filtri (5)'), findsOneWidget);
+      expect(find.byTooltip('Filtri (5)'), findsOneWidget);
       expect(find.byKey(const ValueKey<String>('risultato_c')), findsOneWidget);
       expect(find.byKey(const ValueKey<String>('risultato_a')), findsNothing);
 

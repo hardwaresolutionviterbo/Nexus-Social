@@ -7,7 +7,7 @@ const Map<String, String> sectionMarkers = <String, String>{
   'Mappa': 'Mappa Sociale',
   'Chat': 'Chat e chiamate',
   'Stati': 'Stati dei tuoi contatti',
-  'Vendita': 'Vendita tra privati',
+  'Vendita': 'Annunci vicino a te',
   'Profilo': 'Stato dei servizi',
 };
 

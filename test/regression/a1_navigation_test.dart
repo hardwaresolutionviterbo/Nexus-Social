@@ -72,10 +72,10 @@ void main() {
       // Scambia ora è dentro Vendita.
       await tester.tap(find.descendant(of: find.byType(NavigationBar), matching: find.text('Vendita')));
       await tester.pumpAndSettle();
-      expect(find.text('Vendita tra privati'), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey<String>('sezione_scambia')));
-      await tester.pumpAndSettle();
-      expect(find.text('Scambia vicino a te'), findsOneWidget);
+      expect(find.text('Annunci vicino a te'), findsOneWidget);
+      expect(find.byKey(const ValueKey<String>('banner_scambia')), findsOneWidget);
+      expect(find.byKey(const ValueKey<String>('banner_vendi')), findsOneWidget);
+      expect(find.byKey(const ValueKey<String>('filtro_regalo')), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }

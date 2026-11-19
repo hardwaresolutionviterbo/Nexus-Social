@@ -503,8 +503,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.brandOrange,
                 foregroundColor: Colors.white,
-                minimumSize: const Size(0, 48),
-                elevation: 3,
+                minimumSize: const Size(0, 56),
+                padding: const EdgeInsets.symmetric(horizontal: 22),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
+                elevation: 4,
               ),
               onPressed: _publish,
               icon: const Icon(Icons.add_location_alt_rounded),
@@ -574,28 +577,34 @@ class _MapHeader extends StatelessWidget {
     final ThemeData theme = Theme.of(context);
     final ColorScheme scheme = theme.colorScheme;
     final int? n = count;
+    final ButtonStyle square = IconButton.styleFrom(
+      backgroundColor: scheme.surface,
+      side: BorderSide(color: scheme.outlineVariant),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      fixedSize: const Size(46, 46),
+    );
     return Material(
-      color: scheme.surface.withValues(alpha: 0.94),
-      elevation: 3,
+      color: scheme.surface.withValues(alpha: 0.97),
+      elevation: 4,
       shadowColor: Colors.black26,
-      borderRadius: BorderRadius.circular(22),
+      borderRadius: BorderRadius.circular(24),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 6, 6, 10),
+        padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
             Row(
               children: [
-                Icon(Icons.map_rounded, size: 18, color: scheme.primary),
-                const SizedBox(width: AppSpacing.sm),
+                const Icon(Icons.map_rounded, size: 24, color: AppColors.brandOrange),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         'Mappa Sociale',
-                        style: theme.textTheme.titleSmall,
+                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
                         overflow: TextOverflow.ellipsis,
                       ),
                       if (n != null)
@@ -616,19 +625,23 @@ class _MapHeader extends StatelessWidget {
                 ),
                 IconButton(
                   tooltip: 'Filtri',
+                  style: square,
                   onPressed: onFilters,
                   icon: Badge(
                     isLabelVisible: filters.narrowed,
                     child: const Icon(Icons.tune_rounded),
                   ),
                 ),
+                const SizedBox(width: 8),
                 IconButton(
                   tooltip: 'Ultimi annunci',
+                  style: square,
                   onPressed: onLatest,
                   icon: const Icon(Icons.dynamic_feed_rounded),
                 ),
               ],
             ),
+            const SizedBox(height: 8),
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
@@ -637,7 +650,18 @@ class _MapHeader extends StatelessWidget {
                     ChoiceChip(
                       label: Text('$option km'),
                       selected: option == filters.radiusKm,
-                      visualDensity: VisualDensity.compact,
+                      // Nuova grafica: pillole, quella scelta arancione con la spunta bianca.
+                      shape: const StadiumBorder(),
+                      selectedColor: AppColors.brandOrange,
+                      checkmarkColor: Colors.white,
+                      side: BorderSide(
+                        color: option == filters.radiusKm ? AppColors.brandOrange : scheme.outlineVariant,
+                      ),
+                      labelStyle: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: option == filters.radiusKm ? Colors.white : scheme.onSurface,
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                       onSelected: (_) => onRadiusChanged(option),
                     ),
                     const SizedBox(width: AppSpacing.sm),
@@ -677,40 +701,58 @@ class _MapControls extends StatelessWidget {
       shadowColor: Colors.black38,
       fixedSize: const Size(48, 48),
     );
+    final ButtonStyle flat = style.copyWith(
+      backgroundColor: const WidgetStatePropertyAll<Color>(Colors.transparent),
+      elevation: const WidgetStatePropertyAll<double>(0),
+    );
+    // Nuova grafica: i tre comandi in un pannello verticale, il mirino arancione a parte.
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        IconButton(
-          tooltip: 'I miei annunci',
-          style: style,
-          icon: const Icon(Icons.view_list_rounded),
-          onPressed: onMine,
-        ),
-        const SizedBox(height: 10),
-        IconButton(
-          tooltip: 'Consigli di sicurezza',
-          style: style,
-          icon: const Icon(Icons.health_and_safety_outlined),
-          onPressed: onSafety,
-        ),
-        const SizedBox(height: 10),
-        IconButton(
-          tooltip: threeD ? 'Vista in piano' : 'Vista 3D',
-          style: style,
-          icon: Text(
-            threeD ? '2D' : '3D',
-            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+        Material(
+          color: scheme.surface.withValues(alpha: 0.97),
+          elevation: 4,
+          shadowColor: Colors.black38,
+          borderRadius: BorderRadius.circular(28),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  tooltip: 'I miei annunci',
+                  style: flat,
+                  icon: const Icon(Icons.view_list_rounded),
+                  onPressed: onMine,
+                ),
+                IconButton(
+                  tooltip: 'Consigli di sicurezza',
+                  style: flat,
+                  icon: const Icon(Icons.shield_outlined),
+                  onPressed: onSafety,
+                ),
+                IconButton(
+                  tooltip: threeD ? 'Vista in piano' : 'Vista 3D',
+                  style: flat,
+                  icon: Text(
+                    threeD ? '2D' : '3D',
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                  ),
+                  onPressed: onToggleThreeD,
+                ),
+              ],
+            ),
           ),
-          onPressed: onToggleThreeD,
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 18),
         IconButton(
           tooltip: 'Centra su di me',
           style: style.copyWith(
             backgroundColor: const WidgetStatePropertyAll<Color>(AppColors.brandOrange),
             foregroundColor: const WidgetStatePropertyAll<Color>(Colors.white),
+            fixedSize: const WidgetStatePropertyAll<Size>(Size(58, 58)),
           ),
-          icon: const Icon(Icons.my_location_rounded),
+          icon: const Icon(Icons.my_location_rounded, size: 28),
           onPressed: onCenter,
         ),
       ],

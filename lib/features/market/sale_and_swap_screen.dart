@@ -6,67 +6,27 @@ import 'market_models.dart';
 import 'market_repository.dart';
 import 'market_section_screen.dart';
 
-/// Scheda «Vendita» della barra: contiene anche «Scambia» (decisione del titolare, 19/11/2026).
-/// La grafica definitiva arriverà con i mockup del titolare.
-class SaleAndSwapScreen extends StatefulWidget {
+/// Scheda «Vendita» della barra: Scambia e Vendi in una sola schermata (mockup del titolare,
+/// 19/11/2026), con i filtri Tutti, Scambio, Vendita e Regalo.
+class SaleAndSwapScreen extends StatelessWidget {
   const SaleAndSwapScreen({super.key, this.repository, this.services, this.social});
 
   final MarketRepository? repository;
   final MapServices? services;
   final SocialRepository? social;
 
-  @override
-  State<SaleAndSwapScreen> createState() => _SaleAndSwapScreenState();
-}
+  static final ValueNotifier<int> _search = ValueNotifier<int>(0);
 
-class _SaleAndSwapScreenState extends State<SaleAndSwapScreen> {
-  MarketSection _section = MarketSection.sale;
+  /// La lente dell'intestazione: porta il cursore nella ricerca degli annunci.
+  static void requestSearch() => _search.value++;
 
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-          child: SegmentedButton<MarketSection>(
-            key: const ValueKey<String>('vendita_sezioni'),
-            showSelectedIcon: false,
-            segments: const <ButtonSegment<MarketSection>>[
-              ButtonSegment<MarketSection>(
-                value: MarketSection.sale,
-                icon: Icon(Icons.sell_outlined),
-                label: Text('Vendita', key: ValueKey<String>('sezione_vendita')),
-              ),
-              ButtonSegment<MarketSection>(
-                value: MarketSection.swap,
-                icon: Icon(Icons.swap_horiz_rounded),
-                label: Text('Scambia', key: ValueKey<String>('sezione_scambia')),
-              ),
-            ],
-            selected: <MarketSection>{_section},
-            onSelectionChanged: (Set<MarketSection> v) => setState(() => _section = v.first),
-          ),
-        ),
-        Expanded(
-          child: IndexedStack(
-            index: _section == MarketSection.sale ? 0 : 1,
-            children: [
-              MarketSectionScreen(
-                section: MarketSection.sale,
-                repository: widget.repository,
-                services: widget.services,
-                social: widget.social,
-              ),
-              MarketSectionScreen(
-                section: MarketSection.swap,
-                repository: widget.repository,
-                services: widget.services,
-                social: widget.social,
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
+  Widget build(BuildContext context) => MarketSectionScreen(
+    section: MarketSection.sale,
+    unified: true,
+    repository: repository,
+    services: services,
+    social: social,
+    searchRequests: _search,
+  );
 }
