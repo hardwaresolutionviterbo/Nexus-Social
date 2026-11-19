@@ -126,9 +126,12 @@ void main() {
     await tester.tap(find.byKey(const ValueKey<String>('sezione_chiamate')));
     await tester.pumpAndSettle();
     expect(find.text('Bruno meccanico'), findsOneWidget);
-    expect(find.textContaining('Persa · '), findsOneWidget);
+    expect(find.text('Chiamata persa'), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('nuova_chiamata_vocale')), findsOneWidget);
     expect(find.text('Chiamate'), findsOneWidget, reason: 'aperta la sezione, le perse non sono più nuove');
     final CallRecord r = a.calls!.log.records.single;
+    await tester.tap(find.byKey(ValueKey<String>('chiamata_menu_${r.id}')));
+    await tester.pumpAndSettle();
     await tester.runAsync(() async {
       await tester.tap(find.byKey(ValueKey<String>('richiama_${r.id}')));
       await settle();

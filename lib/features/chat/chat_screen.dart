@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/piazly_ui.dart';
 import '../../core/widgets/nexus_ui.dart';
 import '../calls/calls_list.dart';
 import '../profile/avatar_view.dart';
@@ -76,22 +77,25 @@ class _ChatListState extends State<_ChatList> {
   /// «Chat | Chiamate» in alto. Gli Stati hanno la loro scheda nella barra in basso.
   Widget _sections(BuildContext context) {
     final int missed = chat.calls?.log.unseenMissed ?? 0;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-      child: SegmentedButton<_Section>(
-        key: const ValueKey<String>('chat_sezioni'),
-        showSelectedIcon: false,
-        segments: <ButtonSegment<_Section>>[
-          const ButtonSegment<_Section>(value: _Section.chats, label: Text('Chat')),
-          if (chat.calls != null)
-            ButtonSegment<_Section>(
-              value: _Section.calls,
-              label: Text(missed > 0 ? 'Chiamate · $missed' : 'Chiamate', key: const ValueKey<String>('sezione_chiamate')),
-            ),
-        ],
-        selected: <_Section>{_section},
-        onSelectionChanged: (Set<_Section> v) => setState(() => _section = v.first),
-      ),
+    return PillTabs<_Section>(
+      key: const ValueKey<String>('chat_sezioni'),
+      tabs: <PillTab<_Section>>[
+        const PillTab<_Section>(
+          value: _Section.chats,
+          label: 'Chat',
+          icon: Icons.chat_bubble_outline_rounded,
+          key: ValueKey<String>('sezione_chat'),
+        ),
+        if (chat.calls != null)
+          PillTab<_Section>(
+            value: _Section.calls,
+            label: missed > 0 ? 'Chiamate · $missed' : 'Chiamate',
+            icon: Icons.call_outlined,
+            key: const ValueKey<String>('sezione_chiamate'),
+          ),
+      ],
+      selected: _section,
+      onChanged: (_Section v) => setState(() => _section = v),
     );
   }
 
@@ -209,8 +213,9 @@ class _ChatListState extends State<_ChatList> {
             backgroundColor: AppColors.brandOrange,
             foregroundColor: Colors.white,
             onPressed: () => _newChat(context),
-            icon: const Icon(Icons.edit_rounded),
-            label: const Text('Nuova chat'),
+            shape: const StadiumBorder(),
+            icon: const Icon(Icons.add_rounded),
+            label: const Text('Nuova chat', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
           ),
         ),
       ],
@@ -218,24 +223,45 @@ class _ChatListState extends State<_ChatList> {
   }
 }
 
+/// Scheda «Chat crittografate end-to-end» con il lucchetto e la «i» per saperne di più.
 class _E2eBanner extends StatelessWidget {
   const _E2eBanner();
+
+  Future<void> _info(BuildContext context) => showDialog<void>(
+    context: context,
+    builder: (BuildContext c) => AlertDialog(
+      icon: const Icon(Icons.lock_rounded, color: AppColors.brandOrange),
+      title: const Text('Chat crittografate end-to-end'),
+      content: const Text(
+        'I messaggi, le foto, i vocali e le chiamate si cifrano sul tuo telefono e si decifrano '
+        'solo sui telefoni delle persone della chat. Nessuno, nemmeno Piazly, può leggerli.',
+      ),
+      actions: [TextButton(onPressed: () => Navigator.of(c).pop(), child: const Text('Ho capito'))],
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 4, 18, 8),
+    return SoftCard(
+      key: const ValueKey<String>('chat_e2e'),
+      onTap: () => _info(context),
       child: Row(
         children: [
-          Icon(Icons.lock_rounded, size: 14, color: theme.colorScheme.onSurfaceVariant),
-          const SizedBox(width: 6),
+          const IconTile(Icons.lock_rounded, color: AppColors.brandOrange, size: 40),
+          const SizedBox(width: 14),
           Expanded(
-            child: Text(
-              'Le chat sono cifrate end-to-end: le leggono solo le persone della chat.',
-              style: theme.textTheme.bodySmall,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Chat crittografate end-to-end',
+                    style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+                Text('Solo tu e le persone della chat potete leggere i messaggi.',
+                    style: theme.textTheme.bodySmall),
+              ],
             ),
           ),
+          Icon(Icons.info_outline_rounded, color: theme.colorScheme.onSurfaceVariant),
         ],
       ),
     );
@@ -382,17 +408,38 @@ class ChatThreadTile extends StatelessWidget {
       leading: c.isGroup
           ? GroupAvatar(chat: chat, conversation: c)
           : AvatarView(name: c.peerName, repository: profiles, path: c.peerAvatarPath, size: 48),
-      title: Text(
-        c.displayName,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+      title: Row(
+        children: [
+          if (c.isGroup) ...[
+            Icon(Icons.groups_2_outlined, size: 18, color: theme.colorScheme.onSurfaceVariant),
+            const SizedBox(width: 5),
+          ],
+          Flexible(
+            child: Text(
+              c.displayName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
       ),
       subtitle: Row(
         children: [
           if (last != null && last.mine && last.isText) ...[
             TicksIcon(last.ticksFor(c), size: 15),
             const SizedBox(width: 3),
+          ],
+          // Ultima attività una chiamata: la cornetta (rossa se persa o senza risposta).
+          if (last != null && last.kind == MessageKind.notice && _isCall(last.body)) ...[
+            Icon(
+              last.body.startsWith('Videochiamata') ? Icons.videocam_outlined : Icons.call_outlined,
+              size: 16,
+              color: last.body.contains('persa') || last.body.contains('senza risposta')
+                  ? theme.colorScheme.error
+                  : theme.colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 4),
           ],
           Expanded(
             child: Text(
@@ -441,6 +488,62 @@ class ChatThreadTile extends StatelessWidget {
         ],
       ),
       onTap: () => ChatThreadScreen.open(context, chat: chat, conversationId: c.id, profiles: profiles),
+    );
+  }
+}
+
+bool _isCall(String body) => body.startsWith('Chiamata') || body.startsWith('Videochiamata');
+
+/// Cerca tra le chat: per nome o nell'ultimo messaggio (sul telefono, nulla va al server).
+class ChatSearchScreen extends StatefulWidget {
+  const ChatSearchScreen({super.key, required this.chat, this.profiles, this.now = DateTime.now});
+
+  final ChatService chat;
+  final ProfileRepository? profiles;
+  final DateTime Function() now;
+
+  static Future<void> open(BuildContext context, ChatService chat, {ProfileRepository? profiles}) =>
+      Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(builder: (_) => ChatSearchScreen(chat: chat, profiles: profiles)),
+      );
+
+  @override
+  State<ChatSearchScreen> createState() => _ChatSearchScreenState();
+}
+
+class _ChatSearchScreenState extends State<ChatSearchScreen> {
+  String _q = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final String q = _q.trim().toLowerCase();
+    final List<ChatThread> all = widget.chat.threads;
+    final List<ChatThread> found = q.isEmpty
+        ? all
+        : <ChatThread>[
+            for (final ChatThread t in all)
+              if (t.conversation.displayName.toLowerCase().contains(q) ||
+                  chatPreview(t.last).toLowerCase().contains(q))
+                t,
+          ];
+    return Scaffold(
+      appBar: AppBar(
+        titleSpacing: 0,
+        title: TextField(
+          key: const ValueKey<String>('cerca_chat'),
+          autofocus: true,
+          onChanged: (String v) => setState(() => _q = v),
+          decoration: const InputDecoration(hintText: 'Cerca nelle chat', border: InputBorder.none),
+        ),
+      ),
+      body: found.isEmpty
+          ? const Center(child: Text('Nessuna chat trovata'))
+          : ListView(
+              children: [
+                for (final ChatThread t in found)
+                  ChatThreadTile(thread: t, chat: widget.chat, profiles: widget.profiles, now: widget.now()),
+              ],
+            ),
     );
   }
 }

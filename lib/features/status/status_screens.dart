@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/piazly_ui.dart';
 import '../chat/chat_media_picker.dart';
 import '../chat/chat_models.dart';
 import '../profile/avatar_view.dart';
@@ -215,66 +216,90 @@ class _StatusListState extends State<StatusList> {
           child: ListView(
             padding: AppSpacing.pagePadding.copyWith(left: 0, right: 0),
             children: [
-              ListTile(
-                key: const ValueKey<String>('il_mio_stato'),
-                leading: Stack(
-                  clipBehavior: Clip.none,
+              SoftCard(
+                margin: const EdgeInsets.fromLTRB(16, 8, 16, 6),
+                padding: const EdgeInsets.fromLTRB(12, 12, 10, 12),
+                child: Row(
                   children: [
-                    mine == null
-                        ? Padding(
-                            padding: const EdgeInsets.all(5),
-                            child: AvatarView(name: 'Io', repository: widget.profiles, size: 44),
-                          )
-                        : StatusRing(
-                            seen: true,
-                            child: AvatarView(name: 'Io', repository: widget.profiles, path: mine.avatarPath, size: 44),
+                    InkWell(
+                      key: const ValueKey<String>('il_mio_stato'),
+                      customBorder: const CircleBorder(),
+                      onTap: mine == null ? _media : () => _open(<StatusGroup>[mine], 0),
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          StatusRing(
+                            seen: mine == null,
+                            child: AvatarView(name: 'Io', repository: widget.profiles, path: mine?.avatarPath, size: 48),
                           ),
-                    if (mine == null)
-                      const Positioned(
-                        right: 0,
-                        bottom: 0,
-                        child: CircleAvatar(
-                          radius: 10,
-                          backgroundColor: AppColors.brandOrange,
-                          child: Icon(Icons.add_rounded, size: 16, color: Colors.white),
+                          if (mine == null)
+                            const Positioned(
+                              right: -2,
+                              bottom: -2,
+                              child: CircleAvatar(
+                                radius: 11,
+                                backgroundColor: AppColors.brandOrange,
+                                child: Icon(Icons.add_rounded, size: 17, color: Colors.white),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: InkWell(
+                        onTap: mine == null ? _media : () => _open(<StatusGroup>[mine], 0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Il mio stato', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                            Text(
+                              mine == null
+                                  ? 'Crea un aggiornamento con testo, foto o video'
+                                  : '${mine.items.length == 1 ? '1 aggiornamento' : '${mine.items.length} aggiornamenti'}'
+                                      ' · ${statusTimeLabel(mine.latest, service.now)}',
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ],
                         ),
                       ),
-                  ],
-                ),
-                title: const Text('Il mio stato'),
-                subtitle: Text(
-                  mine == null
-                      ? 'Tocca per aggiungere un aggiornamento'
-                      : '${mine.items.length == 1 ? '1 aggiornamento' : '${mine.items.length} aggiornamenti'}'
-                          ' · ${statusTimeLabel(mine.latest, service.now)}',
-                ),
-                onTap: mine == null ? _media : () => _open(<StatusGroup>[mine], 0),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      key: const ValueKey<String>('stato_testo'),
-                      tooltip: 'Scrivi uno stato',
-                      onPressed: _text,
-                      icon: const Icon(Icons.edit_outlined),
                     ),
-                    IconButton(
+                    _SquareAction(
+                      key: const ValueKey<String>('stato_testo'),
+                      icon: Icons.edit_outlined,
+                      tooltip: 'Scrivi uno stato',
+                      onTap: _text,
+                    ),
+                    const SizedBox(width: 8),
+                    _SquareAction(
                       key: const ValueKey<String>('stato_foto'),
+                      icon: Icons.photo_camera_outlined,
                       tooltip: 'Foto o video',
-                      onPressed: _media,
-                      icon: const Icon(Icons.photo_camera_outlined),
+                      onTap: _media,
                     ),
                   ],
                 ),
               ),
-              ListTile(
+              SoftCard(
                 key: const ValueKey<String>('stati_privacy'),
-                dense: true,
-                leading: const Icon(Icons.lock_outline_rounded, size: 20),
-                title: const Text('Chi vede i miei stati'),
-                subtitle: Text(_audienceLabel(service)),
-                trailing: const Icon(Icons.chevron_right_rounded),
+                margin: const EdgeInsets.fromLTRB(16, 6, 16, 6),
                 onTap: _privacy,
+                child: Row(
+                  children: [
+                    const Icon(Icons.lock_rounded, color: PiazlyColors.violet, size: 26),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Chi vede i miei stati', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+                          Text(_audienceLabel(service), style: theme.textTheme.bodySmall),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right_rounded, color: AppColors.brandOrange),
+                  ],
+                ),
               ),
               if (service.error != null && !service.loaded)
                 Padding(
@@ -287,27 +312,45 @@ class _StatusListState extends State<StatusList> {
               for (int i = 0; i < viewed.length; i++) _groupTile(viewed[i], viewed, i),
               if (service.loaded && recent.isEmpty && viewed.isEmpty)
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 24, 18, 0),
-                  child: Text(
-                    'Nessun aggiornamento dai tuoi contatti. Quando qualcuno che hai in rubrica '
-                    'pubblica uno stato, lo vedi qui.',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+                  child: Column(
+                    children: [
+                      const PiazlyEmptyArt(),
+                      const SizedBox(height: 14),
+                      Text(
+                        'Nessun aggiornamento dai tuoi contatti',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Quando qualcuno che hai in rubrica pubblica uno stato, lo vedi qui.',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodyMedium?.copyWith(color: PiazlyColors.violetDeep),
+                      ),
+                    ],
                   ),
                 ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(18, 24, 18, 0),
+              SoftCard(
+                tint: PiazlyColors.violetSoft,
+                margin: const EdgeInsets.fromLTRB(16, 20, 16, 0),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.info_outline_rounded, size: 14, color: theme.colorScheme.onSurfaceVariant),
-                    const SizedBox(width: 6),
+                    const Icon(Icons.info_outline_rounded, color: PiazlyColors.violet),
+                    const SizedBox(width: 12),
                     Expanded(
-                      child: Text(
-                        'Gli stati spariscono dopo 24 ore. Li vede solo chi scegli tu, ma non sono '
-                        'cifrati end-to-end come i messaggi delle chat.',
-                        key: const ValueKey<String>('stati_avviso'),
-                        style: theme.textTheme.bodySmall,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Gli stati spariscono dopo 24 ore.',
+                              style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+                          Text(
+                            'Li vede solo chi scegli tu, ma non sono cifrati end-to-end come i messaggi delle chat.',
+                            key: const ValueKey<String>('stati_avviso'),
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -327,6 +370,29 @@ String _audienceLabel(StatusService s) => switch (s.audience) {
     s.people.isEmpty ? 'I miei contatti' : 'I miei contatti tranne ${s.people.length}',
   StatusAudience.only => s.people.length == 1 ? 'Solo 1 persona' : 'Solo ${s.people.length} persone',
 };
+
+/// Quadratino arancio chiaro con l'icona (matita, fotocamera).
+class _SquareAction extends StatelessWidget {
+  const _SquareAction({super.key, required this.icon, required this.tooltip, required this.onTap});
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: tooltip,
+    child: Material(
+      color: PiazlyColors.orangeSoft,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: SizedBox.square(dimension: 46, child: Icon(icon, color: AppColors.brandOrange)),
+      ),
+    ),
+  );
+}
 
 class _Header extends StatelessWidget {
   const _Header(this.text);

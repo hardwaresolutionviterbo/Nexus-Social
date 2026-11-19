@@ -364,6 +364,18 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
             ],
           ),
           actions: [
+            // Lente: cerca nelle chat (Chat) o negli annunci (Vendita), come nei mockup.
+            if ((_index == 0 && widget.chat != null && widget.chat!.ready) || _index == 3) ...[
+              _HeaderButton(
+                key: const ValueKey<String>('cerca'),
+                icon: Icons.search_rounded,
+                tooltip: 'Cerca',
+                onPressed: _index == 0
+                    ? () => ChatSearchScreen.open(context, widget.chat!, profiles: widget.profiles)
+                    : SaleAndSwapScreen.requestSearch,
+              ),
+              const SizedBox(width: 8),
+            ],
             NotificationBell(
               count: _unread,
               onPressed: widget.social == null ? null : _openNotifications,
@@ -507,6 +519,31 @@ class _ChatIcon extends StatelessWidget {
       offset: const Offset(-6, -2),
       label: Text(count > 99 ? '99+' : '$count'),
       child: icon,
+    );
+  }
+}
+
+/// Pulsante tondo dell'intestazione, come la campanella.
+class _HeaderButton extends StatelessWidget {
+  const _HeaderButton({super.key, required this.icon, required this.tooltip, required this.onPressed});
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final bool isDark = theme.brightness == Brightness.dark;
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onPressed,
+      style: IconButton.styleFrom(
+        backgroundColor: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.white.withValues(alpha: 0.9),
+        side: BorderSide(color: isDark ? Colors.white.withValues(alpha: 0.10) : theme.colorScheme.outline),
+        fixedSize: const Size(44, 44),
+      ),
+      icon: Icon(icon, color: theme.colorScheme.onSurface),
     );
   }
 }

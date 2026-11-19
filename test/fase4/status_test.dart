@@ -206,7 +206,7 @@ void main() {
     final (ChatService a, ChatService b) = (await tester.runAsync(() async => (await phone(io), await phone(bruno))))!;
     await tester.pumpWidget(MaterialApp(theme: AppTheme.light, home: Scaffold(body: StatusTab(chat: a))));
     await tester.pumpAndSettle();
-    expect(find.text('Tocca per aggiungere un aggiornamento'), findsOneWidget);
+    expect(find.text('Crea un aggiornamento con testo, foto o video'), findsOneWidget);
     expect(find.byKey(const ValueKey<String>('stati_avviso')), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey<String>('stato_testo')));
@@ -307,7 +307,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(stati.rows, isEmpty);
     expect(stati.files, isEmpty);
-    expect(find.text('Tocca per aggiungere un aggiornamento'), findsOneWidget);
+    expect(find.text('Crea un aggiornamento con testo, foto o video'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox());
     await tester.runAsync(() async {
