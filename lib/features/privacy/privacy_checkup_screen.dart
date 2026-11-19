@@ -34,6 +34,7 @@ class PrivacyCheckupScreen extends StatefulWidget {
   static const List<String> explanations = <String>[
     'Ecco cosa vedono gli altri utenti di te. Bio e social si possono nascondere.',
     'Scegli chi può vedere il tuo numero di telefono.',
+    'Scegli chi vede quando sei online e il tuo ultimo accesso.',
     'La rubrica serve a trovare chi conosci. È facoltativa e la puoi revocare.',
     'Come funziona la posizione dei tuoi annunci.',
     'La condivisione della posizione in tempo reale e come interromperla.',
