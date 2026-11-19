@@ -399,6 +399,7 @@ void main() {
       await tester.pump();
     }
     expect(reached, findsWidgets);
+    await tester.pumpAndSettle();
     expect(find.byType(AiImageScreen), findsNothing);
     await finish(tester, <ChatService>[me, b]);
     ai.dispose();
