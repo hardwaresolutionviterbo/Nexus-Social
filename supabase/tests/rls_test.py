@@ -2976,7 +2976,7 @@ def check_business_phase6() -> None:
         "p_hours": {"1": [[420, 780], [960, 1200]], "5": [[1080, 1560]]},
         "p_photos": [], "p_published": True,
     }
-    saved = rpc("business_page_save", page, td)[0]
+    saved, saved_body = rpc("business_page_save", page, td)
     private_user = rpc("business_page_save", page, ta)[0]
     abroad = rpc("business_page_save", {**page, "p_lat": 48.85, "p_lng": 2.35}, td)[0]
     bad_hours = rpc("business_page_save", {**page, "p_hours": {"1": [[900, 600]]}}, td)[0]
@@ -2989,7 +2989,7 @@ def check_business_phase6() -> None:
     check("BZ1", "Pagina attività solo per le Aziende, sede in Italia, orari e foto controllati",
           saved in (200, 204) and private_user >= 400 and abroad >= 400 and bad_hours >= 400
           and bad_photo >= 400 and anon >= 400 and direct >= 400,
-          f"{saved}, {private_user}, {abroad}, {bad_hours}, {bad_photo}, {anon}, {direct}")
+          f"{saved} {saved_body}, {private_user}, {abroad}, {bad_hours}, {bad_photo}, {anon}, {direct}")
 
     s_get, got = rpc("business_page_get", {"p_id": UID_D}, ta)
     s_near, near = rpc("businesses_nearby", {"p_lat": 42.69, "p_lng": 12.10, "p_radius_km": 5}, ta)

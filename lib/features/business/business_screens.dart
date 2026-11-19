@@ -743,9 +743,12 @@ class _BusinessPageEditScreenState extends State<BusinessPageEditScreen> {
     );
     return Scaffold(
       appBar: AppBar(title: Text(_p == null ? 'Profilo attività' : 'Modifica attività')),
-      body: ListView(
+      // Tutto costruito subito (modulo lungo ma leggero): niente campi «spariti» fuori schermo.
+      body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
-        children: [
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
           title('L\'attività'),
           TextField(
             key: const ValueKey<String>('pagina_insegna'),
@@ -968,6 +971,7 @@ class _BusinessPageEditScreenState extends State<BusinessPageEditScreen> {
             child: Text(_busy ? 'Salvataggio…' : 'Salva'),
           ),
         ],
+        ),
       ),
     );
   }
