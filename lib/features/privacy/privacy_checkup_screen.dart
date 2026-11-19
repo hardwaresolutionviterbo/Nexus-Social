@@ -8,7 +8,7 @@ import 'privacy_sections.dart';
 
 /// Percorso guidato «Controllo privacy» (R2.9, `PRIVACY_IMPOSTAZIONI.md` §4).
 ///
-/// Otto passi: le sette sezioni della pagina Privacy e un riepilogo con «Modifica».
+/// Un passo per ogni sezione della pagina Privacy e un riepilogo con «Modifica».
 /// Ogni scelta si salva subito (P15); si può uscire in qualsiasi momento. Alla fine della
 /// registrazione viene proposto e si può saltare (P14).
 class PrivacyCheckupScreen extends StatefulWidget {
@@ -29,7 +29,7 @@ class PrivacyCheckupScreen extends StatefulWidget {
   /// Proposto subito dopo la registrazione: il pulsante d'uscita dice «Salta».
   final bool offeredAfterSignUp;
 
-  static const int stepCount = 8;
+  static int get stepCount => PrivacySection.values.length + 1;
 
   static const List<String> explanations = <String>[
     'Ecco cosa vedono gli altri utenti di te. Bio e social si possono nascondere.',
