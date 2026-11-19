@@ -338,6 +338,7 @@ class ChatService extends ChangeNotifier {
   /// Nuovi messaggi e stato delle chat. Silenzioso: gli errori di rete si riprovano dopo.
   Future<void> refresh() async {
     if (!_ready) return;
+    unawaited(statuses?.refreshIfStale());
     if (_polling) {
       // Arrivato un tocco mentre si sincronizzava: si rifà subito dopo.
       _again = true;

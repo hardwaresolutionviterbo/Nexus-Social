@@ -330,6 +330,13 @@ class StatusService extends ChangeNotifier {
 
   Future<void>? _current;
   bool _again = false;
+  DateTime? _lastLoad;
+
+  /// Ricarica se l'ultimo caricamento è di più di 2 minuti fa (lo chiama la chat).
+  Future<void> refreshIfStale() async {
+    final DateTime? t = _lastLoad;
+    if (t == null || DateTime.now().difference(t) > const Duration(minutes: 2)) await load();
+  }
 
   /// Carica gli stati. La prima volta toglie anche i miei scaduti e i loro file. Se un
   /// caricamento è già in corso, se ne fa un altro subito dopo e si aspetta quello.
@@ -357,8 +364,8 @@ class StatusService extends ChangeNotifier {
   }
 
   Future<void> _loadOnce() async {
+    // Nessun avviso qui: load() può partire mentre si disegna (initState).
     _loading = true;
-    _notify();
     try {
       await _loadPrefs();
       if (!_cleaned) {
@@ -372,6 +379,7 @@ class StatusService extends ChangeNotifier {
         }
       }
       _all = await server.feed();
+      _lastLoad = DateTime.now();
       _loaded = true;
       _error = null;
     } on ChatFailure catch (e) {

@@ -131,6 +131,8 @@ void main() {
       'lib/features/profile/profile_screen.dart',
       'lib/features/profile/public_profile_screen.dart',
       'lib/features/security/security_screens.dart',
+      // Blocco 13: stati (nuovo stato, chi li vede, visualizzatore).
+      'lib/features/status/status_screens.dart',
     ]);
   });
 }

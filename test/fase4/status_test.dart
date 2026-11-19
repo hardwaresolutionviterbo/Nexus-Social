@@ -80,7 +80,8 @@ void main() {
     await c.statuses!.load();
     expect(b.statuses!.recent, isEmpty);
     expect(c.statuses!.recent.single.items.single.body, 'Non per Bruno');
-    expect((prefs.audience, prefs.people), (StatusAudience.except, <String>[bruno]));
+    expect(prefs.audience, StatusAudience.except);
+    expect(prefs.people, <String>[bruno]);
 
     await a.statuses!.setAudience(StatusAudience.only, <String>[bruno]);
     await a.statuses!.postText('Solo per Bruno', 1);
@@ -184,7 +185,8 @@ void main() {
     expect((await store.load()).$1, StatusAudience.contacts);
     await store.save(StatusAudience.only, <String>[bruno, carla]);
     final (StatusAudience a, List<String> p) = await FileStatusPrefsStore(Future<Directory>.value(dir)).load();
-    expect((a, p), (StatusAudience.only, <String>[bruno, carla]));
+    expect(a, StatusAudience.only);
+    expect(p, <String>[bruno, carla]);
     final DateTime now = DateTime(2026, 11, 19, 18, 30);
     expect(statusTimeLabel(now.subtract(const Duration(seconds: 20)), now), 'Adesso');
     expect(statusTimeLabel(now.subtract(const Duration(minutes: 12)), now), '12 minuti fa');
@@ -220,6 +222,8 @@ void main() {
     expect(a.statuses!.mine.single.color, 1);
 
     await tester.pumpWidget(const SizedBox());
+    // Sul telefono si ricaricano all'avvio e quando l'app torna in primo piano.
+    await tester.runAsync(() => b.statuses!.load());
     await tester.pumpWidget(MaterialApp(theme: AppTheme.light, home: Scaffold(body: ChatScreen(service: b))));
     await tester.pumpAndSettle();
     expect(find.text('Stati · 1'), findsOneWidget, reason: 'stati nuovi segnati sulla sezione');
@@ -264,6 +268,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey<String>('pubblico_fatto')));
     await tester.pumpAndSettle();
     expect(find.text('Scegli almeno una persona.'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey<String>('persona_$bruno')));
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey<String>('pubblico_fatto')));
@@ -278,7 +284,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey<String>('stato_pubblica')));
     await tester.pumpAndSettle();
     final FakeStatusRow row = stati.rows.single;
-    expect((row.kind, row.body, row.audience, row.people), (StatusKind.photo, 'Che vista', StatusAudience.only, <String>{bruno}));
+    expect((row.kind, row.body, row.audience), (StatusKind.photo, 'Che vista', StatusAudience.only));
+    expect(row.people, <String>{bruno});
 
     await tester.runAsync(() async {
       await b.statuses!.load();
