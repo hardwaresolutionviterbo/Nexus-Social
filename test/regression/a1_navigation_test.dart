@@ -3,10 +3,10 @@ import 'package:material_ui/material_ui.dart';
 import 'package:nexus_social/app.dart';
 import 'package:nexus_social/core/theme/app_theme.dart';
 
-/// Decisioni A1 e «schermata iniziale»: ordine della barra, Scambia al centro in
-/// arancio, apertura su Chat. Nessuna voce Home o Community.
+/// Ordine della barra deciso dal titolare il 19/11/2026 (sostituisce A1): Chat, Stati,
+/// Mappa al centro in arancio, Vendita con dentro Scambia, Profilo; apertura su Chat.
 void main() {
-  testWidgets('A1 · ordine: Chat, Mappa, Scambia, Vendita, Profilo', (
+  testWidgets('A1 · ordine: Chat, Stati, Mappa, Vendita, Profilo', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(const NexusApp());
@@ -19,7 +19,7 @@ void main() {
       for (final Widget destination in bar.destinations)
         (destination as NavigationDestination).label,
     ];
-    expect(labels, <String>['Chat', 'Mappa', 'Scambia', 'Vendita', 'Profilo']);
+    expect(labels, <String>['Chat', 'Stati', 'Mappa', 'Vendita', 'Profilo']);
     expect(find.text('Home'), findsNothing);
     expect(find.text('Community'), findsNothing);
   });
@@ -37,7 +37,7 @@ void main() {
   });
 
   for (final Brightness brightness in Brightness.values) {
-    testWidgets('A1 · Scambia è il pulsante centrale arancione (${brightness.name})', (
+    testWidgets('A1 · Mappa è il pulsante centrale arancione (${brightness.name})', (
       WidgetTester tester,
     ) async {
       tester.platformDispatcher.platformBrightnessTestValue = brightness;
@@ -57,17 +57,25 @@ void main() {
       );
       expect(orangeCircle, findsOneWidget);
       expect(
-        find.descendant(of: orangeCircle, matching: find.byIcon(Icons.swap_horiz_rounded)),
+        find.descendant(of: orangeCircle, matching: find.byIcon(Icons.map_rounded)),
         findsOneWidget,
       );
 
-      await tester.tap(find.descendant(of: find.byType(NavigationBar), matching: find.text('Scambia')));
+      await tester.tap(find.descendant(of: find.byType(NavigationBar), matching: find.text('Mappa')));
       await tester.pumpAndSettle();
       expect(
         tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
         2,
       );
-      expect(find.text('Scambia vicino a te'), findsOneWidget);
+      expect(find.text('Mappa Sociale'), findsOneWidget);
+
+      // Scambia ora è dentro Vendita.
+      await tester.tap(find.descendant(of: find.byType(NavigationBar), matching: find.text('Vendita')));
+      await tester.pumpAndSettle();
+      expect(find.text('Annunci vicino a te'), findsOneWidget);
+      expect(find.byKey(const ValueKey<String>('banner_scambia')), findsOneWidget);
+      expect(find.byKey(const ValueKey<String>('banner_vendi')), findsOneWidget);
+      expect(find.byKey(const ValueKey<String>('filtro_regalo')), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }

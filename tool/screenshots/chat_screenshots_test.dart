@@ -8,6 +8,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:material_ui/material_ui.dart';
 import 'package:nexus_social/core/theme/app_theme.dart';
+import 'package:nexus_social/features/ai/ai_screens.dart';
+import 'package:nexus_social/features/ai/ai_service.dart';
 import 'package:nexus_social/features/calls/call_screen.dart';
 import 'package:nexus_social/features/chat/chat_backup.dart';
 import 'package:nexus_social/features/chat/chat_backup_screen.dart';
@@ -16,14 +18,20 @@ import 'package:nexus_social/features/chat/chat_group_screens.dart';
 import 'package:nexus_social/features/chat/chat_media.dart';
 import 'package:nexus_social/features/chat/chat_media_picker.dart';
 import 'package:nexus_social/features/chat/chat_models.dart';
+import 'package:nexus_social/features/chat/chat_rich.dart';
 import 'package:nexus_social/features/chat/chat_safety_screens.dart';
 import 'package:nexus_social/features/chat/chat_screen.dart';
 import 'package:nexus_social/features/chat/chat_service.dart';
 import 'package:nexus_social/features/chat/chat_thread_screen.dart';
+import 'package:nexus_social/features/market/comuni_italia.dart';
 import 'package:nexus_social/features/notifications/notification_settings.dart';
 import 'package:nexus_social/features/shell/app_shell.dart';
+import 'package:nexus_social/features/status/status_screens.dart';
+import 'package:nexus_social/features/status/status_service.dart';
 
 import '../../test/fase4/fake_chat.dart';
+import '../../test/fase4/fake_status.dart';
+import '../../test/support/fake_comuni.dart';
 
 Future<void> _loadFonts() async {
   final String root = Platform.environment['FLUTTER_ROOT'] ?? '';
@@ -148,6 +156,45 @@ Future<(ChatService, Map<String, ChatService>, Map<String, String>)> _scene({Bac
   return (me, others, conv);
 }
 
+/// Stati (Blocco 13): Giulia e Marco con aggiornamenti nuovi, Bruno già visto, il mio con 2 visualizzazioni.
+Future<(ChatService, List<ChatService>, FakeStatusHub)> _statusScene() async {
+  final FakeChatHub hub = FakeChatHub()
+    ..addPerson(io, 'anna.r', 'Anna R.')
+    ..addPerson(bruno, 'bruno_b', 'Bruno B.')
+    ..addPerson(giulia, 'giulia.m', 'Giulia M.')
+    ..addPerson(marco, 'marco_t', 'Marco T.')
+    ..contacts[io] = <String>{bruno, giulia, marco}
+    ..contacts[bruno] = <String>{io}
+    ..contacts[giulia] = <String>{io}
+    ..contacts[marco] = <String>{io};
+  final FakeStatusHub stati = FakeStatusHub(hub);
+  hub.clock = DateTime(2026, 11, 16, 9, 10);
+  final ChatService me = await fakePhone(hub, io, statuses: stati.serviceFor(io));
+  final List<ChatService> others = <ChatService>[
+    for (final String id in <String>[bruno, giulia, marco]) await fakePhone(hub, id, statuses: stati.serviceFor(id)),
+  ];
+  await others[0].statuses!.postText('Chi viene a correre domattina al parco?', 4);
+  hub.clock = DateTime(2026, 11, 16, 12, 30);
+  await me.statuses!.postText('Buon lunedì a tutti!', 0);
+  hub.clock = DateTime(2026, 11, 16, 17, 5);
+  await others[2].statuses!.postMedia(kind: StatusKind.photo, bytes: _photo(), caption: 'Tramonto dal belvedere');
+  hub.clock = DateTime(2026, 11, 16, 18, 20);
+  await others[1].statuses!.postText('Sabato mercatino in piazza: porto le mie piante!', 1);
+  hub.clock = DateTime(2026, 11, 16, 19);
+  await me.statuses!.load();
+  await me.statuses!.markSeen(me.statuses!.recent.firstWhere((StatusGroup g) => g.userId == bruno).items.single);
+  for (final ChatService o in others) {
+    await o.statuses!.load();
+    for (final StatusGroup g in o.statuses!.recent) {
+      for (final StatusItem s in g.items) {
+        if (g.userId == io) await o.statuses!.markSeen(s);
+      }
+    }
+  }
+  await me.statuses!.load();
+  return (me, others, stati);
+}
+
 /// Telefono finto per le anteprime: il microfono «registra» subito.
 class _Device implements ChatDevice {
   @override
@@ -162,6 +209,10 @@ class _Device implements ChatDevice {
   Future<PickedMedia?> stopVoice() async => null;
   @override
   Future<void> cancelVoice() async {}
+  @override
+  Future<(double, double)?> currentFix() async => (42.6843, 12.1037);
+  @override
+  Future<List<(String, List<String>)>?> contactEntries() async => <(String, List<String>)>[];
 }
 
 /// Foto di prova: un tramonto sfumato con una «bici» stilizzata.
@@ -470,6 +521,8 @@ void main() {
     await tester.runAsync(() => me.setMute(conv[bruno]!));
     await shoot(tester, 'chat_16_silenzia',
         ChatThreadScreen(chat: me, conversationId: conv[bruno]!, now: () => now), before: () async {
+      await tester.tap(find.byKey(const ValueKey<String>('chat_altro')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey<String>('silenzia_chat')));
       await tester.pumpAndSettle();
     });
@@ -562,6 +615,115 @@ void main() {
     expect(conv, isNotEmpty);
   });
 
+  testWidgets('stati 1-5 · sezione Stati, nuovo stato, guarda, chi lo vede, visto da', (tester) async {
+    final (ChatService me, List<ChatService> others, FakeStatusHub _) = (await tester.runAsync(_statusScene))!;
+    final StatusService st = me.statuses!;
+    await shoot(tester, 'stati_1_sezione', AppShell(chat: me), before: () async {
+      await tester.tap(find.descendant(of: find.byType(NavigationBar), matching: find.text('Stati')));
+    });
+    await shoot(tester, 'stati_2_scrivi',
+        StatusTextComposer(service: st, contacts: me.contacts), before: () async {
+      await tester.enterText(find.byKey(const ValueKey<String>('stato_scrivi')), 'Oggi si va al mare!');
+      await tester.tap(find.byKey(const ValueKey<String>('stato_colore')));
+      await tester.tap(find.byKey(const ValueKey<String>('stato_colore')));
+    });
+    final List<StatusGroup> recent = st.recent;
+    await shoot(tester, 'stati_3_guarda',
+        StatusViewerScreen(service: st, groups: recent, start: 0, frozenAt: 0.4));
+    await shoot(tester, 'stati_4_foto',
+        StatusViewerScreen(service: st, groups: recent, start: 1, frozenAt: 0.7));
+    await tester.runAsync(() => st.setAudience(StatusAudience.except, <String>[marco]));
+    await shoot(tester, 'stati_5_chi_li_vede', StatusAudienceScreen(service: st, contacts: me.contacts));
+    await shoot(tester, 'stati_6_visto_da',
+        StatusViewerScreen(service: st, groups: <StatusGroup>[st.myGroup!], start: 0, frozenAt: 0.5),
+        before: () async {
+      await tester.tap(find.byKey(const ValueKey<String>('stato_visto_da')));
+    });
+    await tester.pumpWidget(const SizedBox());
+    me.dispose();
+    for (final ChatService o in others) {
+      o.dispose();
+    }
+  });
+
+  // Blocco 18: sondaggio, evento, posizione e contatto nella chat.
+  Future<(ChatService, ChatService, String)> scene5() async {
+    final FakeChatHub hub = FakeChatHub()
+      ..addPerson(io, 'anna.r', 'Anna R.')
+      ..addPerson(bruno, 'bruno_b', 'Bruno B.')
+      ..contacts[io] = <String>{bruno}
+      ..contacts[bruno] = <String>{io};
+    final ChatService me = await fakePhone(hub, io);
+    final ChatService b = await fakePhone(hub, bruno);
+    hub.clock = DateTime(2026, 11, 18, 18, 5);
+    final String conv = await me.openDirect(bruno);
+    await me.sendRich(conv, const RichPoll(question: 'Dove ci vediamo sabato?',
+        options: <String>['Piazza del Popolo', 'Lungolago', 'Da Mario']));
+    await me.sendRich(conv, RichEvent(title: 'Pizza da Mario', at: DateTime(2026, 11, 22, 20, 30),
+        place: 'Porano (TR) · Umbria', note: 'Prenoto io per 6'));
+    await b.refresh();
+    await b.answer(b.messages(conv)[0], '2');
+    await b.answer(b.messages(conv)[1], RichEvent.yes);
+    await b.sendRich(conv, const RichLocation(lat: 42.6843, lng: 12.1037, name: 'Pizzeria Da Mario',
+        address: 'Piazza Roma, Porano, Umbria'));
+    await b.sendRich(conv, const RichContact(name: 'Pizzeria Da Mario', phones: <String>['0763 000000']));
+    await me.refresh();
+    await me.answer(me.messages(conv)[0], '2');
+    await b.refresh();
+    await b.markRead(conv);
+    await me.refresh();
+    return (me, b, conv);
+  }
+
+  testWidgets('chat 27 · sondaggio, evento, posizione e contatto', (tester) async {
+    final (ChatService me, ChatService b, String conv) = (await tester.runAsync(scene5))!;
+    await shoot(tester, 'chat_27_sondaggio_evento',
+        ChatThreadScreen(chat: me, conversationId: conv, now: () => now, device: _Device()));
+    me.dispose();
+    b.dispose();
+  });
+
+  testWidgets('chat 28-29 · Piazly AI nella lista e nella chat', (tester) async {
+    final MemoryAiStore store = MemoryAiStore()
+      ..turns = <AiTurn>[
+        AiTurn(mine: true, text: 'Scrivimi un annuncio per vendere una bici da corsa', at: DateTime(2026, 11, 16, 18, 50)),
+        AiTurn(
+          mine: false,
+          text: 'Ecco una proposta:\n\n«Vendo bici da corsa in alluminio, taglia M, 21 velocità, appena '
+              'revisionata. Perfetta per uscite nel weekend. Ritiro a mano in zona.»\n\nVuoi che aggiunga '
+              'il prezzo o le foto da fare?',
+          at: DateTime(2026, 11, 16, 18, 50),
+        ),
+      ];
+    final AiService ai = AiService(server: _NoAi(), store: store);
+    AiRegistry.current = ai;
+    final (ChatService me, Map<String, ChatService> others, _) = (await tester.runAsync(_scene))!;
+    await shoot(tester, 'chat_28_ai_lista', AppShell(chat: me));
+    await tester.pumpWidget(const SizedBox());
+    await shoot(tester, 'chat_29_ai_chat', AiChatScreen(ai: ai));
+    AiRegistry.current = null;
+    me.dispose();
+    for (final ChatService o in others.values) {
+      o.dispose();
+    }
+  });
+
+  testWidgets('chat 30 · Condividi l\'incontro con i luoghi suggeriti', (tester) async {
+    ComuniItalia.testData = fakeComuni();
+    final (ChatService me, Map<String, ChatService> others, _) = (await tester.runAsync(_scene))!;
+    await shoot(tester, 'chat_30_incontro_luoghi',
+        ShareMeetingScreen(chat: me, withName: 'Bruno B. (@bruno_b)', excludeId: bruno, now: () => now),
+        before: () async {
+      await tester.enterText(find.byKey(const ValueKey<String>('incontro_luogo')), 'Poran');
+      await tester.pumpAndSettle();
+    });
+    ComuniItalia.testData = null;
+    me.dispose();
+    for (final ChatService o in others.values) {
+      o.dispose();
+    }
+  });
+
   testWidgets('chat 18 · Profilo → Notifiche', (tester) async {
     await shoot(tester, 'chat_18_notifiche',
         NotificationSettingsScreen(repository: _Prefs()));
@@ -574,4 +736,12 @@ class _Prefs implements PushSettingsRepository {
 
   @override
   Future<void> save(PushSettings settings) async {}
+}
+
+class _NoAi implements AiServer {
+  @override
+  Future<String> chat(List<AiTurn> history) async => '';
+
+  @override
+  Future<Uint8List> image(String prompt) async => Uint8List(0);
 }

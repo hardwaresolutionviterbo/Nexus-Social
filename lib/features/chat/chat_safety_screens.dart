@@ -1,6 +1,8 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../places/place_search.dart';
 import 'chat_models.dart';
 import 'chat_screen.dart' show chatPreview, chatTimeLabel;
 import 'chat_service.dart';
@@ -190,9 +192,13 @@ class ShareMeetingScreen extends StatefulWidget {
     required this.withName,
     this.excludeId,
     this.now = DateTime.now,
+    this.shareText,
   });
 
   final ChatService chat;
+
+  /// Condivisione con SMS o un'altra app (nei test: finta).
+  final Future<void> Function(String text)? shareText;
 
   /// Chi si incontra («Dario V. (@dario88)»).
   final String withName;
@@ -218,6 +224,7 @@ class _ShareMeetingScreenState extends State<ShareMeetingScreen> {
   final TextEditingController _place = TextEditingController();
   final TextEditingController _note = TextEditingController();
   late DateTime _when;
+  PlaceSuggestion? _spot;
   bool _sending = false;
   String? _error;
 
@@ -258,6 +265,37 @@ class _ShareMeetingScreenState extends State<ShareMeetingScreen> {
     if (t != null) setState(() => _when = DateTime(_when.year, _when.month, _when.day, t.hour, t.minute));
   }
 
+  /// Link della mappa (OpenStreetMap) se il posto è stato scelto dai suggerimenti.
+  String get _mapUrl {
+    final PlaceSuggestion? s = _spot;
+    if (s == null) return '';
+    final String lat = s.lat.toStringAsFixed(5);
+    final String lng = s.lng.toStringAsFixed(5);
+    return 'https://www.openstreetmap.org/?mlat=$lat&mlon=$lng#map=17/$lat/$lng';
+  }
+
+  /// Fuori da Piazly: SMS, WhatsApp, email... a scelta del telefono.
+  Future<void> _shareElsewhere() async {
+    if (_place.text.trim().isEmpty) {
+      setState(() => _error = 'Scrivi dove vi incontrate.');
+      return;
+    }
+    setState(() => _error = null);
+    final String text = ChatService.meetingText(
+      withName: widget.withName,
+      place: _place.text,
+      when: _when,
+      note: _note.text,
+      mapUrl: _mapUrl,
+    );
+    final Future<void> Function(String)? custom = widget.shareText;
+    if (custom != null) {
+      await custom(text);
+    } else {
+      await SharePlus.instance.share(ShareParams(text: text, subject: 'Incontro'));
+    }
+  }
+
   Future<void> _send() async {
     final ChatContact? to = _trusted;
     if (to == null) {
@@ -279,6 +317,7 @@ class _ShareMeetingScreenState extends State<ShareMeetingScreen> {
         place: _place.text,
         when: _when,
         note: _note.text,
+        mapUrl: _mapUrl,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Incontro condiviso con ${to.name}')));
@@ -322,15 +361,12 @@ class _ShareMeetingScreenState extends State<ShareMeetingScreen> {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 6),
-            child: TextField(
-              key: const ValueKey<String>('incontro_luogo'),
+            child: PlaceField(
+              fieldKey: const ValueKey<String>('incontro_luogo'),
               controller: _place,
-              maxLength: 200,
-              decoration: const InputDecoration(
-                labelText: 'Dove (per esempio «Bar Centrale, piazza Roma»)',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.place_outlined),
-              ),
+              label: 'Dove vi incontrate',
+              hint: 'Per esempio «Porano» o «Bar Centrale»',
+              onSelected: (PlaceSuggestion? s) => _spot = s,
             ),
           ),
           Padding(
@@ -373,9 +409,16 @@ class _ShareMeetingScreenState extends State<ShareMeetingScreen> {
           if (contacts == null)
             const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator()))
           else if (contacts.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text('Nessun contatto della rubrica è su Piazly.'),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                widget.excludeId != null
+                    ? 'Non hai altri contatti su Piazly oltre a ${widget.withName}, che non può essere '
+                          'la persona fidata. Mandalo con SMS o un\'altra app qui sotto.'
+                    : 'Nessun contatto della rubrica usa ancora Piazly. Mandalo con SMS o un\'altra app '
+                          'qui sotto.',
+                key: const ValueKey<String>('incontro_nessuno'),
+              ),
             )
           else
             RadioGroup<String>(
@@ -404,7 +447,16 @@ class _ShareMeetingScreenState extends State<ShareMeetingScreen> {
               key: const ValueKey<String>('incontro_invia'),
               onPressed: _sending ? null : _send,
               icon: const Icon(Icons.send_rounded),
-              label: Text(_sending ? 'Invio…' : 'Manda'),
+              label: Text(_sending ? 'Invio…' : 'Manda su Piazly'),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: OutlinedButton.icon(
+              key: const ValueKey<String>('incontro_altra_app'),
+              onPressed: _sending ? null : _shareElsewhere,
+              icon: const Icon(Icons.sms_outlined),
+              label: const Text('Manda con SMS o un\'altra app'),
             ),
           ),
         ],

@@ -9,13 +9,17 @@ import 'package:nexus_social/features/map/map_location.dart';
 import 'package:nexus_social/features/market/market_listing_screen.dart';
 import 'package:nexus_social/features/market/market_models.dart';
 import 'package:nexus_social/features/market/market_section_screen.dart';
+import 'package:nexus_social/features/market/comuni_italia.dart';
 
+import '../support/fake_comuni.dart';
 import '../support/fake_map.dart';
 import '../support/fake_market.dart';
 
 /// Fase 5, Blocco 2 · Scambia & Vendi: ricerca per parola, 13 filtri, 5 ordinamenti,
 /// pagine da 20, scheda con avviso antitruffa, Contatta, Segnala, Condividi.
 void main() {
+  setUpAll(() => ComuniItalia.testData = fakeComuni());
+  tearDownAll(() => ComuniItalia.testData = null);
   group('Regole della ricerca', () {
     test('parametri per il server: sezione, filtri, ordinamento senza punto o parola', () {
       final MarketQuery q = MarketQuery(
@@ -104,6 +108,12 @@ void main() {
       await tester.pumpAndSettle();
     }
 
+    /// Posizione nell'ordine di lettura delle schede (riga, poi colonna).
+    double readingOrder(WidgetTester tester, String id) {
+      final Offset o = tester.getTopLeft(find.byKey(ValueKey<String>('risultato_$id')));
+      return o.dy.roundToDouble() * 10000 + o.dx;
+    }
+
     Future<void> tapVisible(WidgetTester tester, Finder f) async {
       FocusManager.instance.primaryFocus?.unfocus();
       await tester.pumpAndSettle();
@@ -145,11 +155,8 @@ void main() {
       }
       expect(find.text('350 €'), findsOneWidget);
       expect(find.byKey(const ValueKey<String>('avviso_antitruffa')), findsOneWidget);
-      // Il più recente per primo.
-      expect(
-        tester.getTopLeft(find.byKey(const ValueKey<String>('risultato_b'))).dy,
-        lessThan(tester.getTopLeft(find.byKey(const ValueKey<String>('risultato_c'))).dy),
-      );
+      // Il più recente per primo (a schede su due colonne: si legge riga per riga).
+      expect(readingOrder(tester, 'b'), lessThan(readingOrder(tester, 'c')));
     });
 
     testWidgets('barra di ricerca: parola, poi «Più pertinenti» (D4); nessun risultato', (
@@ -172,7 +179,10 @@ void main() {
 
     testWidgets('categoria dalla fila in alto', (WidgetTester tester) async {
       await openSection(tester, MarketSection.sale, three);
-      await tester.ensureVisible(find.byKey(const ValueKey<String>('categoria_musica-strumenti')));
+      // Nuova grafica: quattro categorie in vista, le altre in «Altre».
+      await tester.ensureVisible(find.byKey(const ValueKey<String>('categoria_altre')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey<String>('categoria_altre')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey<String>('categoria_musica-strumenti')));
       await tester.pumpAndSettle();
@@ -205,7 +215,7 @@ void main() {
       expect(q.seller, SellerKind.private);
       expect(q.openToSwap, isTrue);
       expect(q.published, MarketPublished.week);
-      expect(find.text('Filtri (5)'), findsOneWidget);
+      expect(find.byTooltip('Filtri (5)'), findsOneWidget);
       expect(find.byKey(const ValueKey<String>('risultato_c')), findsOneWidget);
       expect(find.byKey(const ValueKey<String>('risultato_a')), findsNothing);
 
@@ -217,7 +227,7 @@ void main() {
       await tapVisible(tester, find.byKey(const ValueKey<String>('filtri_azzera')));
       await tapVisible(tester, find.byKey(const ValueKey<String>('filtri_mostra')));
       expect(repo.searches.last.$2.activeFilters, 0);
-      expect(find.text('Filtri'), findsOneWidget);
+      expect(find.byTooltip('Filtri'), findsOneWidget);
     });
 
     testWidgets('Scambia: tipologie Scambio, Regalo e Cerco; conguaglio', (WidgetTester tester) async {
@@ -281,8 +291,8 @@ void main() {
       await tapVisible(tester, find.byKey(const ValueKey<String>('mercato_ordina')));
       await tester.tap(find.byKey(const ValueKey<String>('ordina_price_asc')));
       await tester.pumpAndSettle();
-      double y(String id) => tester.getTopLeft(find.byKey(ValueKey<String>('risultato_$id'))).dy;
-      expect(y('b') < y('c') && y('c') < y('a'), isTrue);
+      expect(readingOrder(tester, 'b') < readingOrder(tester, 'c') && readingOrder(tester, 'c') < readingOrder(tester, 'a'),
+          isTrue);
     });
 
     testWidgets('pagine da 20 (D9): «Mostra altri» carica il resto', (WidgetTester tester) async {

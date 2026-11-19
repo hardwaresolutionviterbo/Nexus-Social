@@ -2740,6 +2740,228 @@ def check_group_calls_phase4() -> None:
     rpc("push_unregister", {"p_fid": fid}, tb)
 
 
+def check_contact_names_phase4() -> None:
+    """CN · Nomi della rubrica (Fase 4, Blocco 11): l'impronta → persona solo per i contatti riconosciuti."""
+    ta, tc = token(UID_A), token(UID_C)
+    tag_b = sql(f"select tag from private.phone_numbers where user_id = '{UID_B}';")
+    tag_d = sql(f"select tag from private.phone_numbers where user_id = '{UID_D}';")
+    sql(f"insert into public.consents (user_id, kind) values ('{UID_A}', 'contacts') "
+        "on conflict (user_id, kind) do update set revoked_at = null;")
+    sql(f"insert into private.contact_links (owner_id, contact_id, expires_at) values "
+        f"('{UID_A}', '{UID_B}', now() + interval '30 days') on conflict (owner_id, contact_id) "
+        "do update set expires_at = excluded.expires_at;")
+    sql(f"delete from private.contact_links where owner_id = '{UID_A}' and contact_id = '{UID_D}';")
+    status, rows = rpc("match_contact_tags", {"p_tags": [tag_b, tag_d, "ab" * 32]}, ta)
+    got = sorted((r.get("id"), r.get("tag")) for r in rows) if isinstance(rows, list) else rows
+    check("CN1", "Risponde solo per le persone già riconosciute come contatti (non per gli altri numeri)",
+          status == 200 and got == [(UID_B, tag_b)], f"{status}, {len(got) if isinstance(got, list) else got}")
+
+    no_consent = rpc("match_contact_tags", {"p_tags": [tag_b]}, tc)[0]
+    bad = rpc("match_contact_tags", {"p_tags": ["non-valido"]}, ta)[0]
+    anon = rpc("match_contact_tags", {"p_tags": [tag_b]}, None)[0]
+    sql(f"update private.contact_links set expires_at = now() - interval '1 second' "
+        f"where owner_id = '{UID_A}' and contact_id = '{UID_B}';")
+    _, expired = rpc("match_contact_tags", {"p_tags": [tag_b]}, ta)
+    sql(f"update private.contact_links set expires_at = now() + interval '30 days' "
+        f"where owner_id = '{UID_A}' and contact_id = '{UID_B}';")
+    check("CN2", "Senza consenso, con dati strani, senza accesso o con il contatto scaduto: niente",
+          no_consent >= 400 and bad >= 400 and anon >= 400 and expired == [],
+          f"{no_consent}, {bad}, {anon}, {expired}")
+
+
+def check_presence_phase4() -> None:
+    """OL · Online e ultimo accesso (Fase 4, Blocco 12): secondo la privacy di ognuno, e reciproco."""
+    ta, tb, tc = token(UID_A), token(UID_B), token(UID_C)
+    for t, other in ((ta, UID_B), (tb, UID_A)):
+        rpc("unblock_user", {"p_user_id": other}, t)
+    # B ha A in rubrica; C no.
+    sql(f"insert into private.contact_links (owner_id, contact_id, expires_at) values "
+        f"('{UID_B}', '{UID_A}', now() + interval '30 days') on conflict (owner_id, contact_id) "
+        "do update set expires_at = excluded.expires_at;")
+    sql(f"delete from private.contact_links where owner_id = '{UID_B}' and contact_id = '{UID_C}';")
+    for t in (ta, tb, tc):
+        rpc("set_last_seen", {"p_value": "contatti"}, t)
+
+    def seen(tok, who=UID_B):
+        status, rows = rpc("presence_of", {"p_users": [who]}, tok)
+        row = rows[0] if status == 200 and isinstance(rows, list) and rows else {}
+        return status, row.get("online"), row.get("last_seen") is not None
+
+    ping = rpc("presence_ping", {"p_online": True}, tb)[0]
+    contact = seen(ta)
+    stranger = seen(tc)
+    rpc("set_last_seen", {"p_value": "tutti"}, tb)
+    everyone = seen(tc)
+    rpc("set_last_seen", {"p_value": "nessuno"}, tb)
+    nobody = seen(ta)
+    rpc("set_last_seen", {"p_value": "contatti"}, tb)
+    check("OL1", "«I miei contatti»: lo vede chi è nella rubrica; «Tutti»: tutti; «Nessuno»: nessuno",
+          ping in (200, 204) and contact == (200, True, True) and stranger == (200, False, False)
+          and everyone == (200, True, True) and nobody == (200, False, False),
+          f"{ping}, {contact}, {stranger}, {everyone}, {nobody}")
+
+    rpc("set_last_seen", {"p_value": "nessuno"}, ta)
+    hidden_me = seen(ta)
+    rpc("set_last_seen", {"p_value": "contatti"}, ta)
+    rpc("block_user", {"p_user_id": UID_B}, ta)
+    blocked = seen(ta)
+    rpc("unblock_user", {"p_user_id": UID_B}, ta)
+    check("OL2", "Chi nasconde il proprio non vede quello degli altri; con un blocco nessuno dei due",
+          hidden_me == (200, False, False) and blocked == (200, False, False), f"{hidden_me}, {blocked}")
+
+    rpc("presence_ping", {"p_online": False}, tb)
+    away = seen(ta)
+    bad = rpc("set_last_seen", {"p_value": "amici"}, ta)[0]
+    anon = [rpc("presence_ping", {"p_online": True}, None)[0], rpc("presence_of", {"p_users": [UID_B]}, None)[0]]
+    _, mine = rpc("get_my_privacy", {}, ta)
+    check("OL3", "App chiusa: non più online ma ultimo accesso; valori strani e senza accesso rifiutati",
+          away == (200, False, True) and bad >= 400 and all(x >= 400 for x in anon)
+          and isinstance(mine, dict) and mine.get("last_seen") == "contatti",
+          f"{away}, {bad}, {anon}, {mine.get('last_seen') if isinstance(mine, dict) else mine}")
+
+
+def check_statuses_phase4() -> None:
+    """ST · Stati (Fase 4, Blocco 13): li vede solo chi l'autore ha scelto, per 24 ore."""
+    ta, tb, tc = token(UID_A), token(UID_B), token(UID_C)
+    for t, other in ((ta, UID_B), (tb, UID_A), (tb, UID_C), (tc, UID_B)):
+        rpc("unblock_user", {"p_user_id": other}, t)
+    sql(f"insert into private.contact_links (owner_id, contact_id, expires_at) values "
+        f"('{UID_B}', '{UID_A}', now() + interval '30 days') on conflict (owner_id, contact_id) "
+        "do update set expires_at = excluded.expires_at;")
+    sql(f"delete from private.contact_links where owner_id = '{UID_B}' and contact_id = '{UID_C}';")
+    sql(f"delete from public.statuses where user_id = '{UID_B}';")
+
+    def create(kind="testo", body="Al mare!", media=None, audience="contatti", people=None, tok=None):
+        return rpc("status_create", {"p_kind": kind, "p_body": body, "p_color": 2, "p_media_path": media,
+                                     "p_audience": audience, "p_people": people or []}, tok or tb)
+
+    def feed_ids(tok) -> set:
+        status, rows = rpc("status_feed", {}, tok)
+        return {r["id"] for r in rows} if status == 200 and isinstance(rows, list) else {"errore"}
+
+    s1 = create()
+    a_sees, c_sees = feed_ids(ta), feed_ids(tc)
+    anon = rpc("status_feed", {}, None)[0]
+    empty = create(body="   ")[0]
+    check("ST1", "«I miei contatti»: lo vede chi l'autore ha in rubrica, non gli altri",
+          s1[0] == 200 and s1[1] in a_sees and s1[1] not in c_sees and anon >= 400 and empty >= 400,
+          f"{s1[0]}, {s1[1] in a_sees}, {s1[1] in c_sees}, {anon}, {empty}")
+
+    except_a = create(audience="tranne", people=[UID_A])[1]
+    only_c_no_contact = create(audience="solo", people=[UID_C])[1]
+    c_before = only_c_no_contact in feed_ids(tc)
+    sql(f"insert into private.contact_links (owner_id, contact_id, expires_at) values "
+        f"('{UID_B}', '{UID_C}', now() + interval '30 days') on conflict (owner_id, contact_id) "
+        "do update set expires_at = excluded.expires_at;")
+    only_c = create(audience="solo", people=[UID_C])[1]
+    a2, c2 = feed_ids(ta), feed_ids(tc)
+    nobody = create(audience="solo", people=[])[0]
+    check("ST2", "«Tranne…» esclude; «Solo…» solo le persone scelte (e che l'autore ha in rubrica)",
+          except_a not in a2 and only_c in c2 and only_c not in a2 and not c_before
+          and only_c_no_contact in c2 and nobody >= 400,
+          f"{except_a in a2}, {only_c in c2}, {only_c in a2}, {c_before}, {nobody}")
+    sql(f"delete from private.contact_links where owner_id = '{UID_B}' and contact_id = '{UID_C}';")
+
+    jpg = b"\xff\xd8\xff" + bytes(200)
+    up = storage("POST", f"stati/{UID_B}/foto1.jpg", tb, jpg, content_type="image/jpeg")
+    foreign_up = storage("POST", f"stati/{UID_B}/intruso.jpg", tc, jpg, content_type="image/jpeg")
+    photo = create(kind="foto", body="", media=f"{UID_B}/foto1.jpg")
+    stolen = create(kind="foto", body="", media=f"{UID_A}/qualcosa.jpg")[0]
+    get_a = storage("GET", f"authenticated/stati/{UID_B}/foto1.jpg", ta)
+    get_c = storage("GET", f"authenticated/stati/{UID_B}/foto1.jpg", tc)
+    check("ST3", "Foto: caricata solo nella propria cartella; la apre solo chi può vedere lo stato",
+          up == 200 and foreign_up >= 400 and photo[0] == 200 and stolen >= 400 and get_a == 200 and get_c >= 400,
+          f"{up}, {foreign_up}, {photo[0]}, {stolen}, {get_a}, {get_c}")
+
+    seen = rpc("status_seen", {"p_id": s1[1]}, ta)[0]
+    seen_c = rpc("status_seen", {"p_id": s1[1]}, tc)[0]
+    _, viewers = rpc("status_viewers", {"p_id": s1[1]}, tb)
+    _, not_owner = rpc("status_viewers", {"p_id": s1[1]}, ta)
+    sql(f"update public.statuses set expires_at = now() - interval '1 second' where user_id = '{UID_B}';")
+    expired = s1[1] in feed_ids(ta)
+    get_expired = storage("GET", f"authenticated/stati/{UID_B}/foto1.jpg", ta)
+    _, cleaned = rpc("status_cleanup", {}, tb)
+    left = sql(f"select count(*) from public.statuses where user_id = '{UID_B}';")
+    check("ST4", "Chi l'ha visto lo sa solo l'autore; dopo 24 ore sparisce e i file si possono togliere",
+          seen in (200, 204) and seen_c >= 400 and [v.get("user_id") for v in viewers] == [UID_A]
+          and not_owner == [] and not expired and get_expired >= 400
+          and f"{UID_B}/foto1.jpg" in [c.get("media_path") for c in cleaned] and left == "0",
+          f"{seen}, {seen_c}, {len(viewers)}, {not_owner}, {expired}, {get_expired}, {left}")
+
+
+def check_live_location_phase4() -> None:
+    """GP · GPS in tempo reale (Blocco 15): solo le persone scelte, a tempo, revocabile."""
+    ta, tb, tc = token(UID_A), token(UID_B), token(UID_C)
+    for t, other in ((ta, UID_B), (tb, UID_A), (tb, UID_C), (tc, UID_B)):
+        rpc("unblock_user", {"p_user_id": other}, t)
+    sql(f"insert into private.contact_links (owner_id, contact_id, expires_at) values "
+        f"('{UID_B}', '{UID_A}', now() + interval '30 days') on conflict (owner_id, contact_id) "
+        "do update set expires_at = excluded.expires_at;")
+    sql(f"delete from private.contact_links where owner_id = '{UID_B}' and contact_id = '{UID_C}';")
+    rpc("live_share_stop", {}, tb)
+
+    def seen(tok) -> list:
+        status, rows = rpc("live_visible", {}, tok)
+        return [r.get("user_id") for r in rows] if status == 200 and isinstance(rows, list) else ["errore"]
+
+    ok = rpc("live_share_start", {"p_viewers": [UID_A], "p_minutes": 60}, tb)[0]
+    not_contact = rpc("live_share_start", {"p_viewers": [UID_C], "p_minutes": 60}, tb)[0]
+    bad_time = rpc("live_share_start", {"p_viewers": [UID_A], "p_minutes": 600}, tb)[0]
+    anon = rpc("live_share_start", {"p_viewers": [UID_A], "p_minutes": 15}, None)[0]
+    _, mine = rpc("live_my_shares", {}, tb)
+    check("GP1", "Si accende solo per chi è in rubrica, per 15 min, 1 ora o 8 ore",
+          ok == 200 and not_contact >= 400 and bad_time >= 400 and anon >= 400
+          and [m.get("viewer_id") for m in mine] == [UID_A],
+          f"{ok}, {not_contact}, {bad_time}, {anon}, {len(mine)}")
+
+    before = seen(ta)
+    up = rpc("live_update", {"p_lat": 42.42, "p_lng": 12.1, "p_accuracy": 12}, tb)
+    c_up = rpc("live_update", {"p_lat": 45.0, "p_lng": 9.0, "p_accuracy": 10}, tc)
+    a_rows = rpc("live_visible", {}, ta)[1]
+    c_sees, b_sees = seen(tc), seen(tb)
+    stored_c = sql(f"select count(*) from private.live_positions where user_id = '{UID_C}';")
+    direct = request("GET", "/rest/v1/live_positions?select=*", jwt=ta)[0]
+    check("GP2", "La posizione la vede solo la persona scelta; senza condivisione non si salva",
+          before == [] and up == (200, True) and a_rows and abs(a_rows[0].get("lat", 0) - 42.42) < 1e-6
+          and c_sees == [] and b_sees == [] and c_up == (200, False) and stored_c == "0" and direct >= 400,
+          f"{before}, {up}, {c_sees}, {b_sees}, {c_up}, {stored_c}, {direct}")
+
+    rpc("block_user", {"p_user_id": UID_B}, ta)
+    blocked_shares = sql(f"select count(*) from private.live_shares where owner_id = '{UID_B}';")
+    blocked_pos = sql(f"select count(*) from private.live_positions where user_id = '{UID_B}';")
+    rpc("unblock_user", {"p_user_id": UID_B}, ta)
+    check("GP3", "Bloccare qualcuno chiude subito la condivisione e cancella la posizione",
+          blocked_shares == "0" and blocked_pos == "0" and seen(ta) == [],
+          f"{blocked_shares}, {blocked_pos}")
+
+    rpc("live_share_start", {"p_viewers": [UID_A], "p_minutes": 15}, tb)
+    rpc("live_update", {"p_lat": 42.4, "p_lng": 12.1, "p_accuracy": 8}, tb)
+    sql(f"update private.live_shares set expires_at = now() - interval '1 second' where owner_id = '{UID_B}';")
+    expired = seen(ta)
+    left = sql(f"select count(*) from private.live_positions where user_id = '{UID_B}';")
+    rpc("live_share_start", {"p_viewers": [UID_A], "p_minutes": 15}, tb)
+    rpc("live_update", {"p_lat": 42.4, "p_lng": 12.1, "p_accuracy": 8}, tb)
+    stop = rpc("live_share_stop", {"p_viewer": UID_A}, tb)[0]
+    after_stop = sql(f"select count(*) from private.live_positions where user_id = '{UID_B}';")
+    check("GP4", "A tempo scaduto o revocata, sparisce e l'ultima posizione si cancella",
+          expired == [] and left == "0" and stop in (200, 204) and after_stop == "0" and seen(ta) == [],
+          f"{expired}, {left}, {stop}, {after_stop}")
+
+
+def check_ai_limits_phase4() -> None:
+    """IA · Piazly AI (Blocco 18): limiti per persona contati solo dalla funzione `ia`."""
+    ta = token(UID_A)
+    service = token(None, role="service_role")
+    user_try = rpc("rubrica_consume_limit", {"p_uid": UID_A, "p_kind": "ia_testo", "p_max": 40}, ta)
+    text = [rpc("rubrica_consume_limit", {"p_uid": UID_B, "p_kind": "ia_testo", "p_max": 2}, service)[1]
+            for _ in range(3)]
+    image = rpc("rubrica_consume_limit", {"p_uid": UID_B, "p_kind": "ia_immagini", "p_max": 1}, service)[1]
+    other = rpc("rubrica_consume_limit", {"p_uid": UID_B, "p_kind": "ia_altro", "p_max": 1}, service)
+    check("IA1", "Domande e immagini IA contate a parte, solo dal server; tipi sconosciuti rifiutati",
+          user_try[0] >= 400 and text == [True, True, False] and image is True and other[0] >= 400,
+          f"{user_try[0]}, {text}, {image}, {other[0]}")
+
+
 def check_push_phase4() -> None:
     """U · Notifiche (Fase 4, Blocco 5): coda server, silenzia, non disturbare, mai i Mi piace."""
     ta, tb = token(UID_A), token(UID_B)
@@ -2884,6 +3106,11 @@ def main() -> int:
     check_realtime_phase4()
     check_preview_phase4()
     check_group_calls_phase4()
+    check_contact_names_phase4()
+    check_presence_phase4()
+    check_statuses_phase4()
+    check_live_location_phase4()
+    check_ai_limits_phase4()
     failed = [r for r in results if not r[2]]
     print(f"{'Caso':6} {'Esito':9} Descrizione")
     for case, desc, ok, detail in results:

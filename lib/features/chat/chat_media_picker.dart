@@ -3,12 +3,14 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
+import '../contacts/contacts_sync.dart' show DeviceContactsReader;
 import 'chat_media.dart';
 import 'chat_models.dart';
 
@@ -50,6 +52,13 @@ abstract class ChatDevice {
   Future<PickedMedia?> stopVoice();
 
   Future<void> cancelVoice();
+
+  /// Posizione del telefono adesso (latitudine, longitudine). Lancia [ChatFailure] con il
+  /// motivo se il GPS è spento o manca il permesso.
+  Future<(double, double)?> currentFix();
+
+  /// Nome e numeri dei contatti della rubrica (null se manca il permesso).
+  Future<List<(String, List<String>)>?> contactEntries();
 }
 
 /// Foto ridotta (lato massimo 1600 px) e anteprima minuscola, fuori dal thread principale.
@@ -98,6 +107,31 @@ String _mimeFor(String name) {
 
 class RealChatDevice implements ChatDevice {
   final ImagePicker _picker = ImagePicker();
+
+  @override
+  Future<(double, double)?> currentFix() async {
+    if (!await Geolocator.isLocationServiceEnabled()) {
+      throw const ChatFailure('Accendi la posizione (GPS) del telefono e riprova.');
+    }
+    LocationPermission p = await Geolocator.checkPermission();
+    if (p == LocationPermission.denied) p = await Geolocator.requestPermission();
+    if (p == LocationPermission.deniedForever) {
+      throw const ChatFailure('Serve il permesso di posizione: attivalo dalle impostazioni del telefono.');
+    }
+    if (p == LocationPermission.denied) throw const ChatFailure('Senza il permesso di posizione non si può inviare.');
+    final Position pos = await Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 20)),
+    );
+    return (pos.latitude, pos.longitude);
+  }
+
+  @override
+  Future<List<(String, List<String>)>?> contactEntries() async {
+    final DeviceContactsReader r = DeviceContactsReader();
+    if (!await r.requestPermission()) return null;
+    return r.entries();
+  }
+
   final AudioRecorder _recorder = AudioRecorder();
   DateTime? _voiceStart;
   String? _voicePath;

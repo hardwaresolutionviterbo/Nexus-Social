@@ -71,6 +71,12 @@ class FakeContactsRepository implements ContactsRepository {
   @override
   Future<List<RecognizedContact>> contacts() async => current;
 
+  /// Nomi della rubrica del telefono simulata.
+  Map<String, String> names = <String, String>{};
+
+  @override
+  Future<Map<String, String>> localNames() async => names;
+
   @override
   Future<void> setDiscoverable(bool value) async {
     calls.add('setDiscoverable:$value');

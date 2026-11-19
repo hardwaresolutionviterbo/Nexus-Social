@@ -45,6 +45,13 @@ l'accesso con SMS e per l'invio delle notifiche. Tutto il resto è su Supabase. 
 | 8 | Chiamate vocali e videochiamate (chat a due) | In `main` | [`BLOCCO8_ESITO.md`](docs/fase4/BLOCCO8_ESITO.md) |
 | 9 | Messaggi e chiamate in tempo reale | In `main` | [`BLOCCO9_ESITO.md`](docs/fase4/BLOCCO9_ESITO.md) |
 | 10 | Chiamata a tutto schermo, testo nelle notifiche, chiamate di gruppo | In `main` | [`BLOCCO10_ESITO.md`](docs/fase4/BLOCCO10_ESITO.md) |
+| 11 | Sezione «Chiamate», nomi come nella rubrica del telefono | Sul ramo `fase4/blocco11`, server attivo, da provare | [`BLOCCO11_ESITO.md`](docs/fase4/BLOCCO11_ESITO.md) |
+| 12 | «Online» e ultimo accesso, con la scelta in Privacy | Sul ramo `fase4/blocco12`, server attivo, da provare | [`BLOCCO12_ESITO.md`](docs/fase4/BLOCCO12_ESITO.md) |
+| 13 | Stati di 24 ore (testo, foto, video), chi li vede, «Visto da» | Sul ramo `fase4/blocco13`, server attivo, da provare | [`BLOCCO13_ESITO.md`](docs/fase4/BLOCCO13_ESITO.md) |
+| 14 | Correzioni del titolare (Profilo, Autorizzazioni, intestazione chat) e GPS in tempo reale | Sul ramo `fase4/blocco14`, server attivo, da provare | [`BLOCCO14_ESITO.md`](docs/fase4/BLOCCO14_ESITO.md) |
+| 15 | Nuova barra in basso: Chat, Stati, Mappa al centro, Vendita (con dentro Scambia), Profilo | Sul ramo `fase4/blocco15`, da provare | — |
+| 16 | Nuova grafica dai mockup del titolare: Chat, Chiamate, Stati, Mappa, Scambia & Vendi, I miei annunci, annuncio, Profilo, pagina iniziale | Sul ramo `fase4/blocco16`, da provare | — |
+| 17 | Numero di telefono nel Profilo, località degli annunci tra tutti i comuni d'Italia, nomi della rubrica anche al limite giornaliero | Sul ramo `fase4/blocco17`, da provare | — |
 
 Le scelte tecniche della chat sono in [`docs/fase4/DECISIONI.md`](docs/fase4/DECISIONI.md).
 
@@ -84,7 +91,7 @@ Nel repository non ce n'è nessuna.
 | Modifiche approvate al piano | [`docs/fase1/MODIFICHE_AL_PIANO.md`](docs/fase1/MODIFICHE_AL_PIANO.md) |
 | Piano e risultato di ogni blocco | `docs/faseN/PIANO_OPERATIVO.md` e `docs/faseN/BLOCCOn_ESITO.md` |
 | Bozze legali (privacy, termini, regole), **non ancora verificate da un professionista** | [`docs/fase0/`](docs/fase0/) |
-| Schema del database e regole di sicurezza | [`supabase/migrations/`](supabase/migrations/): `0001`–`0028`, tutte applicate al database reale |
+| Schema del database e regole di sicurezza | [`supabase/migrations/`](supabase/migrations/): `0001`–`0029`, tutte applicate al database reale |
 | Funzioni del server | [`supabase/functions/`](supabase/functions/): `rubrica`, `notifiche` e `chiamate` |
 | Test di sicurezza del database | [`supabase/tests/rls_test.py`](supabase/tests/rls_test.py), eseguiti su un database temporaneo (workflow Supabase RLS) |
 | Codice dell'app | [`lib/`](lib/), una cartella per sezione in `lib/features/` |

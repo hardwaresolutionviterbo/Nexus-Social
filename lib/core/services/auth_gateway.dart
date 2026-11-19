@@ -36,6 +36,9 @@ abstract class AuthGateway {
 
   String? get currentUid;
 
+  /// Numero con cui la persona è entrata (+39…), solo per mostrarlo a lei nel Profilo.
+  String? get currentPhone;
+
   /// Invia il codice SMS al numero in formato internazionale (+39…).
   Future<CodeRequest> sendCode(String phoneE164);
 
@@ -60,6 +63,9 @@ class FirebaseAuthGateway implements AuthGateway {
 
   @override
   String? get currentUid => _auth.currentUser?.uid;
+
+  @override
+  String? get currentPhone => _auth.currentUser?.phoneNumber;
 
   @override
   Future<CodeRequest> sendCode(String phoneE164) {

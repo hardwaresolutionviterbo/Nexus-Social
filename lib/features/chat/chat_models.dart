@@ -107,6 +107,7 @@ class ChatConversation {
     String? myJoinedKey,
     String? myMlsState,
     int? pending,
+    String? peerName,
   }) => ChatConversation(
     id: id,
     status: status,
@@ -114,7 +115,7 @@ class ChatConversation {
     groupId: groupId ?? this.groupId,
     peerId: peerId,
     peerUsername: peerUsername,
-    peerName: peerName,
+    peerName: peerName ?? this.peerName,
     peerAvatarPath: peerAvatarPath,
     peerSignatureKey: peerSignatureKey ?? this.peerSignatureKey,
     peerJoinedKey: peerJoinedKey ?? this.peerJoinedKey,
@@ -341,6 +342,22 @@ class ChatContent {
       emoji = null,
       media = null;
 
+  /// Posizione, contatto, sondaggio o evento: [body] è il JSON (vedi chat_rich.dart).
+  const ChatContent.rich(this.body, {required this.localId, this.quote})
+    : type = 'rich',
+      forwarded = false,
+      target = null,
+      emoji = null,
+      media = null;
+
+  /// Voto a un sondaggio o risposta a un evento ([body]): riguarda il messaggio [target].
+  const ChatContent.answer(this.body, {required this.localId, required String this.target})
+    : type = 'ans',
+      quote = null,
+      forwarded = false,
+      emoji = null,
+      media = null;
+
   /// Passaggio di una chiamata (offerta, risposta, chiusura): [body] è il JSON del segnale.
   const ChatContent.call(this.body, {required this.localId})
     : type = 'call',
@@ -375,7 +392,7 @@ class ChatContent {
   bool get isText => type == 'text';
 
   /// Testo o allegato: diventa un fumetto nella conversazione.
-  bool get isMessage => type == 'text' || (type == 'media' && media != null);
+  bool get isMessage => type == 'text' || type == 'rich' || (type == 'media' && media != null);
 
   List<int> encode() => utf8.encode(jsonEncode(<String, Object>{
     'v': 1,
@@ -424,6 +441,10 @@ class ChatContent {
             forwarded: json['f'] == true,
             media: media,
           );
+        case 'rich':
+          return body.length <= 4000 ? ChatContent._(type, body, id, quote: quote) : null;
+        case 'ans':
+          return target is String && body.length <= 200 ? ChatContent._(type, body, id, target: target) : null;
         case 'del':
           return target is String ? ChatContent._(type, '', id, target: target) : null;
         case 'react':
@@ -451,11 +472,14 @@ enum MessageKind {
 
   /// Avviso di sistema: «X ha cambiato telefono».
   notice,
+
+  /// Posizione, contatto, sondaggio o evento (Blocco 18): [ChatMessage.body] è il JSON.
+  rich,
 }
 
 /// Evento su un messaggio già salvato: elimina per tutti, reazione, elimina per me,
 /// allegato salvato sul telefono ([ChatEvent.value] = nome del file).
-enum ChatEventKind { delete, react, hide, saved }
+enum ChatEventKind { delete, react, hide, saved, answer }
 
 class ChatEvent {
   const ChatEvent({
@@ -534,7 +558,13 @@ class ChatMessage {
     this.senderId = '',
     this.reactions = const <String, String>{},
     this.fromBackup = false,
+    this.answers = const <String, String>{},
   });
+
+  /// Voti e risposte ai messaggi ricchi: chi → risposta ('' = io, 'peer' nella chat a due).
+  final Map<String, String> answers;
+
+  bool get isRich => kind == MessageKind.rich && !deleted;
 
   final String localId;
   final String conversationId;
@@ -585,7 +615,7 @@ class ChatMessage {
 
   /// Si può eliminare per tutti: mio, già inviato, entro 48 ore.
   bool canDeleteForEveryone(DateTime now) =>
-      mine && isText && serverId != null && now.difference(at) < deleteForEveryoneWindow;
+      mine && (isText || isRich) && serverId != null && now.difference(at) < deleteForEveryoneWindow;
 
   ChatMessage copyWith({
     int? serverId,
@@ -595,6 +625,7 @@ class ChatMessage {
     String? peerReaction,
     String? localFile,
     Map<String, String>? reactions,
+    Map<String, String>? answers,
   }) => ChatMessage(
     localId: localId,
     conversationId: conversationId,
@@ -614,6 +645,7 @@ class ChatMessage {
     senderId: senderId,
     reactions: reactions ?? this.reactions,
     fromBackup: fromBackup,
+    answers: answers ?? this.answers,
   );
 
   Map<String, Object?> toJson() => <String, Object?>{
@@ -685,7 +717,11 @@ List<ChatMessage> foldChatEvents(List<ChatMessage> messages, List<ChatEvent> eve
       case ChatEventKind.delete:
         // Solo chi l'ha scritto può eliminarlo per tutti (nei gruppi: lo stesso membro).
         final bool author = e.byMe ? m.mine : (!m.mine && (m.senderId.isEmpty || e.by.isEmpty || e.by == m.senderId));
-        if (author && m.kind == MessageKind.text) out[i] = m.copyWith(deleted: true);
+        if (author && (m.kind == MessageKind.text || m.kind == MessageKind.rich)) out[i] = m.copyWith(deleted: true);
+      case ChatEventKind.answer:
+        if (m.deleted || m.kind != MessageKind.rich) continue;
+        final String who = e.byMe ? '' : (e.by.isEmpty ? 'peer' : e.by);
+        out[i] = m.copyWith(answers: <String, String>{...m.answers, who: e.emoji});
       case ChatEventKind.react:
         if (m.deleted || m.kind != MessageKind.text) continue;
         if (e.byMe) {
@@ -717,11 +753,35 @@ class ChatThread {
 }
 
 /// Contatto della rubrica a cui scrivere (mai il numero).
+/// «Online» o ultimo accesso di una persona (Blocco 12); null se non si può vedere.
+class Presence {
+  const Presence({required this.online, this.lastSeen});
+
+  final bool online;
+  final DateTime? lastSeen;
+}
+
+/// «online», «ultimo accesso oggi alle 18:05», «ultimo accesso ieri alle 9:12», «… il 12/11 alle …».
+String? presenceLabel(Presence? p, DateTime now) {
+  if (p == null) return null;
+  if (p.online) return 'online';
+  final DateTime? at = p.lastSeen?.toLocal();
+  if (at == null) return null;
+  final String hm = '${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
+  final int days = DateTime(now.year, now.month, now.day).difference(DateTime(at.year, at.month, at.day)).inDays;
+  if (days <= 0) return 'ultimo accesso oggi alle $hm';
+  if (days == 1) return 'ultimo accesso ieri alle $hm';
+  return 'ultimo accesso il ${at.day}/${at.month} alle $hm';
+}
+
 class ChatContact {
-  const ChatContact({required this.id, required this.name, required this.username, this.avatarPath});
+  const ChatContact({required this.id, required this.name, required this.username, this.avatarPath, this.phone});
 
   final String id;
   final String name;
   final String username;
   final String? avatarPath;
+
+  /// Solo se la persona lo rende visibile ai contatti (Privacy → Numero di telefono).
+  final String? phone;
 }

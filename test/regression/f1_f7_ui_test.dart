@@ -21,7 +21,7 @@ void main() {
     for (final MapEntry<String, String> section in sectionMarkers.entries) {
       await openSection(tester, section.key);
       final IndexedStack stack = tester.widget<IndexedStack>(
-        find.byType(IndexedStack),
+        find.byType(IndexedStack).first,
       );
       final int selected = tester
           .widget<NavigationBar>(find.byType(NavigationBar))
@@ -117,21 +117,34 @@ void main() {
     expect(find.text('Diagnostica push (debug)'), findsNothing);
   });
 
-  testWidgets('F7 · Informazioni: Versione, Fase e Privacy', (
+  testWidgets('F7 · Versione nello stato dei servizi; niente più riquadro «Informazioni»', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(const NexusApp());
     await tester.pumpAndSettle();
     await openSection(tester, 'Profilo');
-    await tester.scrollUntilVisible(find.text('Privacy'), 200);
+    await tester.scrollUntilVisible(find.text('Versione'), 200);
 
-    expect(find.text('Versione'), findsOneWidget);
     expect(find.text(AppInfo.versionLabel), findsOneWidget);
-    expect(find.text('Fase'), findsOneWidget);
-    expect(find.text(AppInfo.phaseLabel), findsOneWidget);
-    expect(find.text('Privacy'), findsOneWidget);
-    expect(find.text('Posizione approssimata'), findsOneWidget);
+    // Tolti su richiesta del titolare (19/11/2026).
+    expect(find.text('Informazioni'), findsNothing);
+    expect(find.text(AppInfo.phaseLabel), findsNothing);
+    expect(find.text('Posizione approssimata'), findsNothing);
+    expect(find.text('Costruito una fase alla volta'), findsNothing);
   });
+
+  for (final bool admin in <bool>[false, true]) {
+    testWidgets('F7 · stato dei servizi e versione ${admin ? 'visibili' : 'nascosti'} '
+        '${admin ? 'a un amministratore' : 'a un utente normale'}', (WidgetTester tester) async {
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(body: ProfileScreen(isAdmin: () async => admin)),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.text('Stato dei servizi'), admin ? findsOneWidget : findsNothing);
+      expect(find.text('Versione'), admin ? findsOneWidget : findsNothing);
+      if (!admin) expect(find.text('Diagnostica push (debug)'), findsNothing);
+    });
+  }
 
   testWidgets('F11 · Mappa: raggio 1, 5, 10, 30 km, parte da 10 e si cambia', (
     WidgetTester tester,

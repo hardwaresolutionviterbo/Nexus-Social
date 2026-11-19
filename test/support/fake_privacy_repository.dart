@@ -23,6 +23,13 @@ class FakePrivacyRepository implements PrivacyRepository {
   }
 
   @override
+  Future<void> setLastSeen(LastSeenVisibility value) async {
+    calls.add('setLastSeen:${value.key}');
+    _maybeFail();
+    settings = settings.copyWith(lastSeen: value);
+  }
+
+  @override
   Future<void> setPhoneVisibility(PhoneVisibility value) async {
     calls.add('setPhoneVisibility:${value.key}');
     _maybeFail();

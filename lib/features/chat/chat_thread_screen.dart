@@ -4,13 +4,19 @@ import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../ai/ai_screens.dart';
+import '../ai/ai_service.dart';
+import '../map/live_location.dart';
 import '../profile/avatar_view.dart';
 import '../profile/profile_repository.dart';
 import 'chat_group_screens.dart';
 import 'chat_media.dart';
 import 'chat_media_picker.dart';
 import 'chat_media_widgets.dart';
+import 'chat_contact_info_screen.dart';
 import 'chat_models.dart';
+import 'chat_rich.dart';
+import 'chat_rich_widgets.dart';
 import 'chat_safety_screens.dart';
 import 'chat_screen.dart' show TicksIcon, chatPreview, chatTimeLabel;
 import 'chat_service.dart';
@@ -92,10 +98,18 @@ class ChatThreadScreen extends StatefulWidget {
     this.fallbackName = '',
     this.now = DateTime.now,
     this.device,
+    this.live,
+    this.ai,
   });
 
   final ChatService chat;
   final String conversationId;
+
+  /// GPS in tempo reale (se manca si usa [LiveRegistry.current]).
+  final LiveLocationService? live;
+
+  /// Piazly AI per «Immagini IA» (se manca si usa [AiRegistry.current]).
+  final AiService? ai;
   final ProfileRepository? profiles;
   final String fallbackName;
   final DateTime Function() now;
@@ -132,10 +146,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   DateTime? _recording;
   Timer? _recordTick;
 
+  /// Online o ultimo accesso dell'altra persona (Blocco 12), aggiornato ogni 10 secondi.
+  Presence? _presence;
+  Timer? _presenceTick;
+
+  Future<void> _loadPresence() async {
+    final ChatConversation? c = widget.chat.conversation(widget.conversationId);
+    if (c == null || c.isGroup) return;
+    final Presence? p = await widget.chat.presence(c.peerId);
+    if (mounted) setState(() => _presence = p);
+  }
+
   @override
   void initState() {
     super.initState();
     widget.chat.setOpenConversation(widget.conversationId);
+    unawaited(_loadPresence());
+    _presenceTick = Timer.periodic(const Duration(seconds: 10), (_) => unawaited(_loadPresence()));
     widget.chat.addListener(_onChange);
     // Nei gruppi servono i nomi dei membri (fumetti, citazioni, invito).
     if (widget.chat.conversation(widget.conversationId)?.isGroup ?? false) {
@@ -153,6 +180,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     _text.dispose();
     _focus.dispose();
     _recordTick?.cancel();
+    _presenceTick?.cancel();
     if (_recording != null) unawaited(_device.cancelVoice());
     super.dispose();
   }
@@ -203,7 +231,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     return c.peerName.isEmpty ? '@${c.peerUsername}' : c.peerName;
   }
 
-  /// Graffetta: Galleria, Fotocamera, Video, Documento.
+  /// Graffetta: Galleria, Fotocamera, Video, Documento, Posizione, Contatto, Sondaggio,
+  /// Evento, Immagini IA.
   Future<void> _attach() async {
     final String? choice = await showModalBottomSheet<String>(
       context: context,
@@ -211,6 +240,22 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       builder: (BuildContext ctx) => const _AttachSheet(),
     );
     if (!mounted || choice == null) return;
+    switch (choice) {
+      case 'posizione':
+        return _sendLocation();
+      case 'contatto':
+        return _sendContact();
+      case 'sondaggio':
+        return _sendRich(await Navigator.of(context).push<RichPayload>(
+          MaterialPageRoute<RichPayload>(builder: (_) => const PollComposerScreen()),
+        ));
+      case 'evento':
+        return _sendRich(await Navigator.of(context).push<RichPayload>(
+          MaterialPageRoute<RichPayload>(builder: (_) => const EventComposerScreen()),
+        ));
+      case 'immagini_ia':
+        return _imageAi();
+    }
     PickedMedia? picked;
     try {
       picked = switch (choice) {
@@ -232,6 +277,76 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     );
     if (caption == null || !mounted) return;
     await _sendPicked(picked, caption: caption);
+  }
+
+  Future<void> _sendRich(RichPayload? payload) async {
+    if (payload == null || !mounted) return;
+    final ChatMessage? replyTo = _replyTo;
+    setState(() => _replyTo = null);
+    try {
+      await widget.chat.sendRich(widget.conversationId, payload, replyTo: replyTo);
+    } on ChatFailure catch (f) {
+      if (mounted) _toast(f.message);
+    }
+  }
+
+  /// Chi vede la posizione in tempo reale: l'altra persona, o i membri del gruppo.
+  Future<List<String>> _liveViewers() async {
+    final ChatConversation? c = widget.chat.conversation(widget.conversationId);
+    if (c == null) return const <String>[];
+    if (!c.isGroup) return <String>[c.peerId];
+    final List<GroupMember> members = await widget.chat.groupMembers(widget.conversationId);
+    return <String>[for (final GroupMember m in members) if (m.userId != widget.chat.myId) m.userId];
+  }
+
+  Future<void> _sendLocation() async {
+    final LiveLocationService? live = widget.live ?? LiveRegistry.current;
+    final LocationChoice? choice = await Navigator.of(context).push<LocationChoice>(
+      MaterialPageRoute<LocationChoice>(
+        builder: (_) => LocationShareScreen(currentFix: _device.currentFix, liveAvailable: live != null),
+      ),
+    );
+    if (choice == null || !mounted) return;
+    final LiveDuration? duration = choice.live;
+    if (duration != null && live != null) {
+      try {
+        await live.start(await _liveViewers(), duration);
+      } on LiveFailure catch (f) {
+        _toast(f.message);
+        return;
+      } catch (_) {
+        _toast('Non è stato possibile accendere il GPS in tempo reale.');
+        return;
+      }
+      final DateTime? until = live.until;
+      if (!mounted) return;
+      return _sendRich(RichLocation(
+        lat: choice.location.lat,
+        lng: choice.location.lng,
+        liveUntil: until ?? choice.location.liveUntil,
+      ));
+    }
+    return _sendRich(choice.location);
+  }
+
+  Future<void> _sendContact() => Navigator.of(context)
+      .push<RichContact>(MaterialPageRoute<RichContact>(builder: (_) => ContactPickScreen(load: _device.contactEntries)))
+      .then(_sendRich);
+
+  /// «Immagini IA»: si descrive l'immagine, si guarda l'anteprima e si manda come foto.
+  Future<void> _imageAi() async {
+    final AiService? ai = widget.ai ?? AiRegistry.current;
+    if (ai == null) {
+      _toast('Immagini IA non è ancora attivo.');
+      return;
+    }
+    final Uint8List? bytes = await Navigator.of(context).push<Uint8List>(
+      MaterialPageRoute<Uint8List>(builder: (_) => AiImageScreen(ai: ai)),
+    );
+    if (bytes == null || !mounted) return;
+    final PickedMedia? ready = await prepareImage(bytes);
+    if (ready == null || !mounted) return;
+    await _sendPicked(ready);
   }
 
   Future<void> _sendPicked(PickedMedia p, {String caption = ''}) async {
@@ -298,6 +413,24 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     return c?.peerName.isNotEmpty ?? false ? c!.peerName : widget.fallbackName;
   }
 
+  /// Info contatto, come su WhatsApp.
+  void _openPeer(ChatConversation c) => Navigator.of(context).push<void>(
+    MaterialPageRoute<void>(
+      builder: (BuildContext ctx) => ChatContactInfoScreen(
+        chat: widget.chat,
+        conversationId: c.id,
+        profiles: widget.profiles,
+        onCall: widget.chat.calls == null
+            ? null
+            : ({required bool video}) {
+                Navigator.of(ctx).pop();
+                unawaited(_call(c, video: video));
+              },
+        onMute: () => _more('silenzia', c),
+      ),
+    ),
+  );
+
   void _openInfo() => Navigator.of(context).push<void>(
     MaterialPageRoute<void>(
       builder: (_) => GroupInfoScreen(
@@ -361,7 +494,39 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   }
 
   Future<void> _more(String choice, ChatConversation c) async {
-    if (choice == 'incontro') {
+    if (choice == 'silenzia') {
+      final DateTime now = widget.now();
+      final String? pick = await showModalBottomSheet<String>(
+        context: context,
+        showDragHandle: true,
+        builder: (BuildContext s) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (c.isMuted)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
+                  child: Text(mutedLabel(c.mutedUntil!, now), style: Theme.of(s).textTheme.titleSmall),
+                ),
+              for (final (String v, String t) in const <(String, String)>[
+                ('8h', 'Silenzia per 8 ore'),
+                ('1w', 'Silenzia per 1 settimana'),
+                ('sempre', 'Silenzia sempre'),
+              ])
+                ListTile(title: Text(t), onTap: () => Navigator.of(s).pop(v)),
+              if (c.isMuted)
+                ListTile(
+                  key: const ValueKey<String>('riattiva_notifiche'),
+                  leading: const Icon(Icons.notifications_active_outlined),
+                  title: const Text('Riattiva le notifiche'),
+                  onTap: () => Navigator.of(s).pop('riattiva'),
+                ),
+            ],
+          ),
+        ),
+      );
+      if (pick != null) await _mute(pick);
+    } else if (choice == 'incontro') {
       await ShareMeetingScreen.open(
         context,
         widget.chat,
@@ -450,26 +615,44 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
             titleSpacing: 0,
             title: InkWell(
               key: const ValueKey<String>('chat_intestazione'),
-              onTap: group && c != null && !c.isRequest ? _openInfo : null,
+              onTap: c == null ? null : (group ? (c.isRequest ? null : _openInfo) : () => _openPeer(c)),
               child: Row(
                 children: [
                   if (group && c != null)
                     GroupAvatar(chat: widget.chat, conversation: c, size: 38)
                   else
-                    AvatarView(name: name, repository: widget.profiles, path: c?.peerAvatarPath, size: 38),
-                  const SizedBox(width: 10),
+                    AvatarView(name: name, repository: widget.profiles, path: c?.peerAvatarPath, size: 36),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(name, maxLines: 1, overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-                        if (c != null)
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                            ),
+                            if (c != null && c.isMuted) ...[
+                              const SizedBox(width: 4),
+                              Icon(Icons.notifications_off_outlined, size: 16, color: theme.colorScheme.onSurfaceVariant),
+                            ],
+                          ],
+                        ),
+                        // Come su WhatsApp: sotto il nome solo «online» o l'ultimo accesso.
+                        if (c != null && (group || presenceLabel(_presence, now) != null))
                           Text(
-                            group ? '${c.members} ${c.members == 1 ? 'membro' : 'membri'} · tocca per le info'
-                                : '@${c.peerUsername}',
-                            style: theme.textTheme.bodySmall,
+                            group
+                                ? '${c.members} ${c.members == 1 ? 'membro' : 'membri'} · tocca per le info'
+                                : presenceLabel(_presence, now)!,
+                            key: const ValueKey<String>('chat_stato_persona'),
+                            style: _presence?.online == true
+                                ? theme.textTheme.bodySmall?.copyWith(
+                                    color: const Color(0xFF2E7D32),
+                                    fontWeight: FontWeight.w600,
+                                  )
+                                : theme.textTheme.bodySmall,
                           ),
                       ],
                     ),
@@ -496,35 +679,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                   onPressed: () => _call(c, video: true),
                 ),
               ],
-              if (c != null && !c.isRequest)
-                PopupMenuButton<String>(
-                  key: const ValueKey<String>('silenzia_chat'),
-                  tooltip: c.isMuted ? 'Notifiche silenziate' : 'Silenzia',
-                  icon: Icon(c.isMuted ? Icons.notifications_off_outlined : Icons.notifications_none_rounded),
-                  onSelected: _mute,
-                  itemBuilder: (_) => <PopupMenuEntry<String>>[
-                    if (c.isMuted)
-                      PopupMenuItem<String>(
-                        enabled: false,
-                        child: Text(mutedLabel(c.mutedUntil!, now)),
-                      ),
-                    const PopupMenuItem<String>(value: '8h', child: Text('Silenzia per 8 ore')),
-                    const PopupMenuItem<String>(value: '1w', child: Text('Silenzia per 1 settimana')),
-                    const PopupMenuItem<String>(value: 'sempre', child: Text('Silenzia sempre')),
-                    if (c.isMuted)
-                      const PopupMenuItem<String>(
-                        key: ValueKey<String>('riattiva_notifiche'),
-                        value: 'riattiva',
-                        child: Text('Riattiva le notifiche'),
-                      ),
-                  ],
-                ),
               if (c != null)
                 PopupMenuButton<String>(
                   key: const ValueKey<String>('chat_altro'),
                   tooltip: 'Altro',
                   onSelected: (String v) => _more(v, c),
                   itemBuilder: (_) => <PopupMenuEntry<String>>[
+                    // Silenzia: nel menu, come su WhatsApp, per lasciare spazio al nome.
+                    if (!c.isRequest)
+                      PopupMenuItem<String>(
+                        key: const ValueKey<String>('silenzia_chat'),
+                        value: 'silenzia',
+                        child: ListTile(
+                          leading: Icon(c.isMuted ? Icons.notifications_off_outlined : Icons.notifications_none_rounded),
+                          title: Text(c.isMuted ? 'Notifiche silenziate' : 'Silenzia notifiche'),
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      ),
                     if (!c.isGroup)
                       const PopupMenuItem<String>(
                         key: ValueKey<String>('menu_incontro'),
@@ -561,8 +732,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
               else if (c != null && group && c.myMlsState != 'in')
                 const _WaitingBanner(),
               Expanded(
-                child: ListView.builder(
+                // Come su WhatsApp: con pochi messaggi la conversazione parte dall'alto, con
+                // l'avviso della cifratura in cima; con tanti si scorre dal fondo.
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: ListView.builder(
                   reverse: true,
+                  shrinkWrap: messages.length < 40,
                   padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
                   itemCount: messages.length + 1,
                   itemBuilder: (BuildContext context, int i) {
@@ -583,6 +759,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                           : () => _actions(m),
                     );
                   },
+                ),
                 ),
               ),
               if (_replyTo != null)
@@ -827,7 +1004,10 @@ class _Bubble extends StatelessWidget {
               padding: EdgeInsets.only(bottom: message.body.isEmpty ? 0 : 6),
               child: MediaContent(chat: chat, message: message, mine: mine),
             ),
-          if (message.body.isNotEmpty) Text(message.body, style: theme.textTheme.bodyLarge),
+          if (message.kind == MessageKind.rich)
+            RichMessageCard(chat: chat, message: message, now: now)
+          else if (message.body.isNotEmpty)
+            Text(message.body, style: theme.textTheme.bodyLarge),
         ],
       );
     }
@@ -1119,7 +1299,7 @@ class _MessageActions extends StatelessWidget {
                 ],
               ),
             ),
-          if (text && sent) action('rispondi', Icons.reply_rounded, 'Rispondi'),
+          if ((text || message.isRich) && sent) action('rispondi', Icons.reply_rounded, 'Rispondi'),
           if (text && message.body.isNotEmpty) action('copia', Icons.copy_rounded, 'Copia'),
           if (text && sent) action('inoltra', Icons.shortcut_rounded, 'Inoltra'),
           action('elimina', Icons.delete_outline_rounded, 'Elimina', color: theme.colorScheme.error),
@@ -1225,50 +1405,55 @@ class _ForwardScreenState extends State<ForwardScreen> {
   }
 }
 
-/// Scelta dell'allegato.
+/// Scelta dell'allegato, come su WhatsApp (Blocco 18).
 class _AttachSheet extends StatelessWidget {
   const _AttachSheet();
 
   @override
   Widget build(BuildContext context) {
-    Widget item(String key, IconData icon, String label, Color color) => Expanded(
-      child: InkWell(
-        key: ValueKey<String>('allega_$key'),
-        borderRadius: BorderRadius.circular(16),
-        onTap: () => Navigator.of(context).pop(key),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          child: Column(
-            children: [
-              CircleAvatar(
-                radius: 28,
-                backgroundColor: color,
-                child: Icon(icon, color: Colors.white, size: 26),
-              ),
-              const SizedBox(height: 8),
-              Text(label, style: Theme.of(context).textTheme.labelLarge),
-            ],
-          ),
+    Widget item(String key, IconData icon, String label, Color color) => InkWell(
+      key: ValueKey<String>('allega_$key'),
+      borderRadius: BorderRadius.circular(16),
+      onTap: () => Navigator.of(context).pop(key),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircleAvatar(radius: 26, backgroundColor: color, child: Icon(icon, color: Colors.white, size: 24)),
+            const SizedBox(height: 6),
+            Text(label, textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelMedium),
+          ],
         ),
       ),
     );
+    final List<Widget> items = <Widget>[
+      item('galleria', Icons.photo_library_rounded, 'Galleria', const Color(0xFF7C4DFF)),
+      item('fotocamera', Icons.photo_camera_rounded, 'Fotocamera', AppColors.brandOrange),
+      item('video', Icons.videocam_rounded, 'Video', const Color(0xFFE53935)),
+      item('documento', Icons.description_rounded, 'Documento', AppColors.brandBlue),
+      item('posizione', Icons.location_on_rounded, 'Posizione', const Color(0xFF16A34A)),
+      item('contatto', Icons.person_rounded, 'Contatto', const Color(0xFF0EA5E9)),
+      item('sondaggio', Icons.poll_rounded, 'Sondaggio', const Color(0xFFF59E0B)),
+      item('evento', Icons.event_rounded, 'Evento', const Color(0xFFDB2777)),
+      item('immagini_ia', Icons.auto_awesome_rounded, 'Immagini IA', const Color(0xFF5B21B6)),
+    ];
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              children: [
-                item('galleria', Icons.photo_library_rounded, 'Galleria', const Color(0xFF7C4DFF)),
-                item('fotocamera', Icons.photo_camera_rounded, 'Fotocamera', AppColors.brandOrange),
-                item('video', Icons.videocam_rounded, 'Video', const Color(0xFFE53935)),
-                item('documento', Icons.description_rounded, 'Documento', AppColors.brandBlue),
-              ],
-            ),
+            for (int r = 0; r < items.length; r += 4)
+              Row(
+                children: [
+                  for (int c = r; c < r + 4; c++) Expanded(child: c < items.length ? items[c] : const SizedBox()),
+                ],
+              ),
             const SizedBox(height: 6),
             Text(
-              'Gli allegati sono cifrati sul telefono prima di partire. Massimo 50 MB.',
+              'Tutto è cifrato sul telefono prima di partire. Allegati fino a 50 MB.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall,
             ),

@@ -57,6 +57,14 @@ class FakeDevice implements ChatDevice {
 
   @override
   Future<void> cancelVoice() async => cancelled = true;
+
+  @override
+  Future<(double, double)?> currentFix() async => (42.6893, 12.0991);
+
+  @override
+  Future<List<(String, List<String>)>?> contactEntries() async => <(String, List<String>)>[
+    ('Zia Carla', <String>['+39 333 000 0000']),
+  ];
 }
 
 Widget app(Widget home) => MaterialApp(theme: AppTheme.light, home: home);
@@ -220,7 +228,8 @@ void main() {
     await tester.tap(find.text('Contatta'));
     await tester.pumpAndSettle();
     expect(find.text('Dario V.'), findsOneWidget);
-    expect(find.text('@dario88'), findsOneWidget);
+    // Sotto il nome: «online» (Blocco 12) oppure lo username.
+    expect(find.textContaining(RegExp(r'^(@dario88|online)$')), findsOneWidget);
     await tester.enterText(find.byKey(const ValueKey<String>('chat_testo')), 'Ciao, mi interessa');
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey<String>('chat_invia')));
@@ -322,7 +331,7 @@ void main() {
     for (final String k in <String>['galleria', 'fotocamera', 'video', 'documento']) {
       expect(find.byKey(ValueKey<String>('allega_$k')), findsOneWidget);
     }
-    expect(find.textContaining('Massimo 50 MB'), findsOneWidget);
+    expect(find.textContaining('fino a 50 MB'), findsOneWidget);
 
     // Video troppo pesante: messaggio chiaro, nessun invio.
     await tester.tap(find.byKey(const ValueKey<String>('allega_video')));
@@ -456,6 +465,8 @@ void main() {
 
     await tester.tap(find.byKey(ValueKey<String>('chat_$conv')));
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey<String>('chat_altro')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey<String>('silenzia_chat')));
     await tester.pumpAndSettle();
     expect(find.text('Silenzia per 8 ore'), findsOneWidget);
@@ -471,6 +482,8 @@ void main() {
     expect(find.byKey(ValueKey<String>('silenziata_$conv')), findsOneWidget);
 
     await tester.tap(find.byKey(ValueKey<String>('chat_$conv')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey<String>('chat_altro')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey<String>('silenzia_chat')));
     await tester.pumpAndSettle();

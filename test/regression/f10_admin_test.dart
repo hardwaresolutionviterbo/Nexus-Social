@@ -101,10 +101,17 @@ void main() {
         if (file.readAsStringSync().contains('Navigator.')) rel(file),
     ]..sort();
     expect(users, <String>[
+      // Blocco 18: Piazly AI (chat e Immagini IA).
+      'lib/features/ai/ai_screens.dart',
       'lib/features/calls/call_screen.dart',
+      'lib/features/calls/calls_list.dart',
       'lib/features/chat/chat_backup_screen.dart',
+      // Info contatto (Blocca chiude anche la chat).
+      'lib/features/chat/chat_contact_info_screen.dart',
       'lib/features/chat/chat_group_screens.dart',
       'lib/features/chat/chat_media_widgets.dart',
+      // Blocco 18: posizione, contatto, sondaggio, evento.
+      'lib/features/chat/chat_rich_widgets.dart',
       'lib/features/chat/chat_safety_screens.dart',
       'lib/features/chat/chat_screen.dart',
       'lib/features/chat/chat_thread_screen.dart',
@@ -112,11 +119,15 @@ void main() {
       'lib/features/map/listing_form_screen.dart',
       'lib/features/map/listing_sheets.dart',
       'lib/features/map/listing_social_panel.dart',
+      // Blocco 14: GPS in tempo reale (scelta delle persone).
+      'lib/features/map/live_location_screens.dart',
       'lib/features/map/map_screen.dart',
       'lib/features/map/my_listings_screen.dart',
       'lib/features/map/notifications_screen.dart',
       'lib/features/map/point_picker_screen.dart',
       'lib/features/market/category_picker.dart',
+      // Località degli annunci: tutti i comuni d'Italia.
+      'lib/features/market/comune_picker_screen.dart',
       'lib/features/market/market_deals_screen.dart',
       'lib/features/market/market_feedback.dart',
       'lib/features/market/market_filters_screen.dart',
@@ -131,6 +142,8 @@ void main() {
       'lib/features/profile/profile_screen.dart',
       'lib/features/profile/public_profile_screen.dart',
       'lib/features/security/security_screens.dart',
+      // Blocco 13: stati (nuovo stato, chi li vede, visualizzatore).
+      'lib/features/status/status_screens.dart',
     ]);
   });
 }

@@ -6,12 +6,14 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 
 import '../calls/call_service.dart';
+import '../status/status_service.dart';
 import 'chat_backup.dart';
 import 'chat_backup_service.dart';
 import 'chat_crypto.dart';
 import 'chat_media.dart';
 import 'chat_models.dart';
 import 'chat_preview.dart';
+import 'chat_rich.dart';
 import 'chat_server.dart';
 import 'chat_store.dart';
 
@@ -26,6 +28,7 @@ class ChatService extends ChangeNotifier {
     required this.store,
     required this.myId,
     this.contactsLoader,
+    this.localNames,
     this.media,
     this.files,
     this.fastPoll = const Duration(seconds: 3),
@@ -35,6 +38,7 @@ class ChatService extends ChangeNotifier {
     BackupKdf backupKdf = const BackupKdf(),
     DateTime Function()? clock,
     CallService Function(ChatService chat)? calls,
+    StatusService Function(ChatService chat)? statuses,
     PreviewKeyStore? previews,
   }) : _previews = previews == null ? null : PreviewKeys(previews),
        _openCrypto = crypto,
@@ -43,7 +47,11 @@ class ChatService extends ChangeNotifier {
         ? ChatBackup(chat: this, server: backupServer, keys: backupKeys, kdf: backupKdf)
         : null;
     this.calls = calls?.call(this);
+    this.statuses = statuses?.call(this);
   }
+
+  /// Stati di 24 ore (Blocco 13); null senza server.
+  late final StatusService? statuses;
 
   /// Chiavi delle anteprime nelle notifiche (Blocco 10); null nei test che non le usano.
   final PreviewKeys? _previews;
@@ -73,6 +81,35 @@ class ChatService extends ChangeNotifier {
   final ChatStore store;
   final String myId;
   final Future<List<ChatContact>> Function()? contactsLoader;
+
+  /// Nomi come scritti nella rubrica del telefono (Blocco 11): hanno la precedenza su quelli
+  /// scelti dalle persone su Piazly, come su WhatsApp.
+  final Future<Map<String, String>> Function()? localNames;
+  Map<String, String> _local = const <String, String>{};
+  DateTime _localAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// Rilegge i nomi della rubrica (all'avvio, quando cambia la rubrica, ogni tanto).
+  Future<void> reloadNames() async {
+    final Future<Map<String, String>> Function()? load = localNames;
+    if (load == null || _disposed) return;
+    try {
+      _local = await load();
+      if (_disposed) return;
+      _localAt = DateTime.now();
+      _conversations.updateAll((String _, ChatConversation c) => _named(c));
+      _changed();
+    } catch (_) {
+      // Restano i nomi di Piazly.
+    }
+  }
+
+  /// Nome della rubrica, se la persona c'è.
+  String? localName(String userId) => _local[userId];
+
+  ChatConversation _named(ChatConversation c) {
+    final String? n = c.isGroup ? null : _local[c.peerId];
+    return n == null ? c : c.copyWith(peerName: n);
+  }
 
   /// Allegati cifrati sul server e in chiaro sul telefono (Blocco 3).
   final ChatMediaServer? media;
@@ -140,11 +177,17 @@ class ChatService extends ChangeNotifier {
     try {
       await _run(_init);
       _ready = true;
+      unawaited(server.presencePing(true).catchError((Object _) {}));
+      _heartbeat ??= Timer.periodic(const Duration(seconds: 30), (_) {
+        if (!_disposed && _foreground) unawaited(server.presencePing(true).catchError((Object _) {}));
+      });
+      await reloadNames();
       _listenLive();
       await refresh();
       _schedule();
       final ChatBackup? b = backup;
       if (b != null) unawaited(b.load());
+      unawaited(statuses?.load());
     } on ChatFailure catch (f) {
       _startError = f.message;
     } catch (_) {
@@ -176,6 +219,29 @@ class ChatService extends ChangeNotifier {
     _foreground = value;
     _schedule();
     if (value) unawaited(refresh());
+    _heartbeat?.cancel();
+    _heartbeat = null;
+    if (!_ready) return;
+    if (value) unawaited(statuses?.load());
+    // «Online» (Blocco 12): un segnale ogni 30 secondi mentre l'app è aperta.
+    unawaited(server.presencePing(value).catchError((Object _) {}));
+    if (value) {
+      _heartbeat = Timer.periodic(const Duration(seconds: 30), (_) {
+        if (!_disposed) unawaited(server.presencePing(true).catchError((Object _) {}));
+      });
+    }
+  }
+
+  Timer? _heartbeat;
+
+  /// Online o ultimo accesso di una persona (null se non si può vedere).
+  Future<Presence?> presence(String userId) async {
+    if (!_ready || userId.isEmpty) return null;
+    try {
+      return (await server.presenceOf(<String>[userId]))[userId];
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Chat aperta sullo schermo: controlli più frequenti e messaggi segnati come letti.
@@ -200,9 +266,11 @@ class ChatService extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _timer?.cancel();
+    _heartbeat?.cancel();
     unawaited(_wake?.cancel());
     backup?.dispose();
     calls?.dispose();
+    statuses?.dispose();
     unawaited(_callSignals.close());
     super.dispose();
   }
@@ -255,14 +323,24 @@ class ChatService extends ChangeNotifier {
       .where((m) => !m.mine && m.kind != MessageKind.notice && (m.serverId ?? 0) > c.myReadUpto)
       .length;
 
-  Future<List<ChatContact>> contacts() async =>
-      contactsLoader == null ? const <ChatContact>[] : await contactsLoader!();
+  Future<List<ChatContact>> contacts() async {
+    if (contactsLoader == null) return const <ChatContact>[];
+    final List<ChatContact> list = await contactsLoader!();
+    final List<ChatContact> named = <ChatContact>[
+      for (final ChatContact c in list)
+        _local[c.id] == null
+            ? c
+            : ChatContact(id: c.id, name: _local[c.id]!, username: c.username, avatarPath: c.avatarPath, phone: c.phone),
+    ];
+    return named..sort((ChatContact a, ChatContact b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+  }
 
   // ---------------------------------------------------------------- aggiornamento
 
   /// Nuovi messaggi e stato delle chat. Silenzioso: gli errori di rete si riprovano dopo.
   Future<void> refresh() async {
     if (!_ready) return;
+    unawaited(statuses?.refreshIfStale());
     if (_polling) {
       // Arrivato un tocco mentre si sincronizzava: si rifà subito dopo.
       _again = true;
@@ -302,9 +380,13 @@ class ChatService extends ChangeNotifier {
 
   Future<void> _loadConversations() async {
     final List<ChatConversation> list = await server.conversations();
+    if (localNames != null && DateTime.now().difference(_localAt) > const Duration(minutes: 5)) {
+      _localAt = DateTime.now();
+      unawaited(reloadNames());
+    }
     _conversations
       ..clear()
-      ..addEntries(list.map((c) => MapEntry<String, ChatConversation>(c.id, c)));
+      ..addEntries(list.map((c) => MapEntry<String, ChatConversation>(c.id, _named(c))));
     _conversationsAt = DateTime.now();
     for (final ChatConversation c in list) {
       if (!_messages.containsKey(c.id)) _messages[c.id] = await store.messages(c.id);
@@ -391,7 +473,7 @@ class ChatService extends ChangeNotifier {
   /// Nome di un membro del gruppo («Tu» per sé stessi).
   String memberName(String conversationId, String userId) {
     if (userId == myId) return 'Tu';
-    return _names[conversationId]?[userId] ?? 'Un membro';
+    return _local[userId] ?? _names[conversationId]?[userId] ?? 'Un membro';
   }
 
   Future<void> _loadNames(String conversationId) async {
@@ -481,26 +563,36 @@ class ChatService extends ChangeNotifier {
       }
       return;
     }
-    if (content != null && (content.type == 'del' || content.type == 'react')) {
+    if (content != null && (content.type == 'del' || content.type == 'react' || content.type == 'ans')) {
       await _appendEvent(ChatEvent(
         conversationId: e.conversationId,
-        kind: content.type == 'del' ? ChatEventKind.delete : ChatEventKind.react,
+        kind: switch (content.type) {
+          'del' => ChatEventKind.delete,
+          'ans' => ChatEventKind.answer,
+          _ => ChatEventKind.react,
+        },
         target: content.target!,
         byMe: false,
         at: e.createdAt,
-        emoji: content.emoji ?? '',
+        emoji: content.type == 'ans' ? content.body : (content.emoji ?? ''),
         serverId: e.id,
         by: e.senderId,
       ));
       return;
     }
-    final bool ok = content != null && content.isMessage;
+    final bool ok = content != null &&
+        content.isMessage &&
+        (content.type != 'rich' || RichPayload.decode(content.body) != null);
     final ChatMessage m = ChatMessage(
       localId: content?.localId ?? 'srv-${e.id}',
       conversationId: e.conversationId,
       serverId: e.id,
       mine: false,
-      kind: ok ? MessageKind.text : MessageKind.unreadable,
+      kind: !ok
+          ? MessageKind.unreadable
+          : content.type == 'rich'
+          ? MessageKind.rich
+          : MessageKind.text,
       body: ok ? content.body : '',
       at: e.createdAt,
       quote: ok ? content.quote : null,
@@ -634,6 +726,36 @@ class ChatService extends ChangeNotifier {
     await _deliver(local);
   }
 
+  /// Manda una posizione, un contatto, un sondaggio o un evento (cifrati come i testi).
+  Future<void> sendRich(String conversationId, RichPayload payload, {ChatMessage? replyTo}) async {
+    final String body = payload.encode();
+    if (body.length > RichPayload.maxBytes) throw const ChatFailure('Contenuto troppo lungo.');
+    final ChatMessage local = ChatMessage(
+      localId: _localId(),
+      conversationId: conversationId,
+      mine: true,
+      kind: MessageKind.rich,
+      body: body,
+      at: DateTime.now(),
+      ticks: MessageTicks.sending,
+      quote: _quoteOf(replyTo, _conversations[conversationId]),
+    );
+    (_pending[conversationId] ??= <ChatMessage>[]).add(local);
+    _changed();
+    await _deliver(local);
+  }
+
+  /// Voto a un sondaggio (indici separati da virgola) o risposta a un evento ('si'/'no').
+  Future<void> answer(ChatMessage message, String value) async {
+    if (!message.isRich || message.serverId == null || value.length > 100) return;
+    await _event(
+      message,
+      ChatContent.answer(value, localId: _localId(), target: message.localId),
+      ChatEventKind.answer,
+      emoji: value,
+    );
+  }
+
   /// Nuovo tentativo per un messaggio rimasto in rosso.
   Future<void> retry(ChatMessage message) async {
     final List<ChatMessage>? list = _pending[message.conversationId];
@@ -746,7 +868,7 @@ class ChatService extends ChangeNotifier {
     await _deliver(local);
   }
 
-  ChatQuote? _quoteOf(ChatMessage? replyTo, ChatConversation? c) => replyTo == null || !replyTo.isText
+  ChatQuote? _quoteOf(ChatMessage? replyTo, ChatConversation? c) => replyTo == null || !(replyTo.isText || replyTo.isRich)
       ? null
       : ChatQuote(
           localId: replyTo.localId,
@@ -755,7 +877,9 @@ class ChatService extends ChangeNotifier {
         );
 
   static String _quoteText(ChatMessage m) {
-    final String base = m.body.isNotEmpty
+    final String base = m.kind == MessageKind.rich
+        ? (RichPayload.decode(m.body)?.summary ?? '')
+        : m.body.isNotEmpty
         ? m.body
         : switch (m.media?.kind) {
             MediaKind.image => '📷 Foto',
@@ -1001,8 +1125,12 @@ class ChatService extends ChangeNotifier {
         final ChatMedia? md = ready.media;
         final (int, DateTime) sent = await _transmit(
           ready.conversationId,
-          preview: previewOf(body: ready.body, media: md?.kind),
-          md == null
+          preview: ready.kind == MessageKind.rich
+              ? (RichPayload.decode(ready.body)?.preview ?? 'Messaggio')
+              : previewOf(body: ready.body, media: md?.kind),
+          ready.kind == MessageKind.rich
+              ? ChatContent.rich(ready.body, localId: ready.localId, quote: ready.quote)
+              : md == null
               ? ChatContent.text(
                   ready.body,
                   localId: ready.localId,
@@ -1024,7 +1152,7 @@ class ChatService extends ChangeNotifier {
           conversationId: local.conversationId,
           serverId: sent.$1,
           mine: true,
-          kind: MessageKind.text,
+          kind: local.kind,
           body: local.body,
           at: sent.$2,
           quote: local.quote,
@@ -1407,6 +1535,16 @@ class ChatService extends ChangeNotifier {
     }
   }
 
+  /// Blocca la persona della chat a due (dalla scheda del contatto).
+  Future<void> blockPeer(String conversationId) async {
+    final ChatConversation? c = conversation(conversationId);
+    final String? peer = c == null || c.isGroup ? null : c.peerId;
+    if (peer == null || peer.isEmpty) return;
+    await server.blockUser(peer);
+    await _run(_loadConversations);
+    _changed();
+  }
+
   /// Testo di un messaggio allegato a una segnalazione (per gli allegati solo tipo e didascalia).
   static String reportText(ChatMessage m) {
     final String kind = switch (m.media?.kind) {
@@ -1427,10 +1565,11 @@ class ChatService extends ChangeNotifier {
     required String place,
     required DateTime when,
     String note = '',
+    String mapUrl = '',
   }) async {
     if (place.trim().isEmpty) throw const ChatFailure('Scrivi dove vi incontrate.');
     final String conv = await openDirect(trustedId);
-    await send(conv, meetingText(withName: withName, place: place, when: when, note: note));
+    await send(conv, meetingText(withName: withName, place: place, when: when, note: note, mapUrl: mapUrl));
     return conv;
   }
 
@@ -1442,6 +1581,7 @@ class ChatService extends ChangeNotifier {
     required String place,
     required DateTime when,
     String note = '',
+    String mapUrl = '',
   }) {
     final DateTime l = when.toLocal();
     final String hm = '${l.hour.toString().padLeft(2, '0')}:${l.minute.toString().padLeft(2, '0')}';
@@ -1450,6 +1590,7 @@ class ChatService extends ChangeNotifier {
       ..writeln('Vedo: $withName')
       ..writeln('Quando: ${_days[l.weekday - 1]} ${l.day}/${l.month} alle $hm')
       ..write('Dove: ${place.trim()}');
+    if (mapUrl.isNotEmpty) b.write('\nMappa: $mapUrl');
     if (note.trim().isNotEmpty) b.write('\nNota: ${note.trim()}');
     b.write('\nSe non ti scrivo dopo l\'incontro, contattami.');
     return b.toString();

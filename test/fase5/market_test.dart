@@ -11,13 +11,17 @@ import 'package:nexus_social/features/market/market_catalog_data.dart';
 import 'package:nexus_social/features/market/market_models.dart';
 import 'package:nexus_social/features/market/market_section_screen.dart';
 import 'package:nexus_social/features/market/my_market_screen.dart';
+import 'package:nexus_social/features/market/comuni_italia.dart';
 
+import '../support/fake_comuni.dart';
 import '../support/fake_map.dart';
 import '../support/fake_market.dart';
 
 /// Fase 5, Blocco 1 · Scambia & Vendi: catalogo della specifica del titolare, 4 tipologie,
 /// pubblicazione con foto obbligatorie, campi specifici, divieti, i miei annunci.
 void main() {
+  setUpAll(() => ComuniItalia.testData = fakeComuni());
+  tearDownAll(() => ComuniItalia.testData = null);
   final DateTime now = DateTime(2026, 11, 15, 10, 30);
 
   group('Catalogo (specifica del titolare, test di accettazione)', () {
@@ -202,7 +206,10 @@ void main() {
       await openSection(tester, MarketSection.sale, server: false);
       expect(find.text('Vendita tra privati'), findsOneWidget);
       expect(find.byKey(const ValueKey<String>('avviso_antitruffa')), findsOneWidget);
-      expect(find.byType(ChoiceChip), findsNWidgets(20)); // «Tutte» e le 19 categorie
+      // «Tutte», quattro categorie in vista e «Altre» con tutte le 19.
+      for (final String k in <String>['tutte', 'motori', 'immobili', 'elettronica', 'casa-arredamento', 'altre']) {
+        expect(find.byKey(ValueKey<String>('categoria_$k')), findsOneWidget);
+      }
       await tester.tap(find.byKey(const ValueKey<String>('pubblica_sale')));
       await tester.pump();
       expect(find.textContaining('serve il collegamento al server'), findsOneWidget);
@@ -245,8 +252,9 @@ void main() {
       expect(d.pickup && d.ships, isTrue);
       expect(d.attributes, <String, Object>{'memoria': '128 GB'});
       expect(d.newPhotos, hasLength(1));
-      expect(d.point, const GeoPoint(41.9028, 12.4964));
-      expect(d.place, ListingPlace.approximateZone);
+      // La località è il comune (Roma): il punto pubblico è il suo centro, non la posizione del telefono.
+      expect(d.point, const GeoPoint(41.8933, 12.4829));
+      expect(d.place, ListingPlace.chosenPoint);
       expect(d.noProhibitedItems, isTrue);
       expect(find.text('Annuncio pubblicato.'), findsOneWidget);
     });

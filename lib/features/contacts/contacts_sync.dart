@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuth, User;
 import 'package:crypto/crypto.dart' show sha256;
-import 'package:flutter/foundation.dart' show compute;
+import 'package:flutter/foundation.dart' show ValueNotifier, compute;
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'
@@ -58,11 +58,19 @@ String rubricaErrorMessage(int status) => switch (status) {
   _ => 'Sincronizzazione non riuscita. Riprova più tardi.',
 };
 
+/// Avvisi per chi mostra i nomi della rubrica (la chat): sono cambiati, rileggili.
+abstract final class ContactsEvents {
+  static final ValueNotifier<int> namesChanged = ValueNotifier<int>(0);
+}
+
 /// Rubrica del telefono, letta solo con il permesso del sistema.
 abstract class ContactsReader {
   Future<bool> requestPermission();
 
   Future<List<String>> phoneNumbers();
+
+  /// Nome scritto in rubrica e numeri di ogni contatto (restano sul telefono).
+  Future<List<(String, List<String>)>> entries();
 
   /// Avvisa quando la rubrica del telefono cambia (contatto aggiunto o modificato).
   void addListener(void Function() listener);
@@ -79,6 +87,19 @@ class DeviceContactsReader implements ContactsReader {
 
   @override
   void removeListener(void Function() listener) => FlutterContacts.removeListener(listener);
+
+  @override
+  Future<List<(String, List<String>)>> entries() async {
+    final List<Contact> contacts = await FlutterContacts.getContacts(withProperties: true);
+    return <(String, List<String>)>[
+      for (final Contact c in contacts)
+        if (c.displayName.trim().isNotEmpty)
+          (
+            c.displayName.trim(),
+            <String>[for (final Phone p in c.phones) p.normalizedNumber.isNotEmpty ? p.normalizedNumber : p.number],
+          ),
+    ];
+  }
 
   @override
   Future<List<String>> phoneNumbers() async {
@@ -126,6 +147,10 @@ abstract class ContactsRepository {
 
   Future<List<RecognizedContact>> contacts();
 
+  /// Nomi come scritti nella rubrica del telefono, per persona di Piazly (Fase 4, Blocco 11).
+  /// Restano sul telefono.
+  Future<Map<String, String>> localNames();
+
   Future<void> setDiscoverable(bool value);
 
   /// «Revoca e cancella»: stop e cancellazione dei dati derivati.
@@ -162,6 +187,9 @@ class SupabaseContactsRepository implements ContactsRepository {
 
   static const FlutterSecureStorage _storage = FlutterSecureStorage();
   static const String _fingerprintKey = 'piazly_contacts_fingerprint';
+
+  /// Persona di Piazly → numeri della rubrica che le corrispondono (solo sul telefono).
+  static const String _numbersKey = 'piazly_contacts_numbers';
   bool _autoRunning = false;
 
   static Future<T> _guard<T>(Future<T> Function() body) async {
@@ -237,12 +265,122 @@ class SupabaseContactsRepository implements ContactsRepository {
     if (values.length != blinded.length) throw const ProfileFailure('Risposta non valida.');
     onProgress?.call(0.6);
     final List<String> tags = await compute(_finalizeAll, (blinded, values));
+    onProgress?.call(0.85);
+    // Prima i nomi della rubrica (senza limiti): così compaiono anche se poi il limite
+    // giornaliero ferma l'aggiornamento dei collegamenti.
+    await _saveNumbers(numbers, tags);
     onProgress?.call(0.9);
-    await _client.rpc('match_contacts', params: <String, Object?>{'p_tags': tags});
+    try {
+      await _client.rpc('match_contacts', params: <String, Object?>{'p_tags': tags});
+    } on PostgrestException catch (e) {
+      if (e.message.contains('Limite')) {
+        await _markLimited();
+        ContactsEvents.namesChanged.value++;
+        throw ProfileFailure(rubricaErrorMessage(429));
+      }
+      rethrow;
+    }
     await _saveFingerprint(numbers);
+    ContactsEvents.namesChanged.value++;
     onProgress?.call(1);
     return contacts();
   });
+
+  /// Quale numero della rubrica corrisponde a quale persona: serve per mostrare i nomi della
+  /// rubrica nelle chat. Il nome non lascia mai il telefono.
+  Future<void> _saveNumbers(List<String> numbers, List<String> tags) async {
+    // Le coppie numero → codice restano nell'archivio sicuro del telefono: così i nomi della
+    // rubrica si possono ricalcolare senza consumare gli aggiornamenti del giorno.
+    try {
+      await _storage.write(
+        key: _tagsKey,
+        value: jsonEncode(<String, String>{
+          for (int i = 0; i < tags.length && i < numbers.length; i++) numbers[i]: tags[i],
+        }),
+      );
+    } catch (_) {}
+    try {
+      final Object? rows = await _client.rpc('match_contact_tags', params: <String, Object?>{'p_tags': tags});
+      final Map<String, String> byTag = <String, String>{
+        for (int i = 0; i < tags.length && i < numbers.length; i++) tags[i]: numbers[i],
+      };
+      final Map<String, List<String>> byUser = <String, List<String>>{};
+      if (rows is List) {
+        for (final Object? r in rows) {
+          if (r is! Map) continue;
+          final String? number = byTag['${r['tag']}'];
+          if (number != null) (byUser['${r['id']}'] ??= <String>[]).add(number);
+        }
+      }
+      await _storage.write(key: _numbersKey, value: jsonEncode(byUser));
+    } catch (_) {
+      // Senza questa informazione le chat mostrano il nome scelto dalla persona su Piazly.
+    }
+  }
+
+  @override
+  Future<Map<String, String>> localNames() async {
+    try {
+      final String? raw = await _storage.read(key: _numbersKey);
+      if (raw == null) return const <String, String>{};
+      final Object? j = jsonDecode(raw);
+      if (j is! Map || j.isEmpty) return const <String, String>{};
+      if (!await _reader.requestPermission()) return const <String, String>{};
+      final Map<String, String> nameOf = <String, String>{};
+      for (final (String name, List<String> phones) in await _reader.entries()) {
+        for (final String n in normalizeContactNumbers(phones)) {
+          nameOf.putIfAbsent(n, () => name);
+        }
+      }
+      return <String, String>{
+        for (final MapEntry<dynamic, dynamic> e in j.entries)
+          if (e.value is List)
+            if ((e.value as List).map((Object? n) => nameOf['$n']).whereType<String>().firstOrNull
+                case final String name)
+              '${e.key}': name,
+      };
+    } catch (_) {
+      return const <String, String>{};
+    }
+  }
+
+  static const String _limitedKey = 'piazly_contacts_limit_day';
+  static const String _tagsKey = 'piazly_contacts_tags';
+
+  /// Ricalcola «persona → numeri» con i codici già salvati (nessun limite giornaliero).
+  Future<bool> _remapFromSavedTags() async {
+    try {
+      final String? raw = await _storage.read(key: _tagsKey);
+      if (raw == null) return false;
+      final Map<String, dynamic> j = jsonDecode(raw) as Map<String, dynamic>;
+      if (j.isEmpty) return false;
+      await _saveNumbers(<String>[...j.keys], <String>[for (final Object? t in j.values) '$t']);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static String _today() {
+    final DateTime n = DateTime.now();
+    return '${n.year}-${n.month}-${n.day}';
+  }
+
+  /// Limite di oggi raggiunto: niente altri tentativi automatici fino a domani (ognuno
+  /// consumerebbe uno dei 3 aggiornamenti al giorno).
+  Future<void> _markLimited() async {
+    try {
+      await _storage.write(key: _limitedKey, value: _today());
+    } catch (_) {}
+  }
+
+  Future<bool> _limitedToday() async {
+    try {
+      return await _storage.read(key: _limitedKey) == _today();
+    } catch (_) {
+      return false;
+    }
+  }
 
   Future<void> _saveFingerprint(List<String> numbers) async {
     try {
@@ -269,7 +407,14 @@ class SupabaseContactsRepository implements ContactsRepository {
       } catch (_) {
         stored = null;
       }
-      final bool changed = stored != null && stored != contactsFingerprint(numbers);
+      bool hasNumbers = false;
+      try {
+        hasNumbers = await _storage.read(key: _numbersKey) != null;
+      } catch (_) {
+        hasNumbers = false;
+      }
+      // Prima volta dopo l'aggiornamento: serve una sincronizzazione per i nomi della rubrica.
+      final bool changed = (stored != null && stored != contactsFingerprint(numbers)) || !hasNumbers;
       if (!shouldAutoSync(
         enabled: true,
         contactsChanged: changed,
@@ -278,7 +423,16 @@ class SupabaseContactsRepository implements ContactsRepository {
       )) {
         return false;
       }
-      await sync();
+      if (await _limitedToday()) {
+        if (await _remapFromSavedTags()) ContactsEvents.namesChanged.value++;
+        return false;
+      }
+      try {
+        await sync();
+      } on ProfileFailure catch (f) {
+        if (f.message == rubricaErrorMessage(429)) await _markLimited();
+        rethrow;
+      }
       return true;
     } catch (_) {
       // Limite giornaliero, rete assente…: si riprova alla prossima apertura.
@@ -314,6 +468,7 @@ class SupabaseContactsRepository implements ContactsRepository {
     await _client.rpc('revoke_contacts');
     try {
       await _storage.delete(key: _fingerprintKey);
+      await _storage.delete(key: _numbersKey);
     } catch (_) {
       // L'impronta locale è facoltativa.
     }

@@ -7,6 +7,7 @@ import 'package:material_ui/material_ui.dart' show Widget;
 
 import '../chat/chat_models.dart';
 import '../chat/chat_service.dart';
+import 'call_log.dart';
 
 /// Chiamate vocali e videochiamate nelle chat a due (Fase 4, Blocco 8).
 ///
@@ -247,7 +248,9 @@ class CallService extends ChangeNotifier {
     this.offerMaxAge = const Duration(seconds: 45),
     this.ringer,
     this.groupMedia,
-  }) {
+    CallLogStore? logStore,
+  }) : log = CallLog(logStore ?? MemoryCallLogStore()) {
+    unawaited(log.load());
     _sub = chat.callSignals.listen(_onSignal);
   }
 
@@ -273,6 +276,12 @@ class CallService extends ChangeNotifier {
   final Set<String> _linked = <String>{};
 
   GroupCallMedia? get currentGroupMedia => _groupMedia;
+
+  /// Registro delle chiamate (sezione «Chiamate» della chat), solo su questo telefono.
+  final CallLog log;
+
+  /// La chiamata in corso l'ho fatta io.
+  bool _startedByMe = false;
   bool _ringing = false;
   String _ringingIn = '';
 
@@ -317,6 +326,7 @@ class CallService extends ChangeNotifier {
     final ChatConversation? c = chat.conversation(conversationId);
     if (c == null || c.isGroup || c.isRequest) throw const ChatFailure('Puoi chiamare solo nelle chat a due già accettate.');
     final String id = _newId();
+    _startedByMe = true;
     _set(CallState(phase: CallPhase.outgoing, conversationId: conversationId, callId: id, peerName: c.displayName, video: video));
     try {
       final CallMedia m = _media = media();
@@ -367,6 +377,7 @@ class CallService extends ChangeNotifier {
         if (c == null || c.isGroup || c.isRequest) return;
         if (old) {
           await chat.logCall(e.conversationId, sig.video ? 'Videochiamata persa' : 'Chiamata persa');
+          await _record(e.conversationId, outgoing: false, answered: false, video: sig.video, group: false);
           return;
         }
         if (s != null && s.phase != CallPhase.ended) {
@@ -374,9 +385,11 @@ class CallService extends ChangeNotifier {
           // Occupato: l'altra persona lo sa subito.
           await chat.sendCallSignal(e.conversationId, CallSignal(action: CallAction.busy, callId: sig.callId));
           await chat.logCall(e.conversationId, sig.video ? 'Videochiamata persa' : 'Chiamata persa');
+          await _record(e.conversationId, outgoing: false, answered: false, video: sig.video, group: false);
           return;
         }
         _offer = sig.sdp;
+        _startedByMe = false;
         // Le credenziali del ponte si preparano mentre squilla: la risposta parte subito.
         unawaited(ice.servers().then((_) {}, onError: (Object _) {}));
         _set(CallState(
@@ -510,8 +523,43 @@ class CallService extends ChangeNotifier {
       }
     }
     if (s == null) return;
-    if (log != null) await chat.logCall(s.conversationId, log);
+    if (log != null) {
+      await chat.logCall(s.conversationId, log);
+      final DateTime? from = s.startedAt;
+      await _record(
+        s.conversationId,
+        outgoing: _startedByMe,
+        answered: from != null,
+        video: s.video,
+        group: s.group,
+        duration: from == null ? null : chat.now().difference(from),
+      );
+    }
     _set(s.copyWith(phase: CallPhase.ended, endReason: reason));
+  }
+
+  /// Una riga nel registro delle chiamate.
+  Future<void> _record(
+    String conversationId, {
+    required bool outgoing,
+    required bool answered,
+    required bool video,
+    required bool group,
+    Duration? duration,
+  }) async {
+    final ChatConversation? c = chat.conversation(conversationId);
+    await log.add(CallRecord(
+      id: _newId(),
+      conversationId: conversationId,
+      peerId: c == null || c.isGroup ? '' : c.peerId,
+      name: c?.displayName ?? (group ? 'Gruppo' : 'Chiamata'),
+      at: chat.now(),
+      outgoing: outgoing,
+      answered: answered,
+      video: video,
+      group: group,
+      duration: duration,
+    ));
   }
 
   // ---------------------------------------------------------------- gruppi
@@ -528,6 +576,7 @@ class CallService extends ChangeNotifier {
     if (c.myMlsState != 'in') throw const ChatFailure('Aspetta di essere entrato nel gruppo cifrato.');
     if (c.members > 8) throw const ChatFailure('Le chiamate di gruppo sono per gruppi fino a 8 persone.');
     final String id = _newId();
+    _startedByMe = true;
     _set(CallState(
       phase: CallPhase.outgoing,
       conversationId: conversationId,
@@ -631,9 +680,11 @@ class CallService extends ChangeNotifier {
         final bool old = chat.now().difference(e.at) > offerMaxAge;
         if (old) {
           await chat.logCall(e.conversationId, sig.video ? 'Videochiamata di gruppo persa' : 'Chiamata di gruppo persa');
+          await _record(e.conversationId, outgoing: false, answered: false, video: sig.video, group: true);
           return;
         }
         if (s != null && s.phase != CallPhase.ended) return; // Occupato: la chiamata continua senza di me.
+        _startedByMe = false;
         _joined
           ..clear()
           ..add(e.senderId);
@@ -739,6 +790,7 @@ class CallService extends ChangeNotifier {
     unawaited(_sub.cancel());
     unawaited(_link?.cancel());
     unawaited(_media?.close());
+    log.dispose();
     unawaited(_groupLink?.cancel());
     unawaited(_groupMedia?.close());
     super.dispose();

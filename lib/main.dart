@@ -15,6 +15,8 @@ import 'core/services/backend_bootstrap.dart';
 import 'core/services/firebase_services.dart';
 import 'core/services/push_device_registry.dart';
 import 'core/services/supabase_push_backend.dart';
+import 'features/ai/ai_service.dart';
+import 'features/calls/call_log.dart';
 import 'features/calls/call_service.dart';
 import 'features/calls/webrtc_call_media.dart';
 import 'features/chat/chat_backup.dart';
@@ -27,14 +29,18 @@ import 'features/chat/chat_service.dart';
 import 'features/chat/chat_store.dart';
 import 'features/contacts/contacts_sync.dart';
 import 'features/map/listing_repository.dart';
+import 'features/map/live_location.dart';
+import 'features/map/map_location.dart';
 import 'features/map/map_screen.dart';
 import 'features/map/social_repository.dart';
 import 'features/market/market_repository.dart';
 import 'features/notifications/notification_settings.dart';
+import 'features/places/place_search.dart';
 import 'features/privacy/privacy_repository.dart';
 import 'features/profile/profile_repository.dart';
 import 'features/security/app_lock.dart';
 import 'features/security/security_repository.dart';
+import 'features/status/status_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -63,6 +69,20 @@ Future<void> main() async {
   final bool profilesReady = firebaseReady &&
       AppConfig.serverLinkEnabled &&
       backend.supabase == ServiceState.connected;
+  // GPS in tempo reale (Blocco 15): uno per l'app, solo con il server collegato.
+  if (profilesReady) {
+    LiveRegistry.current = LiveLocationService(
+      server: SupabaseLiveLocationServer(Supabase.instance.client),
+      location: const GeolocatorDeviceLocation(),
+    );
+    // Piazly AI (Blocco 18): chat e Immagini IA con Cloudflare Workers AI, tramite la funzione `ia`.
+    AiRegistry.current = AiService(
+      server: SupabaseAiServer(Supabase.instance.client),
+      store: FileAiStore(uid: () => FirebaseAuth.instance.currentUser?.uid ?? ''),
+    );
+  }
+  // Suggerimenti di luoghi e indirizzi mentre si scrive (OpenStreetMap, servizio gratuito).
+  PlaceRegistry.online = PhotonPlaceLookup();
   runApp(
     NexusApp(
       backend: backend,
@@ -74,6 +94,16 @@ Future<void> main() async {
             )
           : null,
       social: profilesReady ? SupabaseSocialRepository(Supabase.instance.client) : null,
+      // Stato dei servizi e diagnostica: solo per gli amministratori (tabella admin_users).
+      isAdmin: profilesReady
+          ? () async {
+              try {
+                return await Supabase.instance.client.rpc('is_admin') == true;
+              } catch (_) {
+                return false;
+              }
+            }
+          : null,
       market: profilesReady
           ? SupabaseMarketRepository(
               Supabase.instance.client,
@@ -104,7 +134,7 @@ ChatService _chatFor(String uid) {
   final Future<Directory> folder = getApplicationSupportDirectory()
       .then((Directory d) => Directory('${d.path}/chat/$safe'));
   final SupabaseContactsRepository contacts = SupabaseContactsRepository(Supabase.instance.client);
-  return ChatService(
+  final ChatService chat = ChatService(
     server: SupabaseChatServer(Supabase.instance.client),
     crypto: () async => MlsChatCrypto.open(
       uid: uid,
@@ -123,20 +153,40 @@ ChatService _chatFor(String uid) {
       ice: SupabaseIceProvider(Supabase.instance.client),
       media: WebRtcCallMedia.new,
       groupMedia: WebRtcGroupCallMedia.new,
+      // Registro delle chiamate, solo su questo telefono (Blocco 11).
+      logStore: FileCallLogStore(folder),
       ringer: SystemCallRinger(),
+    ),
+    // Stati di 24 ore (Blocco 13): regole sul server, la scelta del pubblico sul telefono.
+    statuses: (ChatService chat) => StatusService(
+      server: SupabaseStatusServer(Supabase.instance.client),
+      myId: uid,
+      prefs: FileStatusPrefsStore(folder),
+      localName: chat.localName,
     ),
     // Backup cifrato con password (Blocco 6): la chiave resta nell'archivio sicuro del telefono.
     backupServer: SupabaseBackupServer(Supabase.instance.client, uid: () => uid),
     backupKeys: SecureBackupKeyStore(const FlutterSecureStorage(), uid: uid),
+    // Nomi come scritti nella rubrica del telefono (Blocco 11).
+    localNames: contacts.localNames,
     contactsLoader: () async {
       try {
         return <ChatContact>[
           for (final RecognizedContact c in await contacts.contacts())
-            ChatContact(id: c.id, name: c.publicName, username: c.username, avatarPath: c.avatarThumbPath),
+            ChatContact(
+              id: c.id,
+              name: c.publicName,
+              username: c.username,
+              avatarPath: c.avatarThumbPath,
+              phone: c.phone,
+            ),
         ];
       } catch (_) {
         return const <ChatContact>[];
       }
     },
   );
+  // Rubrica aggiornata: i nomi nelle chat si rileggono subito.
+  ContactsEvents.namesChanged.addListener(chat.reloadNames);
+  return chat;
 }

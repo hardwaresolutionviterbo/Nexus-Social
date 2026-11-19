@@ -110,7 +110,7 @@ void main() {
     expect(key('nessun_bloccato'), findsOneWidget);
   });
 
-  testWidgets('R2.9 · Controllo privacy: 8 passi, riepilogo con «Modifica»', (tester) async {
+  testWidgets('R2.9 · Controllo privacy: 9 passi (con «Ultimo accesso e online»), riepilogo con «Modifica»', (tester) async {
     phone(tester);
     final PrivacyController controller = PrivacyController(privacy);
     addTearDown(controller.dispose);
@@ -123,17 +123,17 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Passo 1 di 8'), findsOneWidget);
-    for (int i = 2; i <= 8; i++) {
+    expect(find.text('Passo 1 di 9'), findsOneWidget);
+    for (int i = 2; i <= 9; i++) {
       await tapKey(tester, 'avanti_controllo');
-      expect(find.text('Passo $i di 8'), findsOneWidget);
+      expect(find.text('Passo $i di 9'), findsOneWidget);
     }
     expect(find.text('Riepilogo'), findsOneWidget);
-    expect(find.text('Modifica'), findsNWidgets(7));
+    expect(find.text('Modifica'), findsNWidgets(8));
 
     await tester.tap(find.descendant(of: key('riepilogo_phone'), matching: find.text('Modifica')));
     await tester.pumpAndSettle();
-    expect(find.text('Passo 2 di 8'), findsOneWidget);
+    expect(find.text('Passo 2 di 9'), findsOneWidget);
     await tapKey(tester, 'numero_nessuno');
     expect(privacy.calls, contains('setPhoneVisibility:nobody'));
 

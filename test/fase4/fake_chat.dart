@@ -6,6 +6,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:material_ui/material_ui.dart' show Widget;
+import 'package:nexus_social/features/calls/call_log.dart';
 import 'package:nexus_social/features/calls/call_service.dart';
 import 'package:nexus_social/features/chat/chat_backup.dart';
 import 'package:nexus_social/features/chat/chat_crypto.dart';
@@ -15,6 +16,7 @@ import 'package:nexus_social/features/chat/chat_preview.dart';
 import 'package:nexus_social/features/chat/chat_server.dart';
 import 'package:nexus_social/features/chat/chat_service.dart';
 import 'package:nexus_social/features/chat/chat_store.dart';
+import 'package:nexus_social/features/status/status_service.dart';
 
 class FakeConv {
   FakeConv(this.id, this.a, this.b, this.createdAt, {this.group = false, this.title = ''});
@@ -106,6 +108,9 @@ class FakeChatHub {
   /// owner → persone che ha in rubrica.
   final Map<String, Set<String>> contacts = <String, Set<String>>{};
   final Set<String> blocks = <String>{};
+
+  /// Online e ultimo accesso (Blocco 12), senza regole di privacy (quelle le prova il server).
+  final Map<String, Presence> presence = <String, Presence>{};
 
   /// Tempo reale finto (Blocco 9): spento di base, i test lo accendono.
   bool live = false;
@@ -280,6 +285,15 @@ class FakeChatServer implements ChatServer {
     }
     return (id, hub.clock);
   }
+
+  @override
+  Future<void> presencePing(bool online) async => hub.presence[uid] = Presence(online: online, lastSeen: hub.clock);
+
+  @override
+  Future<Map<String, Presence>> presenceOf(List<String> userIds) async => <String, Presence>{
+    for (final String id in userIds)
+      if (hub.presence[id] case final Presence p) id: p,
+  };
 
   @override
   bool get live => hub.live;
@@ -779,8 +793,12 @@ Future<ChatService> fakePhone(
   BackupKeyStore? backupKeys,
   CallService Function(ChatService chat)? calls,
   PreviewKeyStore? previews,
+  Map<String, String>? localNames,
+  StatusService Function(ChatService chat)? statuses,
 }) async {
   final ChatService s = ChatService(
+    statuses: statuses,
+    localNames: localNames == null ? null : () async => localNames,
     previews: previews,
     calls: calls,
     clock: () => hub.clock,
@@ -976,7 +994,11 @@ class FakeRinger implements CallRinger {
 }
 
 /// Telefono finto con le chiamate.
-CallService Function(ChatService) fakeCalls({Duration ring = const Duration(seconds: 45), FakeRinger? ringer}) =>
+CallService Function(ChatService) fakeCalls({
+  Duration ring = const Duration(seconds: 45),
+  FakeRinger? ringer,
+  CallLogStore? log,
+}) =>
     (ChatService chat) =>
         CallService(
           chat: chat,
@@ -985,4 +1007,5 @@ CallService Function(ChatService) fakeCalls({Duration ring = const Duration(seco
           groupMedia: FakeGroupCallMedia.new,
           ringTimeout: ring,
           ringer: ringer,
+          logStore: log,
         );

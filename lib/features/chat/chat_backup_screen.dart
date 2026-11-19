@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/piazly_ui.dart';
 import 'chat_backup.dart';
 import 'chat_backup_service.dart';
 import 'chat_media.dart' show formatBytes;
@@ -77,13 +78,27 @@ class ChatBackupCard extends StatelessWidget {
         );
       }
       if (backup.loaded && !backup.enabled && info == null && hasChats) {
-        return ListTile(
+        // Nuova grafica: scheda viola chiaro con la nuvola.
+        return SoftCard(
           key: const ValueKey<String>('backup_invito'),
-          leading: const Icon(Icons.cloud_upload_outlined, color: AppColors.brandBlue),
-          title: const Text('Attiva il backup delle chat'),
-          subtitle: const Text('Se cambi telefono ritrovi i messaggi'),
-          trailing: const Icon(Icons.chevron_right_rounded),
+          tint: PiazlyColors.violetSoft,
           onTap: () => ChatBackupScreen.open(context, backup),
+          child: Row(
+            children: [
+              const Icon(Icons.cloud_upload_outlined, color: PiazlyColors.violet, size: 30),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Backup delle chat', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+                    Text('Mantieni al sicuro i tuoi messaggi', style: theme.textTheme.bodySmall),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded, color: PiazlyColors.violet),
+            ],
+          ),
         );
       }
       return const SizedBox.shrink();

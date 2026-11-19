@@ -3,8 +3,11 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/nexus_ui.dart';
 import '../contacts/contacts_sync.dart';
+import '../map/live_location.dart';
+import '../map/live_location_screens.dart';
 import '../profile/avatar_view.dart';
 import '../profile/profile_repository.dart';
+import 'phone_permissions.dart';
 import 'privacy_controller.dart';
 import 'privacy_repository.dart';
 
@@ -13,6 +16,7 @@ import 'privacy_repository.dart';
 enum PrivacySection {
   profile('Visibilità del profilo', Icons.person_outline_rounded, AppColors.brandBlue),
   phone('Numero di telefono', Icons.phone_outlined, AppColors.brandOrange),
+  lastSeen('Ultimo accesso e online', Icons.access_time_rounded, AppColors.brandBlue),
   contacts('Contatti e rubrica', Icons.contacts_outlined, AppColors.brandViolet),
   location('Posizione', Icons.place_outlined, AppColors.brandMint),
   gps('GPS in tempo reale', Icons.my_location_rounded, AppColors.brandCyan),
@@ -31,11 +35,12 @@ enum PrivacySection {
       'Bio ${c.settings.showBio ? 'visibile' : 'nascosta'} · '
           'social ${c.settings.showSocial ? 'visibili' : 'nascosti'}',
     PrivacySection.phone => c.settings.phoneVisibility.label,
+    PrivacySection.lastSeen => c.settings.lastSeen.label,
     PrivacySection.contacts => c.settings.contactsEnabled
         ? 'Attiva · ${c.contacts.length == 1 ? '1 contatto' : '${c.contacts.length} contatti'}'
         : 'Rubrica non attiva',
     PrivacySection.location => 'Posizione esatta mai visibile',
-    PrivacySection.gps => 'Spento · nessuna condivisione',
+    PrivacySection.gps => liveSummary(LiveRegistry.current),
     PrivacySection.blocked => switch (c.blocked.length) {
       0 => 'Nessuno',
       1 => '1 persona',
@@ -67,11 +72,12 @@ class PrivacySectionBody extends StatelessWidget {
       builder: (BuildContext context, _) => switch (section) {
         PrivacySection.profile => _ProfileBody(controller: controller, onPreview: onPreview),
         PrivacySection.phone => _PhoneBody(controller: controller),
+        PrivacySection.lastSeen => _LastSeenBody(controller: controller),
         PrivacySection.contacts => controller.contactsRepository == null
             ? const _ContactsBody()
             : _LiveContactsBody(controller: controller, profiles: profiles),
         PrivacySection.location => const _LocationBody(),
-        PrivacySection.gps => const _GpsBody(),
+        PrivacySection.gps => _GpsBody(controller: controller, profiles: profiles),
         PrivacySection.blocked => _BlockedBody(controller: controller, profiles: profiles),
         PrivacySection.permissions => _PermissionsBody(controller: controller),
       },
@@ -220,6 +226,62 @@ class _PhoneBody extends StatelessWidget {
   }
 }
 
+/// «Ultimo accesso e online» (Fase 4, Blocco 12), come su WhatsApp.
+class _LastSeenBody extends StatelessWidget {
+  const _LastSeenBody({required this.controller});
+
+  final PrivacyController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    return SectionCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Chi può vedere quando sono online e il mio ultimo accesso?', style: theme.textTheme.titleSmall),
+          const SizedBox(height: 6),
+          RadioGroup<LastSeenVisibility>(
+            groupValue: controller.settings.lastSeen,
+            onChanged: (LastSeenVisibility? v) {
+              if (v != null && !controller.saving) controller.setLastSeen(v);
+            },
+            child: const Column(
+              children: [
+                RadioListTile<LastSeenVisibility>(
+                  key: ValueKey<String>('accesso_tutti'),
+                  contentPadding: EdgeInsets.zero,
+                  value: LastSeenVisibility.everyone,
+                  title: Text('Tutti'),
+                  subtitle: Text('Chi ha una chat con te'),
+                ),
+                RadioListTile<LastSeenVisibility>(
+                  key: ValueKey<String>('accesso_contatti'),
+                  contentPadding: EdgeInsets.zero,
+                  value: LastSeenVisibility.contacts,
+                  title: Text('I miei contatti'),
+                  subtitle: Text('Solo chi hai in rubrica'),
+                ),
+                RadioListTile<LastSeenVisibility>(
+                  key: ValueKey<String>('accesso_nessuno'),
+                  contentPadding: EdgeInsets.zero,
+                  value: LastSeenVisibility.nobody,
+                  title: Text('Nessuno'),
+                ),
+              ],
+            ),
+          ),
+          const _Note(
+            'Come su WhatsApp: se non mostri il tuo, non vedi nemmeno quello degli altri. '
+            'Con le persone bloccate non si vede in nessuna delle due direzioni.',
+            icon: Icons.sync_alt_rounded,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ContactsBody extends StatelessWidget {
   const _ContactsBody();
 
@@ -276,7 +338,6 @@ class _LocationBody extends StatelessWidget {
             'GPS in tempo reale oppure un punto scelto a mano (bar, punto d\'incontro). '
             'La scelta vale solo per quell\'annuncio.',
           ),
-          _Soon('Annunci e Mappa arrivano nella Fase 3.'),
         ],
       ),
     );
@@ -284,22 +345,32 @@ class _LocationBody extends StatelessWidget {
 }
 
 class _GpsBody extends StatelessWidget {
-  const _GpsBody();
+  const _GpsBody({required this.controller, this.profiles});
+
+  final PrivacyController controller;
+  final ProfileRepository? profiles;
 
   @override
   Widget build(BuildContext context) {
-    return const SectionCard(
+    final LiveLocationService? live = LiveRegistry.current;
+    return SectionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Nessuna condivisione attiva.', key: ValueKey<String>('gps_info')),
-          _Note(
-            'Il GPS in tempo reale è spento di partenza. Quando lo userai sarà temporaneo '
-            '(al massimo 8 ore), revocabile in ogni momento e visibile solo alle persone '
-            'che autorizzi. Alla fine l\'ultima posizione viene cancellata.',
+          if (live == null)
+            const Text('Nessuna condivisione attiva.', key: ValueKey<String>('gps_info'))
+          else
+            LiveShareCard(
+              service: live,
+              contacts: controller.settings.contactsEnabled ? controller.contacts : null,
+              profiles: profiles,
+            ),
+          const _Note(
+            'Il GPS in tempo reale è spento di partenza. Quando lo accendi è temporaneo '
+            '(15 minuti, 1 ora o 8 ore), revocabile in ogni momento e visibile solo alle persone '
+            'che scegli, sulla loro Mappa. Alla fine l\'ultima posizione viene cancellata.',
             icon: Icons.lock_outline_rounded,
           ),
-          _Soon('Disponibile con la Mappa (Fase 3).'),
         ],
       ),
     );
@@ -361,8 +432,8 @@ class _BlockedBody extends StatelessWidget {
               ),
           const _Note(
             'Chi è bloccato non vede il tuo profilo e non viene avvisato. Non potrà '
-            'scriverti, chiamarti, commentare i tuoi annunci né vedere le tue reazioni '
-            '(con chat e commenti, nelle prossime fasi).',
+            'scriverti, chiamarti, commentare i tuoi annunci, vedere i tuoi stati né il tuo '
+            'ultimo accesso.',
           ),
         ],
       ),
@@ -378,25 +449,12 @@ class _PermissionsBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
-    Widget row(IconData icon, String name, String state) => ListTile(
-      contentPadding: EdgeInsets.zero,
-      dense: true,
-      leading: Icon(icon),
-      title: Text(name),
-      subtitle: Text(state),
-    );
     return SectionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Permessi del telefono', style: theme.textTheme.titleSmall),
-          row(Icons.notifications_outlined, 'Notifiche',
-              'Gestite nelle impostazioni del telefono'),
-          row(Icons.photo_library_outlined, 'Foto',
-              'Nessun accesso alla galleria: scegli tu ogni singola foto'),
-          row(Icons.contacts_outlined, 'Contatti', 'Letti solo con la rubrica attiva, mai inviati in chiaro'),
-          row(Icons.place_outlined, 'Posizione', 'Non usata (servirà alla Mappa, Fase 3)'),
-          row(Icons.mic_none_rounded, 'Microfono', 'Non usato (vocali e chiamate, Fase 4)'),
+          const PhonePermissionsList(),
           const Divider(height: 24),
           Text('Consensi dati nell\'app', style: theme.textTheme.titleSmall),
           const SizedBox(height: 6),
@@ -422,8 +480,8 @@ class _PermissionsBody extends StatelessWidget {
               key: ValueKey<String>('nessun_consenso'),
             ),
           const _Note(
-            'Qui compariranno, con la data e il pulsante «Revoca», i consensi per la rubrica, '
-            'il GPS in tempo reale e le notifiche delle promozioni vicine.',
+            'Qui trovi, con la data e il pulsante «Revoca», i consensi che hai dato dentro '
+            'l\'app. Puoi revocarli quando vuoi.',
           ),
         ],
       ),

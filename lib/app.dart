@@ -34,7 +34,12 @@ class NexusApp extends StatelessWidget {
     this.social,
     this.market,
     this.chat,
+    this.isAdmin,
   });
+
+  /// Vero solo per gli amministratori di Piazly: vedono lo stato dei servizi e la diagnostica.
+  final Future<bool> Function()? isAdmin;
+
 
   /// Stato dei servizi collegati all'avvio (Firebase, Supabase).
   final BackendStatus backend;
@@ -101,6 +106,7 @@ class NexusApp extends StatelessWidget {
               social: social,
               market: market,
               chat: chat,
+              isAdmin: isAdmin,
             ),
     );
   }

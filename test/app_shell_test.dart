@@ -13,7 +13,7 @@ void main() {
     for (final String label in <String>[
       'Mappa',
       'Chat',
-      'Scambia',
+      'Stati',
       'Vendita',
       'Profilo',
     ]) {
@@ -38,8 +38,8 @@ void main() {
       tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
       3,
     );
-    expect(tester.widget<IndexedStack>(find.byType(IndexedStack)).index, 3);
-    expect(find.text('Vendita tra privati'), findsOneWidget);
+    expect(tester.widget<IndexedStack>(find.byType(IndexedStack).first).index, 3);
+    expect(find.text('Annunci vicino a te'), findsOneWidget);
   });
 
   testWidgets('la campanella apre il foglio delle notifiche vuote', (
@@ -73,7 +73,7 @@ void main() {
 
     await tester.drag(find.text('Stato dei servizi'), const Offset(0, -400));
     await tester.pumpAndSettle();
-    expect(find.text('Posizione approssimata'), findsOneWidget);
+    expect(find.text('Versione'), findsOneWidget);
   });
 
   testWidgets('le icone di sistema seguono il tema chiaro e scuro', (
