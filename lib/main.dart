@@ -15,6 +15,7 @@ import 'core/services/backend_bootstrap.dart';
 import 'core/services/firebase_services.dart';
 import 'core/services/push_device_registry.dart';
 import 'core/services/supabase_push_backend.dart';
+import 'features/ai/ai_service.dart';
 import 'features/calls/call_log.dart';
 import 'features/calls/call_service.dart';
 import 'features/calls/webrtc_call_media.dart';
@@ -34,6 +35,7 @@ import 'features/map/map_screen.dart';
 import 'features/map/social_repository.dart';
 import 'features/market/market_repository.dart';
 import 'features/notifications/notification_settings.dart';
+import 'features/places/place_search.dart';
 import 'features/privacy/privacy_repository.dart';
 import 'features/profile/profile_repository.dart';
 import 'features/security/app_lock.dart';
@@ -73,7 +75,14 @@ Future<void> main() async {
       server: SupabaseLiveLocationServer(Supabase.instance.client),
       location: const GeolocatorDeviceLocation(),
     );
+    // Piazly AI (Blocco 18): chat e Immagini IA con Cloudflare Workers AI, tramite la funzione `ia`.
+    AiRegistry.current = AiService(
+      server: SupabaseAiServer(Supabase.instance.client),
+      store: FileAiStore(uid: () => FirebaseAuth.instance.currentUser?.uid ?? ''),
+    );
   }
+  // Suggerimenti di luoghi e indirizzi mentre si scrive (OpenStreetMap, servizio gratuito).
+  PlaceRegistry.online = PhotonPlaceLookup();
   runApp(
     NexusApp(
       backend: backend,

@@ -72,3 +72,23 @@ jobs:
           set -euo pipefail
           deno check index.ts handler.ts firebase_token.ts chiamate_test.ts
           deno test -A chiamate_test.ts
+
+  ia:
+    name: Funzione ia · test Deno
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Controllo dei tipi e test
+        working-directory: supabase/functions/ia
+        run: |
+          set -euo pipefail
+          deno check index.ts handler.ts firebase_token.ts ia_test.ts
+          deno test -A ia_test.ts

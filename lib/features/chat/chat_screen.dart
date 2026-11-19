@@ -3,6 +3,8 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/piazly_ui.dart';
 import '../../core/widgets/nexus_ui.dart';
+import '../ai/ai_screens.dart';
+import '../ai/ai_service.dart';
 import '../calls/calls_list.dart';
 import '../profile/avatar_view.dart';
 import '../profile/profile_repository.dart';
@@ -10,6 +12,7 @@ import 'chat_backup_screen.dart';
 import 'chat_group_screens.dart';
 import 'chat_media.dart';
 import 'chat_models.dart';
+import 'chat_rich.dart';
 import 'chat_service.dart';
 import 'chat_thread_screen.dart';
 
@@ -196,6 +199,13 @@ class _ChatListState extends State<_ChatList> {
                     ),
                   ),
                 ),
+              if (AiRegistry.current case final AiService ai)
+                AiChatTile(
+                  ai: ai,
+                  onTap: () => Navigator.of(context).push<void>(
+                    MaterialPageRoute<void>(builder: (_) => AiChatScreen(ai: ai)),
+                  ),
+                ),
               if (threads.isEmpty)
                 const _EmptyChats()
               else
@@ -375,6 +385,9 @@ String chatPreview(ChatMessage? m) {
         return m.body.isEmpty ? label : '$label · ${m.body.replaceAll('\n', ' ')}';
       }
       return m.body.replaceAll('\n', ' ');
+    case MessageKind.rich:
+      if (m.deleted) return m.mine ? 'Hai eliminato questo messaggio' : 'Questo messaggio è stato eliminato';
+      return RichPayload.decode(m.body)?.preview ?? 'Messaggio';
     case MessageKind.unreadable:
       return 'Messaggio non disponibile';
     case MessageKind.notice:

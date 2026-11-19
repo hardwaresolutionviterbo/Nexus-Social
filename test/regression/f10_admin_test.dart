@@ -101,6 +101,8 @@ void main() {
         if (file.readAsStringSync().contains('Navigator.')) rel(file),
     ]..sort();
     expect(users, <String>[
+      // Blocco 18: Piazly AI (chat e Immagini IA).
+      'lib/features/ai/ai_screens.dart',
       'lib/features/calls/call_screen.dart',
       'lib/features/calls/calls_list.dart',
       'lib/features/chat/chat_backup_screen.dart',
@@ -108,6 +110,8 @@ void main() {
       'lib/features/chat/chat_contact_info_screen.dart',
       'lib/features/chat/chat_group_screens.dart',
       'lib/features/chat/chat_media_widgets.dart',
+      // Blocco 18: posizione, contatto, sondaggio, evento.
+      'lib/features/chat/chat_rich_widgets.dart',
       'lib/features/chat/chat_safety_screens.dart',
       'lib/features/chat/chat_screen.dart',
       'lib/features/chat/chat_thread_screen.dart',

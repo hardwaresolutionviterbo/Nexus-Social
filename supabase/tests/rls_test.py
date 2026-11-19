@@ -2948,6 +2948,20 @@ def check_live_location_phase4() -> None:
           f"{expired}, {left}, {stop}, {after_stop}")
 
 
+def check_ai_limits_phase4() -> None:
+    """IA · Piazly AI (Blocco 18): limiti per persona contati solo dalla funzione `ia`."""
+    ta = token(UID_A)
+    service = token(None, role="service_role")
+    user_try = rpc("rubrica_consume_limit", {"p_uid": UID_A, "p_kind": "ia_testo", "p_max": 40}, ta)
+    text = [rpc("rubrica_consume_limit", {"p_uid": UID_B, "p_kind": "ia_testo", "p_max": 2}, service)[1]
+            for _ in range(3)]
+    image = rpc("rubrica_consume_limit", {"p_uid": UID_B, "p_kind": "ia_immagini", "p_max": 1}, service)[1]
+    other = rpc("rubrica_consume_limit", {"p_uid": UID_B, "p_kind": "ia_altro", "p_max": 1}, service)
+    check("IA1", "Domande e immagini IA contate a parte, solo dal server; tipi sconosciuti rifiutati",
+          user_try[0] >= 400 and text == [True, True, False] and image is True and other[0] >= 400,
+          f"{user_try[0]}, {text}, {image}, {other[0]}")
+
+
 def check_push_phase4() -> None:
     """U · Notifiche (Fase 4, Blocco 5): coda server, silenzia, non disturbare, mai i Mi piace."""
     ta, tb = token(UID_A), token(UID_B)
@@ -3096,6 +3110,7 @@ def main() -> int:
     check_presence_phase4()
     check_statuses_phase4()
     check_live_location_phase4()
+    check_ai_limits_phase4()
     failed = [r for r in results if not r[2]]
     print(f"{'Caso':6} {'Esito':9} Descrizione")
     for case, desc, ok, detail in results:

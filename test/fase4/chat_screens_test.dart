@@ -57,6 +57,14 @@ class FakeDevice implements ChatDevice {
 
   @override
   Future<void> cancelVoice() async => cancelled = true;
+
+  @override
+  Future<(double, double)?> currentFix() async => (42.6893, 12.0991);
+
+  @override
+  Future<List<(String, List<String>)>?> contactEntries() async => <(String, List<String>)>[
+    ('Zia Carla', <String>['+39 333 000 0000']),
+  ];
 }
 
 Widget app(Widget home) => MaterialApp(theme: AppTheme.light, home: home);
@@ -323,7 +331,7 @@ void main() {
     for (final String k in <String>['galleria', 'fotocamera', 'video', 'documento']) {
       expect(find.byKey(ValueKey<String>('allega_$k')), findsOneWidget);
     }
-    expect(find.textContaining('Massimo 50 MB'), findsOneWidget);
+    expect(find.textContaining('fino a 50 MB'), findsOneWidget);
 
     // Video troppo pesante: messaggio chiaro, nessun invio.
     await tester.tap(find.byKey(const ValueKey<String>('allega_video')));

@@ -13,6 +13,7 @@ import 'chat_crypto.dart';
 import 'chat_media.dart';
 import 'chat_models.dart';
 import 'chat_preview.dart';
+import 'chat_rich.dart';
 import 'chat_server.dart';
 import 'chat_store.dart';
 
@@ -562,26 +563,36 @@ class ChatService extends ChangeNotifier {
       }
       return;
     }
-    if (content != null && (content.type == 'del' || content.type == 'react')) {
+    if (content != null && (content.type == 'del' || content.type == 'react' || content.type == 'ans')) {
       await _appendEvent(ChatEvent(
         conversationId: e.conversationId,
-        kind: content.type == 'del' ? ChatEventKind.delete : ChatEventKind.react,
+        kind: switch (content.type) {
+          'del' => ChatEventKind.delete,
+          'ans' => ChatEventKind.answer,
+          _ => ChatEventKind.react,
+        },
         target: content.target!,
         byMe: false,
         at: e.createdAt,
-        emoji: content.emoji ?? '',
+        emoji: content.type == 'ans' ? content.body : (content.emoji ?? ''),
         serverId: e.id,
         by: e.senderId,
       ));
       return;
     }
-    final bool ok = content != null && content.isMessage;
+    final bool ok = content != null &&
+        content.isMessage &&
+        (content.type != 'rich' || RichPayload.decode(content.body) != null);
     final ChatMessage m = ChatMessage(
       localId: content?.localId ?? 'srv-${e.id}',
       conversationId: e.conversationId,
       serverId: e.id,
       mine: false,
-      kind: ok ? MessageKind.text : MessageKind.unreadable,
+      kind: !ok
+          ? MessageKind.unreadable
+          : content.type == 'rich'
+          ? MessageKind.rich
+          : MessageKind.text,
       body: ok ? content.body : '',
       at: e.createdAt,
       quote: ok ? content.quote : null,
@@ -715,6 +726,36 @@ class ChatService extends ChangeNotifier {
     await _deliver(local);
   }
 
+  /// Manda una posizione, un contatto, un sondaggio o un evento (cifrati come i testi).
+  Future<void> sendRich(String conversationId, RichPayload payload, {ChatMessage? replyTo}) async {
+    final String body = payload.encode();
+    if (body.length > RichPayload.maxBytes) throw const ChatFailure('Contenuto troppo lungo.');
+    final ChatMessage local = ChatMessage(
+      localId: _localId(),
+      conversationId: conversationId,
+      mine: true,
+      kind: MessageKind.rich,
+      body: body,
+      at: DateTime.now(),
+      ticks: MessageTicks.sending,
+      quote: _quoteOf(replyTo, _conversations[conversationId]),
+    );
+    (_pending[conversationId] ??= <ChatMessage>[]).add(local);
+    _changed();
+    await _deliver(local);
+  }
+
+  /// Voto a un sondaggio (indici separati da virgola) o risposta a un evento ('si'/'no').
+  Future<void> answer(ChatMessage message, String value) async {
+    if (!message.isRich || message.serverId == null || value.length > 100) return;
+    await _event(
+      message,
+      ChatContent.answer(value, localId: _localId(), target: message.localId),
+      ChatEventKind.answer,
+      emoji: value,
+    );
+  }
+
   /// Nuovo tentativo per un messaggio rimasto in rosso.
   Future<void> retry(ChatMessage message) async {
     final List<ChatMessage>? list = _pending[message.conversationId];
@@ -827,7 +868,7 @@ class ChatService extends ChangeNotifier {
     await _deliver(local);
   }
 
-  ChatQuote? _quoteOf(ChatMessage? replyTo, ChatConversation? c) => replyTo == null || !replyTo.isText
+  ChatQuote? _quoteOf(ChatMessage? replyTo, ChatConversation? c) => replyTo == null || !(replyTo.isText || replyTo.isRich)
       ? null
       : ChatQuote(
           localId: replyTo.localId,
@@ -836,7 +877,9 @@ class ChatService extends ChangeNotifier {
         );
 
   static String _quoteText(ChatMessage m) {
-    final String base = m.body.isNotEmpty
+    final String base = m.kind == MessageKind.rich
+        ? (RichPayload.decode(m.body)?.summary ?? '')
+        : m.body.isNotEmpty
         ? m.body
         : switch (m.media?.kind) {
             MediaKind.image => '📷 Foto',
@@ -1082,8 +1125,12 @@ class ChatService extends ChangeNotifier {
         final ChatMedia? md = ready.media;
         final (int, DateTime) sent = await _transmit(
           ready.conversationId,
-          preview: previewOf(body: ready.body, media: md?.kind),
-          md == null
+          preview: ready.kind == MessageKind.rich
+              ? (RichPayload.decode(ready.body)?.preview ?? 'Messaggio')
+              : previewOf(body: ready.body, media: md?.kind),
+          ready.kind == MessageKind.rich
+              ? ChatContent.rich(ready.body, localId: ready.localId, quote: ready.quote)
+              : md == null
               ? ChatContent.text(
                   ready.body,
                   localId: ready.localId,
@@ -1105,7 +1152,7 @@ class ChatService extends ChangeNotifier {
           conversationId: local.conversationId,
           serverId: sent.$1,
           mine: true,
-          kind: MessageKind.text,
+          kind: local.kind,
           body: local.body,
           at: sent.$2,
           quote: local.quote,
@@ -1518,10 +1565,11 @@ class ChatService extends ChangeNotifier {
     required String place,
     required DateTime when,
     String note = '',
+    String mapUrl = '',
   }) async {
     if (place.trim().isEmpty) throw const ChatFailure('Scrivi dove vi incontrate.');
     final String conv = await openDirect(trustedId);
-    await send(conv, meetingText(withName: withName, place: place, when: when, note: note));
+    await send(conv, meetingText(withName: withName, place: place, when: when, note: note, mapUrl: mapUrl));
     return conv;
   }
 
@@ -1533,6 +1581,7 @@ class ChatService extends ChangeNotifier {
     required String place,
     required DateTime when,
     String note = '',
+    String mapUrl = '',
   }) {
     final DateTime l = when.toLocal();
     final String hm = '${l.hour.toString().padLeft(2, '0')}:${l.minute.toString().padLeft(2, '0')}';
@@ -1541,6 +1590,7 @@ class ChatService extends ChangeNotifier {
       ..writeln('Vedo: $withName')
       ..writeln('Quando: ${_days[l.weekday - 1]} ${l.day}/${l.month} alle $hm')
       ..write('Dove: ${place.trim()}');
+    if (mapUrl.isNotEmpty) b.write('\nMappa: $mapUrl');
     if (note.trim().isNotEmpty) b.write('\nNota: ${note.trim()}');
     b.write('\nSe non ti scrivo dopo l\'incontro, contattami.');
     return b.toString();

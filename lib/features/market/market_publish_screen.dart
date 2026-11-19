@@ -10,6 +10,7 @@ import '../map/listing_repository.dart' show ListingFailure;
 import '../map/map_location.dart';
 import '../map/map_screen.dart' show MapServices;
 import '../map/point_picker_screen.dart';
+import '../places/place_search.dart';
 import '../profile/profile_form_screen.dart' show PickImage, pickFromGallery;
 import 'category_picker.dart';
 import 'comune_picker_screen.dart';
@@ -69,6 +70,7 @@ class _MarketPublishScreenState extends State<MarketPublishScreen> {
   final TextEditingController _description = TextEditingController();
   final TextEditingController _price = TextEditingController();
   final TextEditingController _wanted = TextEditingController();
+  final TextEditingController _comuneText = TextEditingController();
   final Map<String, TextEditingController> _attr = <String, TextEditingController>{};
   ItemCondition? _condition;
   bool _ships = false;
@@ -136,6 +138,7 @@ class _MarketPublishScreenState extends State<MarketPublishScreen> {
   @override
   void dispose() {
     for (final TextEditingController c in <TextEditingController>[
+      _comuneText,
       _title,
       _description,
       _price,
@@ -540,6 +543,20 @@ class _MarketPublishScreenState extends State<MarketPublishScreen> {
             ],
             const SizedBox(height: AppSpacing.md),
             const _Title('Dove'),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: PlaceField(
+                fieldKey: const ValueKey<String>('mercato_comune_scrivi'),
+                controller: _comuneText,
+                onlyComuni: true,
+                label: 'Scrivi il comune',
+                hint: 'Per esempio «Porano»',
+                onSelected: (PlaceSuggestion? s) {
+                  final Comune? c = s?.comune;
+                  if (c != null) setState(() => _comune = c);
+                },
+              ),
+            ),
             SoftCard(
               key: const ValueKey<String>('mercato_localita'),
               margin: const EdgeInsets.only(bottom: 8),
