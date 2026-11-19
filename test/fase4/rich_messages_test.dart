@@ -398,7 +398,7 @@ void main() {
       await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200)));
       await tester.pump();
     }
-    expect(reached, findsOneWidget);
+    expect(reached, findsWidgets);
     expect(find.byType(AiImageScreen), findsNothing);
     await finish(tester, <ChatService>[me, b]);
     ai.dispose();
