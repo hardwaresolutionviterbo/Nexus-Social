@@ -28,6 +28,8 @@ import 'features/chat/chat_service.dart';
 import 'features/chat/chat_store.dart';
 import 'features/contacts/contacts_sync.dart';
 import 'features/map/listing_repository.dart';
+import 'features/map/live_location.dart';
+import 'features/map/map_location.dart';
 import 'features/map/map_screen.dart';
 import 'features/map/social_repository.dart';
 import 'features/market/market_repository.dart';
@@ -65,6 +67,13 @@ Future<void> main() async {
   final bool profilesReady = firebaseReady &&
       AppConfig.serverLinkEnabled &&
       backend.supabase == ServiceState.connected;
+  // GPS in tempo reale (Blocco 15): uno per l'app, solo con il server collegato.
+  if (profilesReady) {
+    LiveRegistry.current = LiveLocationService(
+      server: SupabaseLiveLocationServer(Supabase.instance.client),
+      location: const GeolocatorDeviceLocation(),
+    );
+  }
   runApp(
     NexusApp(
       backend: backend,

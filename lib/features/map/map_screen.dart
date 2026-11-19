@@ -6,11 +6,14 @@ import '../../core/theme/app_theme.dart';
 import '../profile/profile_form_screen.dart' show PickImage, pickFromGallery;
 import '../privacy/privacy_repository.dart';
 import '../profile/profile_repository.dart';
+import '../chat/chat_thread_screen.dart' show openChatWith;
 import 'latest_listings_screen.dart';
 import 'listing_form_screen.dart';
 import 'listing_models.dart';
 import 'listing_repository.dart';
 import 'listing_sheets.dart';
+import 'live_location.dart';
+import 'live_location_screens.dart';
 import 'social_repository.dart';
 import 'map_location.dart';
 import 'my_listings_screen.dart';
@@ -94,6 +97,10 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   MapSurfaceHandle? _handle;
   StreamSubscription<GeoFix>? _sub;
 
+  /// GPS in tempo reale (Blocco 15): chi condivide con me, ricaricato ogni 20 secondi.
+  LiveLocationService? _live;
+  Timer? _livePoll;
+
   MapServices? get _services => widget.services;
 
   @override
@@ -101,6 +108,82 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     if (widget.active) _start();
+    _live = LiveRegistry.current?..addListener(_showPeople);
+    _syncLivePoll();
+  }
+
+  void _syncLivePoll() {
+    final LiveLocationService? live = _live;
+    final bool on = live != null && widget.active && _foreground;
+    if (!on) {
+      _livePoll?.cancel();
+      _livePoll = null;
+      return;
+    }
+    if (_livePoll != null) return;
+    unawaited(live.loadPeople());
+    _livePoll = Timer.periodic(const Duration(seconds: 20), (_) => unawaited(live.loadPeople()));
+  }
+
+  void _showPeople() {
+    final LiveLocationService? live = _live;
+    if (live == null) return;
+    unawaited(_handle?.showPeople(live.people, _openPerson));
+  }
+
+  Future<void> _openPerson(String id) async {
+    final LiveLocationService? live = _live;
+    final LivePerson? p = live?.people.where((LivePerson x) => x.userId == id).firstOrNull;
+    if (live == null || p == null || !mounted) return;
+    final String name = live.nameOf(p.userId, p.name);
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (BuildContext c) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(name, key: const ValueKey<String>('gps_persona_nome'), style: Theme.of(c).textTheme.titleLarge),
+              Text('@${p.username}'),
+              const SizedBox(height: 8),
+              Text(
+                'Posizione in tempo reale, ${liveAgoLabel(p.updatedAt, live.now)} · '
+                '${liveUntilLabel(p.expiresAt, live.now)}',
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  FilledButton.icon(
+                    key: const ValueKey<String>('gps_persona_scrivi'),
+                    onPressed: () {
+                      Navigator.of(c).pop();
+                      unawaited(openChatWith(context, userId: p.userId, name: name));
+                    },
+                    icon: const Icon(Icons.chat_bubble_outline_rounded),
+                    label: const Text('Scrivi'),
+                  ),
+                  const SizedBox(width: 10),
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.of(c).pop();
+                      unawaited(_handle?.flyTo(
+                        GeoFix(latitude: p.latitude, longitude: p.longitude, time: p.updatedAt),
+                        threeD: _threeD,
+                      ));
+                    },
+                    icon: const Icon(Icons.center_focus_strong_outlined),
+                    label: const Text('Centra'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -109,18 +192,22 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     if (widget.active && !_started) _start();
     _syncListening();
     if (widget.active && !old.active) unawaited(_refreshNearby());
+    _syncLivePoll();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _sub?.cancel();
+    _livePoll?.cancel();
+    _live?.removeListener(_showPeople);
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _foreground = state == AppLifecycleState.resumed;
+    _syncLivePoll();
     if (_foreground && _noticeChecked && !_showNotice) {
       // Ritorno dalle impostazioni del telefono: il permesso può essere cambiato.
       unawaited(_checkAccess());
@@ -211,6 +298,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   void _onSurfaceReady(MapSurfaceHandle handle) {
     _handle = handle;
     if (_nearby.isNotEmpty) unawaited(handle.showListings(_nearby, _openListingById));
+    final LiveLocationService? live = _live;
+    if (live != null && live.people.isNotEmpty) unawaited(handle.showPeople(live.people, _openPerson));
     final GeoFix? fix = _lastFix;
     if (fix != null) {
       unawaited(handle.showMe(fix));

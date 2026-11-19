@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -11,6 +13,7 @@ import '../chat/chat_screen.dart';
 import '../chat/chat_service.dart';
 import '../chat/chat_thread_screen.dart' show ChatRegistry, openChatFromNotification;
 import '../map/listing_repository.dart';
+import '../map/live_location.dart';
 import '../map/map_screen.dart';
 import '../market/market_models.dart';
 import '../market/market_repository.dart';
@@ -231,6 +234,12 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     chat.addListener(_onChat);
     chat.calls?.addListener(_onCall);
     chat.start();
+    // GPS in tempo reale (Blocco 15): riprende l'invio se una condivisione è ancora attiva.
+    final LiveLocationService? live = LiveRegistry.current;
+    if (live != null) {
+      live.localName = chat.localName;
+      unawaited(live.refresh());
+    }
   }
 
   /// C'è una chiamata (in arrivo o appena partita): si apre la schermata a tutto schermo.

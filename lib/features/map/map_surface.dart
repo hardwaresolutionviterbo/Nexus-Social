@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../core/theme/app_theme.dart';
 import 'listing_models.dart';
+import 'live_location.dart';
 import 'map_location.dart';
 
 /// Comandi che lo schermo della Mappa dà alla mappa disegnata.
@@ -25,6 +26,10 @@ abstract class MapSurfaceHandle {
   /// Segnaposti rotondi degli annunci vicini con l'iniziale dell'autore (T2); toccandoli
   /// si riceve l'identificativo dell'annuncio.
   Future<void> showListings(List<NearbyListing> listings, ValueChanged<String> onTap);
+
+  /// Persone che condividono con me il GPS in tempo reale (Blocco 15): segnaposti viola con
+  /// l'iniziale; toccandoli si riceve l'identificativo della persona.
+  Future<void> showPeople(List<LivePerson> people, ValueChanged<String> onTap);
 }
 
 typedef MapSurfaceBuilder =
@@ -49,6 +54,9 @@ class MapLibreSurface extends StatefulWidget {
 class _MapLibreSurfaceState extends State<MapLibreSurface> implements MapSurfaceHandle {
   MapLibreMapController? _controller;
   ValueChanged<String>? _onListingTap;
+  ValueChanged<String>? _onPersonTap;
+  List<NearbyListing> _listings = const <NearbyListing>[];
+  List<LivePerson> _people = const <LivePerson>[];
 
   void _tappedCircle(Circle c) => _tapped(c.data);
   void _tappedSymbol(Symbol s) => _tapped(s.data);
@@ -56,15 +64,57 @@ class _MapLibreSurfaceState extends State<MapLibreSurface> implements MapSurface
   void _tapped(Map<dynamic, dynamic>? data) {
     final Object? id = data?['id'];
     if (id is String) _onListingTap?.call(id);
+    final Object? person = data?['persona'];
+    if (person is String) _onPersonTap?.call(person);
+  }
+
+  @override
+  Future<void> showPeople(List<LivePerson> people, ValueChanged<String> onTap) async {
+    _onPersonTap = onTap;
+    _people = people;
+    await _redraw();
   }
 
   @override
   Future<void> showListings(List<NearbyListing> listings, ValueChanged<String> onTap) async {
+    _onListingTap = onTap;
+    _listings = listings;
+    await _redraw();
+  }
+
+  /// Annunci e persone insieme: si ridisegnano tutti a ogni cambiamento.
+  Future<void> _redraw() async {
     final MapLibreMapController? c = _controller;
     if (c == null) return;
-    _onListingTap = onTap;
+    final List<NearbyListing> listings = _listings;
+    final List<LivePerson> people = _people;
     await c.clearSymbols();
     await c.clearCircles();
+    if (people.isNotEmpty) {
+      final List<Map<String, dynamic>> who = <Map<String, dynamic>>[
+        for (final LivePerson p in people) <String, dynamic>{'persona': p.userId},
+      ];
+      await c.addCircles(<CircleOptions>[
+        for (final LivePerson p in people)
+          CircleOptions(
+            geometry: LatLng(p.latitude, p.longitude),
+            circleRadius: 17,
+            circleColor: '#7C3AED',
+            circleStrokeWidth: 4,
+            circleStrokeColor: '#FFFFFF',
+          ),
+      ], who);
+      await c.addSymbols(<SymbolOptions>[
+        for (final LivePerson p in people)
+          SymbolOptions(
+            geometry: LatLng(p.latitude, p.longitude),
+            textField: p.initial,
+            textSize: 14,
+            textColor: '#FFFFFF',
+            fontNames: const <String>['Noto Sans Bold'],
+          ),
+      ], who);
+    }
     if (listings.isEmpty) return;
     final List<Map<String, dynamic>> data = <Map<String, dynamic>>[
       for (final NearbyListing l in listings) <String, dynamic>{'id': l.id},

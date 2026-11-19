@@ -2889,6 +2889,65 @@ def check_statuses_phase4() -> None:
           f"{seen}, {seen_c}, {len(viewers)}, {not_owner}, {expired}, {get_expired}, {left}")
 
 
+def check_live_location_phase4() -> None:
+    """GP · GPS in tempo reale (Blocco 15): solo le persone scelte, a tempo, revocabile."""
+    ta, tb, tc = token(UID_A), token(UID_B), token(UID_C)
+    for t, other in ((ta, UID_B), (tb, UID_A), (tb, UID_C), (tc, UID_B)):
+        rpc("unblock_user", {"p_user_id": other}, t)
+    sql(f"insert into private.contact_links (owner_id, contact_id, expires_at) values "
+        f"('{UID_B}', '{UID_A}', now() + interval '30 days') on conflict (owner_id, contact_id) "
+        "do update set expires_at = excluded.expires_at;")
+    sql(f"delete from private.contact_links where owner_id = '{UID_B}' and contact_id = '{UID_C}';")
+    rpc("live_share_stop", {}, tb)
+
+    def seen(tok) -> list:
+        status, rows = rpc("live_visible", {}, tok)
+        return [r.get("user_id") for r in rows] if status == 200 and isinstance(rows, list) else ["errore"]
+
+    ok = rpc("live_share_start", {"p_viewers": [UID_A], "p_minutes": 60}, tb)[0]
+    not_contact = rpc("live_share_start", {"p_viewers": [UID_C], "p_minutes": 60}, tb)[0]
+    bad_time = rpc("live_share_start", {"p_viewers": [UID_A], "p_minutes": 600}, tb)[0]
+    anon = rpc("live_share_start", {"p_viewers": [UID_A], "p_minutes": 15}, None)[0]
+    _, mine = rpc("live_my_shares", {}, tb)
+    check("GP1", "Si accende solo per chi è in rubrica, per 15 min, 1 ora o 8 ore",
+          ok == 200 and not_contact >= 400 and bad_time >= 400 and anon >= 400
+          and [m.get("viewer_id") for m in mine] == [UID_A],
+          f"{ok}, {not_contact}, {bad_time}, {anon}, {len(mine)}")
+
+    before = seen(ta)
+    up = rpc("live_update", {"p_lat": 42.42, "p_lng": 12.1, "p_accuracy": 12}, tb)
+    c_up = rpc("live_update", {"p_lat": 45.0, "p_lng": 9.0, "p_accuracy": 10}, tc)
+    a_rows = rpc("live_visible", {}, ta)[1]
+    c_sees, b_sees = seen(tc), seen(tb)
+    stored_c = sql(f"select count(*) from private.live_positions where user_id = '{UID_C}';")
+    direct = request("GET", "/rest/v1/live_positions?select=*", jwt=ta)[0]
+    check("GP2", "La posizione la vede solo la persona scelta; senza condivisione non si salva",
+          before == [] and up == (200, True) and a_rows and abs(a_rows[0].get("lat", 0) - 42.42) < 1e-6
+          and c_sees == [] and b_sees == [] and c_up == (200, False) and stored_c == "0" and direct >= 400,
+          f"{before}, {up}, {c_sees}, {b_sees}, {c_up}, {stored_c}, {direct}")
+
+    rpc("block_user", {"p_user_id": UID_B}, ta)
+    blocked_shares = sql(f"select count(*) from private.live_shares where owner_id = '{UID_B}';")
+    blocked_pos = sql(f"select count(*) from private.live_positions where user_id = '{UID_B}';")
+    rpc("unblock_user", {"p_user_id": UID_B}, ta)
+    check("GP3", "Bloccare qualcuno chiude subito la condivisione e cancella la posizione",
+          blocked_shares == "0" and blocked_pos == "0" and seen(ta) == [],
+          f"{blocked_shares}, {blocked_pos}")
+
+    rpc("live_share_start", {"p_viewers": [UID_A], "p_minutes": 15}, tb)
+    rpc("live_update", {"p_lat": 42.4, "p_lng": 12.1, "p_accuracy": 8}, tb)
+    sql(f"update private.live_shares set expires_at = now() - interval '1 second' where owner_id = '{UID_B}';")
+    expired = seen(ta)
+    left = sql(f"select count(*) from private.live_positions where user_id = '{UID_B}';")
+    rpc("live_share_start", {"p_viewers": [UID_A], "p_minutes": 15}, tb)
+    rpc("live_update", {"p_lat": 42.4, "p_lng": 12.1, "p_accuracy": 8}, tb)
+    stop = rpc("live_share_stop", {"p_viewer": UID_A}, tb)[0]
+    after_stop = sql(f"select count(*) from private.live_positions where user_id = '{UID_B}';")
+    check("GP4", "A tempo scaduto o revocata, sparisce e l'ultima posizione si cancella",
+          expired == [] and left == "0" and stop in (200, 204) and after_stop == "0" and seen(ta) == [],
+          f"{expired}, {left}, {stop}, {after_stop}")
+
+
 def check_push_phase4() -> None:
     """U · Notifiche (Fase 4, Blocco 5): coda server, silenzia, non disturbare, mai i Mi piace."""
     ta, tb = token(UID_A), token(UID_B)
@@ -3036,6 +3095,7 @@ def main() -> int:
     check_contact_names_phase4()
     check_presence_phase4()
     check_statuses_phase4()
+    check_live_location_phase4()
     failed = [r for r in results if not r[2]]
     print(f"{'Caso':6} {'Esito':9} Descrizione")
     for case, desc, ok, detail in results:

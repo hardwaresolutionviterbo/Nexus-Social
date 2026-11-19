@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:material_ui/material_ui.dart';
 import 'package:nexus_social/features/map/listing_models.dart';
+import 'package:nexus_social/features/map/live_location.dart';
 import 'package:nexus_social/features/map/map_location.dart';
 import 'package:nexus_social/features/map/map_screen.dart';
 import 'package:nexus_social/features/map/map_surface.dart';
@@ -109,6 +110,17 @@ class FakeMapHandle implements MapSurfaceHandle {
   }
 
   void tapMarker(String id) => _onTap?.call(id);
+
+  List<LivePerson> people = const <LivePerson>[];
+  ValueChanged<String>? _onPerson;
+
+  @override
+  Future<void> showPeople(List<LivePerson> people, ValueChanged<String> onTap) async {
+    this.people = people;
+    _onPerson = onTap;
+  }
+
+  void tapPerson(String id) => _onPerson?.call(id);
 }
 
 class FakeMapSurface extends StatefulWidget {

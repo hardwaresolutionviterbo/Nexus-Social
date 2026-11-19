@@ -3,6 +3,8 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/nexus_ui.dart';
 import '../contacts/contacts_sync.dart';
+import '../map/live_location.dart';
+import '../map/live_location_screens.dart';
 import '../profile/avatar_view.dart';
 import '../profile/profile_repository.dart';
 import 'phone_permissions.dart';
@@ -38,7 +40,7 @@ enum PrivacySection {
         ? 'Attiva · ${c.contacts.length == 1 ? '1 contatto' : '${c.contacts.length} contatti'}'
         : 'Rubrica non attiva',
     PrivacySection.location => 'Posizione esatta mai visibile',
-    PrivacySection.gps => 'Spento · nessuna condivisione',
+    PrivacySection.gps => liveSummary(LiveRegistry.current),
     PrivacySection.blocked => switch (c.blocked.length) {
       0 => 'Nessuno',
       1 => '1 persona',
@@ -75,7 +77,7 @@ class PrivacySectionBody extends StatelessWidget {
             ? const _ContactsBody()
             : _LiveContactsBody(controller: controller, profiles: profiles),
         PrivacySection.location => const _LocationBody(),
-        PrivacySection.gps => const _GpsBody(),
+        PrivacySection.gps => _GpsBody(controller: controller, profiles: profiles),
         PrivacySection.blocked => _BlockedBody(controller: controller, profiles: profiles),
         PrivacySection.permissions => _PermissionsBody(controller: controller),
       },
@@ -343,22 +345,32 @@ class _LocationBody extends StatelessWidget {
 }
 
 class _GpsBody extends StatelessWidget {
-  const _GpsBody();
+  const _GpsBody({required this.controller, this.profiles});
+
+  final PrivacyController controller;
+  final ProfileRepository? profiles;
 
   @override
   Widget build(BuildContext context) {
-    return const SectionCard(
+    final LiveLocationService? live = LiveRegistry.current;
+    return SectionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Nessuna condivisione attiva.', key: ValueKey<String>('gps_info')),
-          _Note(
-            'Il GPS in tempo reale è spento di partenza. Quando lo userai sarà temporaneo '
-            '(al massimo 8 ore), revocabile in ogni momento e visibile solo alle persone '
-            'che autorizzi. Alla fine l\'ultima posizione viene cancellata.',
+          if (live == null)
+            const Text('Nessuna condivisione attiva.', key: ValueKey<String>('gps_info'))
+          else
+            LiveShareCard(
+              service: live,
+              contacts: controller.settings.contactsEnabled ? controller.contacts : null,
+              profiles: profiles,
+            ),
+          const _Note(
+            'Il GPS in tempo reale è spento di partenza. Quando lo accendi è temporaneo '
+            '(15 minuti, 1 ora o 8 ore), revocabile in ogni momento e visibile solo alle persone '
+            'che scegli, sulla loro Mappa. Alla fine l\'ultima posizione viene cancellata.',
             icon: Icons.lock_outline_rounded,
           ),
-          _Soon('Disponibile con la Mappa (Fase 3).'),
         ],
       ),
     );
