@@ -232,4 +232,23 @@ void main() {
       await tester.enterText(find.byKey(const ValueKey<String>('promo_coupon_testo')), 'Secondo drink gratis');
     });
   });
+
+  testWidgets('aziende 11 · recensioni verificate e avvisi', (tester) async {
+    final FakeBusinessRepository repo = (await tester.runAsync(withPromos))!;
+    repo.publicNames['cliente1'] = 'Giulia M.';
+    repo.me = 'cliente1';
+    final String code = (await tester.runAsync(() => repo.claimCoupon('promo1')))!;
+    repo.me = io;
+    await tester.runAsync(() => repo.redeemCoupon(code));
+    repo.me = 'cliente1';
+    await tester.runAsync(() => repo.saveReview(io, rating: 5, body: 'Cornetti caldi e servizio veloce. Coupon accettato senza problemi.'));
+    repo.me = io;
+    await tester.runAsync(() => repo.replyReview('rev-$io-cliente1', 'Grazie Giulia, ti aspettiamo!'));
+    repo.me = 'cliente2';
+    await shoot(tester, 'aziende_11_recensioni', BusinessProfileScreen(repository: repo, id: io, now: () => now),
+        before: () async {
+      await tester.drag(find.byType(ListView).first, const Offset(0, -1400));
+      await tester.pumpAndSettle();
+    });
+  });
 }
