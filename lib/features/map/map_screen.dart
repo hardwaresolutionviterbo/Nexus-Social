@@ -5,7 +5,9 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/theme/app_theme.dart';
 import '../business/business_models.dart';
 import '../business/business_repository.dart';
+import '../business/business_promotions.dart';
 import '../business/business_screens.dart';
+import '../business/promotion_models.dart';
 import '../profile/profile_form_screen.dart' show PickImage, pickFromGallery;
 import '../privacy/privacy_repository.dart';
 import '../profile/profile_repository.dart';
@@ -306,6 +308,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _handle = handle;
     if (_nearby.isNotEmpty) unawaited(handle.showListings(_nearby, _openListingById));
     if (_businesses.isNotEmpty) unawaited(handle.showBusinesses(_businesses, _openBusiness));
+    if (_promos.isNotEmpty) unawaited(handle.showPromotions(_promos, _openPromotion));
     final LiveLocationService? live = _live;
     if (live != null && live.people.isNotEmpty) unawaited(handle.showPeople(live.people, _openPerson));
     final GeoFix? fix = _lastFix;
@@ -336,6 +339,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// Sedi delle attività intorno (Fase 6): segnaposti fissi, entro 20 km.
   List<BusinessPin> _businesses = const <BusinessPin>[];
 
+  /// Promozioni ed eventi in corso qui intorno (Fase 6, Blocco 3).
+  List<Promotion> _promos = const <Promotion>[];
+
   Future<void> _refreshBusinesses() async {
     final BusinessRepository? repo = widget.businesses ?? BusinessRegistry.current;
     final GeoPoint? origin = _currentPoint;
@@ -345,9 +351,39 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       if (!mounted) return;
       _businesses = pins;
       await _handle?.showBusinesses(pins, _openBusiness);
+      final List<Promotion> promos = await repo.promotionsNearby(origin.latitude, origin.longitude);
+      if (!mounted) return;
+      setState(() => _promos = promos);
+      await _handle?.showPromotions(promos, _openPromotion);
     } on BusinessFailure {
       // Si riprova al prossimo spostamento.
     }
+  }
+
+  Future<void> _openPromotion(String id) async {
+    final BusinessRepository? repo = widget.businesses ?? BusinessRegistry.current;
+    final Promotion? p = _promos.where((Promotion x) => x.id == id).firstOrNull;
+    if (repo == null || p == null || !mounted) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(builder: (_) => PromotionDetailScreen(repository: repo, promotion: p, now: widget.now)),
+    );
+  }
+
+  Future<void> _openPromotions() async {
+    final BusinessRepository? repo = widget.businesses ?? BusinessRegistry.current;
+    if (repo == null) return;
+    final GeoPoint? origin = _currentPoint;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => PromotionsListScreen(
+          repository: repo,
+          promotions: _promos,
+          originLat: origin?.latitude,
+          originLng: origin?.longitude,
+          now: widget.now,
+        ),
+      ),
+    );
   }
 
   Future<void> _openBusiness(String id) async {
@@ -515,6 +551,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             onRadiusChanged: (int v) => _setFilters(_filters.copyWith(radiusKm: v)),
             onFilters: _openFilters,
             onLatest: _openLatest,
+            promotions: (widget.businesses ?? BusinessRegistry.current) == null ? null : _promos.length,
+            onPromotions: _openPromotions,
           ),
         ),
         Positioned(
@@ -595,8 +633,13 @@ class _MapHeader extends StatelessWidget {
     required this.onRadiusChanged,
     required this.onFilters,
     required this.onLatest,
+    this.promotions,
+    this.onPromotions,
   });
 
+  /// Promozioni in corso qui intorno (null: funzione non disponibile).
+  final int? promotions;
+  final VoidCallback? onPromotions;
   final MapFilters filters;
 
   /// Annunci visibili entro il raggio; null senza server.
@@ -673,6 +716,21 @@ class _MapHeader extends StatelessWidget {
                   onPressed: onLatest,
                   icon: const Icon(Icons.dynamic_feed_rounded),
                 ),
+                if (promotions != null) ...[
+                  const SizedBox(width: 8),
+                  IconButton(
+                    key: const ValueKey<String>('mappa_promozioni'),
+                    tooltip: 'Promozioni ed eventi',
+                    style: square,
+                    onPressed: onPromotions,
+                    icon: Badge(
+                      isLabelVisible: promotions! > 0,
+                      label: Text('${promotions!}'),
+                      backgroundColor: const Color(0xFFDB2777),
+                      child: const Icon(Icons.local_offer_rounded, color: Color(0xFFDB2777)),
+                    ),
+                  ),
+                ],
               ],
             ),
             const SizedBox(height: 8),

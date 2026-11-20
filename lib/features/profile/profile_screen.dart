@@ -5,6 +5,7 @@ import '../../core/config/app_config.dart';
 import '../../core/services/backend_bootstrap.dart';
 import '../../core/theme/app_theme.dart';
 import '../business/business_repository.dart';
+import '../business/business_promotions.dart';
 import '../business/business_screens.dart';
 import '../map/map_surface.dart' show MapLibreSurface;
 import '../places/place_search.dart' show PlaceRegistry;
@@ -235,6 +236,17 @@ class ProfileScreen extends StatelessWidget {
                   ),
                 ),
               ).then((_) => onProfileChanged?.call()),
+            ),
+          if (BusinessRegistry.current case final BusinessRepository biz)
+            MenuCard(
+              key: const ValueKey<String>('apri_miei_coupon'),
+              icon: Icons.confirmation_number_outlined,
+              color: const Color(0xFFDB2777),
+              title: 'I miei coupon',
+              subtitle: 'Quelli presi dalle promozioni, con il QR da mostrare',
+              onTap: () => Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(builder: (_) => MyCouponsScreen(repository: biz)),
+              ),
             ),
           if (privacy != null)
             MenuCard(

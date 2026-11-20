@@ -3091,6 +3091,81 @@ def check_subscriptions_phase6() -> None:
           f"{expired}, {expired_mine}, {retry}, {extend}, {extended}, {stop}, {stopped}")
 
 
+def check_promotions_phase6() -> None:
+    """PR · Promozioni e coupon (Fase 6, Blocco 3)."""
+    ta, tb, td = token(UID_A), token(UID_B), token(UID_D)
+    for t, other in ((ta, UID_D), (td, UID_A), (tb, UID_D), (td, UID_B)):
+        rpc("unblock_user", {"p_user_id": other}, t)
+    sql(f"delete from public.promotions where business_id = '{UID_D}'; "
+        f"update public.business_subscriptions set current_period_end = now() - interval '1 second' "
+        f"where id = '{UID_D}';")
+    start = sql("select to_char(now() at time zone 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"');")
+    end = sql("select to_char((now() + interval '2 days') at time zone 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"');")
+    too_long = sql("select to_char((now() + interval '8 days') at time zone 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"');")
+    offer = {"p_kind": "offerta", "p_title": "Colazione -20%", "p_description": "Solo oggi",
+             "p_starts_at": start, "p_ends_at": end, "p_coupon_text": "Sconto 20%", "p_coupon_limit": 1}
+    no_premium = rpc("promotion_create", offer, td)[0]
+    sql(f"insert into public.business_subscriptions (id, source, current_period_end) "
+        f"values ('{UID_D}', 'admin', now() + interval '1 month') on conflict (id) do update "
+        "set current_period_end = now() + interval '1 month';")
+    s_offer, offer_id = rpc("promotion_create", offer, td)
+    s_event = rpc("promotion_create", {"p_kind": "evento", "p_title": "Concerto in piazza", "p_starts_at": start,
+                                       "p_ends_at": end, "p_lat": 42.70, "p_lng": 12.11,
+                                       "p_place_label": "Piazza del Popolo, Orvieto"}, td)[0]
+    offer_elsewhere = rpc("promotion_create", {**offer, "p_lat": 42.70, "p_lng": 12.11}, td)[0]
+    week_plus = rpc("promotion_create", {**offer, "p_ends_at": too_long}, td)[0]
+    private_user = rpc("promotion_create", offer, ta)[0]
+    more = [rpc("promotion_create", {**offer, "p_title": f"Offerta {i}"}, td)[0] for i in range(4)]
+    check("PR1", "Promozioni solo con Premium, al massimo 7 giorni e 5 al giorno; luogo diverso solo per eventi",
+          no_premium >= 400 and s_offer == 200 and s_event == 200 and offer_elsewhere >= 400
+          and week_plus >= 400 and private_user >= 400 and more[:3] == [200, 200, 200] and more[3] >= 400,
+          f"{no_premium}, {s_offer}, {s_event}, {offer_elsewhere}, {week_plus}, {private_user}, {more}")
+
+    near = rpc("promotions_nearby", {"p_lat": 42.69, "p_lng": 12.10, "p_radius_km": 10}, ta)[1]
+    of_d = rpc("promotions_of", {"p_business_id": UID_D}, ta)[1]
+    direct = get("/rest/v1/promotions?select=*", ta)
+    rpc("block_user", {"p_user_id": UID_D}, ta)
+    blocked = rpc("promotions_nearby", {"p_lat": 42.69, "p_lng": 12.10, "p_radius_km": 10}, ta)[1]
+    rpc("unblock_user", {"p_user_id": UID_D}, ta)
+    event = [p for p in near if p.get("kind") == "evento"] if isinstance(near, list) else []
+    check("PR2", "Mappa delle promozioni: visibili a tutti tranne chi è bloccato; evento nel suo luogo",
+          isinstance(near, list) and len(near) == 5 and isinstance(of_d, list) and len(of_d) == 5
+          and (direct[0] >= 400 or rows(direct) == []) and blocked == []
+          and len(event) == 1 and event[0].get("at_site") is False and abs(event[0].get("lat", 0) - 42.70) < 1e-6,
+          f"{len(near) if isinstance(near, list) else near}, {direct[0]}, {blocked}, {event}")
+
+    s_claim, code = rpc("coupon_claim", {"p_promotion_id": offer_id}, ta)
+    again = rpc("coupon_claim", {"p_promotion_id": offer_id}, ta)[1]
+    sold_out = rpc("coupon_claim", {"p_promotion_id": offer_id}, tb)[0]
+    own = rpc("coupon_claim", {"p_promotion_id": offer_id}, td)[0]
+    mine = rpc("coupons_mine", {}, ta)[1]
+    check("PR3", "Coupon: uno a persona, codice stabile, limite rispettato, non per il titolare",
+          s_claim == 200 and isinstance(code, str) and len(code) == 8 and again == code
+          and sold_out >= 400 and own >= 400 and isinstance(mine, list)
+          and any(c.get("my_coupon") == code for c in mine),
+          f"{s_claim}, {again == code}, {sold_out}, {own}")
+
+    wrong_shop = rpc("coupon_redeem", {"p_code": code}, tb)[0]
+    s_ok, ok = rpc("coupon_redeem", {"p_code": f"PIAZLY-{code.lower()}"}, td)
+    twice = rpc("coupon_redeem", {"p_code": code}, td)[0]
+    stats = rpc("promotions_mine", {}, td)[1]
+    first = [p for p in stats if p.get("id") == offer_id] if isinstance(stats, list) else []
+    check("PR4", "Convalida solo dall'attività, una volta; conteggio clienti senza dire chi sono",
+          wrong_shop >= 400 and s_ok == 200 and isinstance(ok, dict) and ok.get("redeemed") == 1 and twice >= 400
+          and len(first) == 1 and first[0].get("claimed") == 1 and first[0].get("redeemed") == 1
+          and UID_A not in json.dumps(stats),
+          f"{wrong_shop}, {s_ok} {ok}, {twice}, {first}")
+
+    rpc("promotion_cancel", {"p_id": offer_id}, td)
+    canceled = rpc("promotions_of", {"p_business_id": UID_D}, ta)[1]
+    sql(f"update public.business_subscriptions set current_period_end = now() - interval '1 second' "
+        f"where id = '{UID_D}';")
+    expired = rpc("promotions_nearby", {"p_lat": 42.69, "p_lng": 12.10, "p_radius_km": 10}, ta)[1]
+    check("PR5", "Promozione annullata sparisce; senza Premium spariscono tutte",
+          isinstance(canceled, list) and len(canceled) == 4 and expired == [],
+          f"{len(canceled) if isinstance(canceled, list) else canceled}, {expired}")
+
+
 def check_push_phase4() -> None:
     """U · Notifiche (Fase 4, Blocco 5): coda server, silenzia, non disturbare, mai i Mi piace."""
     ta, tb = token(UID_A), token(UID_B)
@@ -3242,6 +3317,7 @@ def main() -> int:
     check_ai_limits_phase4()
     check_business_phase6()
     check_subscriptions_phase6()
+    check_promotions_phase6()
     failed = [r for r in results if not r[2]]
     print(f"{'Caso':6} {'Esito':9} Descrizione")
     for case, desc, ok, detail in results:

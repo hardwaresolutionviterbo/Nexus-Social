@@ -5,6 +5,7 @@ import 'package:image/image.dart' as img;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'business_models.dart';
+import 'promotion_models.dart';
 
 /// Dati delle attività sul server (Fase 6). Nei test: una versione in memoria.
 abstract class BusinessRepository {
@@ -25,6 +26,28 @@ abstract class BusinessRepository {
   Future<List<BusinessPin>> nearby(double lat, double lng, {int radiusKm = 20});
 
   Future<Uint8List?> photo(String path);
+
+  // ---- Promozioni e coupon (Blocco 3)
+
+  /// Crea una promozione (solo con Premium; 5 al giorno). Restituisce l'identificativo.
+  Future<String> createPromotion(PromotionDraft draft);
+
+  Future<void> cancelPromotion(String id);
+
+  /// Le mie promozioni (anche finite) con i conteggi.
+  Future<List<Promotion>> myPromotions();
+
+  Future<List<Promotion>> promotionsNearby(double lat, double lng, {int radiusKm = 20});
+
+  Future<List<Promotion>> promotionsOf(String businessId);
+
+  /// Prendo il coupon: restituisce il mio codice (sempre lo stesso).
+  Future<String> claimCoupon(String promotionId);
+
+  Future<List<Promotion>> myCoupons();
+
+  /// Il titolare convalida un coupon (dal QR o scritto a mano).
+  Future<CouponCheck> redeemCoupon(String code);
 
   /// Prova gratuita di 7 giorni (una sola volta per azienda e per partita IVA).
   Future<BusinessSubscription> startTrial();
@@ -228,6 +251,63 @@ class SupabaseBusinessRepository implements BusinessRepository {
     } catch (_) {
       return null;
     }
+  }
+
+  static List<Promotion> _promos(Object? r) => <Promotion>[
+    for (final Object? x in (r as List<dynamic>? ?? const <dynamic>[]))
+      if (x is Map<String, dynamic>) Promotion.fromJson(x),
+  ];
+
+  @override
+  Future<String> createPromotion(PromotionDraft d) async {
+    final Object? id = await _rpc('promotion_create', <String, Object?>{
+      'p_kind': d.kind.key,
+      'p_title': d.title.trim(),
+      'p_description': d.description.trim(),
+      'p_starts_at': d.startsAt.toUtc().toIso8601String(),
+      'p_ends_at': d.endsAt.toUtc().toIso8601String(),
+      'p_lat': d.lat,
+      'p_lng': d.lng,
+      'p_place_label': d.placeLabel.trim(),
+      'p_coupon_text': d.couponText.trim(),
+      'p_coupon_limit': d.couponText.trim().isEmpty ? null : d.couponLimit,
+    });
+    return '$id';
+  }
+
+  @override
+  Future<void> cancelPromotion(String id) async {
+    await _rpc('promotion_cancel', <String, Object?>{'p_id': id});
+  }
+
+  @override
+  Future<List<Promotion>> myPromotions() async => _promos(await _rpc('promotions_mine'));
+
+  @override
+  Future<List<Promotion>> promotionsNearby(double lat, double lng, {int radiusKm = 20}) async => _promos(
+    await _rpc('promotions_nearby', <String, Object?>{'p_lat': lat, 'p_lng': lng, 'p_radius_km': radiusKm.clamp(1, 50)}),
+  );
+
+  @override
+  Future<List<Promotion>> promotionsOf(String businessId) async =>
+      _promos(await _rpc('promotions_of', <String, Object?>{'p_business_id': businessId}));
+
+  @override
+  Future<String> claimCoupon(String promotionId) async =>
+      '${await _rpc('coupon_claim', <String, Object?>{'p_promotion_id': promotionId})}';
+
+  @override
+  Future<List<Promotion>> myCoupons() async => _promos(await _rpc('coupons_mine'));
+
+  @override
+  Future<CouponCheck> redeemCoupon(String code) async {
+    final Object? r = await _rpc('coupon_redeem', <String, Object?>{'p_code': PromotionRules.normalizeCode(code)});
+    final Map<String, dynamic> j = r is Map<String, dynamic> ? r : const <String, dynamic>{};
+    return CouponCheck(
+      title: '${j['title'] ?? ''}',
+      couponText: '${j['coupon_text'] ?? ''}',
+      redeemed: (j['redeemed'] as num?)?.toInt() ?? 0,
+    );
   }
 
   @override

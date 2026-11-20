@@ -9,6 +9,8 @@ import 'package:material_ui/material_ui.dart';
 import 'package:nexus_social/core/theme/app_theme.dart';
 import 'package:nexus_social/features/business/business_models.dart';
 import 'package:nexus_social/features/business/business_premium.dart';
+import 'package:nexus_social/features/business/business_promotions.dart';
+import 'package:nexus_social/features/business/promotion_models.dart';
 import 'package:nexus_social/features/business/business_screens.dart';
 import 'package:nexus_social/features/market/comuni_italia.dart';
 
@@ -178,5 +180,56 @@ void main() {
   testWidgets('aziende 7 · la mia attività con Premium e badge', (tester) async {
     final FakeBusinessRepository repo = seeded()..clock = (() => now);
     await shoot(tester, 'aziende_7_premium_attivo', MyBusinessScreen(repository: repo, now: () => now));
+  });
+
+  Future<FakeBusinessRepository> withPromos() async {
+    final FakeBusinessRepository repo = seeded()..clock = (() => now);
+    await repo.createPromotion(PromotionDraft(
+      kind: PromotionKind.offerta,
+      title: 'Colazione -20%',
+      description: 'Cappuccino e cornetto con il 20% di sconto, dalle 7 alle 11.',
+      startsAt: now,
+      endsAt: now.add(const Duration(days: 3)),
+      couponText: 'Sconto 20%',
+      couponLimit: 50,
+    ));
+    await repo.createPromotion(PromotionDraft(
+      kind: PromotionKind.evento,
+      title: 'Musica dal vivo in piazza',
+      startsAt: now.add(const Duration(days: 4)),
+      endsAt: now.add(const Duration(days: 4, hours: 4)),
+      lat: 42.7201,
+      lng: 12.1103,
+      placeLabel: 'Piazza del Popolo · Orvieto, Umbria',
+    ));
+    return repo;
+  }
+
+  testWidgets('aziende 8 · le mie promozioni con i conteggi', (tester) async {
+    final FakeBusinessRepository repo = (await tester.runAsync(withPromos))!;
+    repo.me = 'cliente1';
+    final String code = (await tester.runAsync(() => repo.claimCoupon('promo1')))!;
+    repo.me = io;
+    await tester.runAsync(() => repo.redeemCoupon(code));
+    await shoot(tester, 'aziende_8_mie_promozioni',
+        MyPromotionsScreen(repository: repo, premiumActive: true, now: () => now));
+  });
+
+  testWidgets('aziende 9 · coupon con QR del cliente', (tester) async {
+    final FakeBusinessRepository repo = (await tester.runAsync(withPromos))!;
+    repo.me = 'cliente1';
+    await tester.runAsync(() => repo.claimCoupon('promo1'));
+    final Promotion p = (await tester.runAsync(() => repo.promotionsNearby(42.69, 12.1)))!.first;
+    await shoot(tester, 'aziende_9_coupon', PromotionDetailScreen(repository: repo, promotion: p, now: () => now));
+  });
+
+  testWidgets('aziende 10 · nuova promozione', (tester) async {
+    await shoot(tester, 'aziende_10_nuova_promo', PromotionFormScreen(repository: seeded(), now: () => now),
+        before: () async {
+      await tester.enterText(find.byKey(const ValueKey<String>('promo_titolo')), 'Aperitivo 2x1');
+      await tester.tap(find.byKey(const ValueKey<String>('promo_con_coupon')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey<String>('promo_coupon_testo')), 'Secondo drink gratis');
+    });
   });
 }

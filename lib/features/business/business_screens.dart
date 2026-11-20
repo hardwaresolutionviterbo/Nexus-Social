@@ -17,7 +17,9 @@ import '../profile/profile_form_screen.dart' show PickImage, pickFromGallery;
 import '../profile/profile_models.dart' show ProfileRules;
 import 'business_models.dart';
 import 'business_premium.dart';
+import 'business_promotions.dart';
 import 'business_repository.dart';
+import 'promotion_models.dart';
 
 /// Documento facoltativo: (byte, è un PDF?). Nei test: finto.
 typedef PickDocument = Future<(Uint8List, bool)?> Function();
@@ -342,6 +344,29 @@ class _MyBusinessScreenState extends State<MyBusinessScreen> {
                           ),
                         ),
                       _PremiumCard(me: me, now: widget.now(), onTap: _openPremium),
+                      if (me.page != null)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: MenuCard(
+                          key: const ValueKey<String>('azienda_promozioni'),
+                          icon: Icons.campaign_rounded,
+                          color: const Color(0xFFDB2777),
+                          title: 'Promozioni ed eventi',
+                          subtitle: 'Fino a 5 al giorno sulla Mappa, coupon con QR e clienti arrivati',
+                          onTap: () => Navigator.of(context)
+                              .push<void>(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => MyPromotionsScreen(
+                                    repository: widget.repository,
+                                    premiumActive: me.subscription.isActive(widget.now()),
+                                    now: widget.now,
+                                    lookup: widget.lookup,
+                                  ),
+                                ),
+                              )
+                              .then((_) => _load()),
+                          ),
+                        ),
                     ],
             ),
     );
@@ -1201,6 +1226,7 @@ class BusinessProfileScreen extends StatefulWidget {
 
 class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
   BusinessPage? _page;
+  List<Promotion> _promos = const <Promotion>[];
   bool _loading = true;
   String? _error;
   int _photo = 0;
@@ -1215,6 +1241,10 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
     try {
       final BusinessPage? p = await widget.repository.page(widget.id);
       if (mounted) setState(() => _page = p);
+      if (p != null) {
+        final List<Promotion> promos = await widget.repository.promotionsOf(widget.id);
+        if (mounted) setState(() => _promos = promos);
+      }
     } on BusinessFailure catch (f) {
       if (mounted) setState(() => _error = f.message);
     } finally {
@@ -1338,6 +1368,23 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
               ],
             ),
           ),
+          if (_promos.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+              child: Text('Promozioni ed eventi', style: theme.textTheme.titleMedium),
+            ),
+            for (final Promotion promo in _promos)
+              PromotionTile(
+                promotion: promo,
+                now: now,
+                onTap: () => Navigator.of(context).push<void>(
+                  MaterialPageRoute<void>(
+                    builder: (_) =>
+                        PromotionDetailScreen(repository: widget.repository, promotion: promo, now: widget.now),
+                  ),
+                ),
+              ),
+          ],
           SoftCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

@@ -2,13 +2,14 @@ import 'dart:typed_data';
 
 import 'package:nexus_social/features/business/business_models.dart';
 import 'package:nexus_social/features/business/business_repository.dart';
+import 'package:nexus_social/features/business/promotion_models.dart';
 import 'package:nexus_social/features/profile/profile_models.dart';
 
 /// Aziende in memoria, con gli stessi controlli principali del server.
 class FakeBusinessRepository implements BusinessRepository {
   FakeBusinessRepository({this.me = 'utenteAnna000000000000000001'});
 
-  final String me;
+  String me;
   final Map<String, MyBusiness> registered = <String, MyBusiness>{};
   final Map<String, BusinessPage> pages = <String, BusinessPage>{};
   final Map<String, String> usernames = <String, String>{};
@@ -43,6 +44,151 @@ class FakeBusinessRepository implements BusinessRepository {
       page: pages[me],
       verifiedBadge: badge(me),
       subscription: _sub(me),
+    );
+  }
+
+  // ---- Promozioni e coupon
+  final Map<String, PromotionDraft> drafts = <String, PromotionDraft>{};
+  final Map<String, String> promoOwner = <String, String>{};
+  final Map<String, DateTime> promoCreated = <String, DateTime>{};
+  final Set<String> canceledPromos = <String>{};
+
+  /// codice → (promozione, cliente, convalidato)
+  final Map<String, (String, String, bool)> coupons = <String, (String, String, bool)>{};
+  int _codes = 0;
+
+  Promotion _promo(String id, {bool stats = false}) {
+    final PromotionDraft d = drafts[id]!;
+    final String owner = promoOwner[id]!;
+    final BusinessPage page = pages[owner]!;
+    final MapEntry<String, (String, String, bool)>? mine = coupons.entries
+        .where((MapEntry<String, (String, String, bool)> e) => e.value.$1 == id && e.value.$2 == me)
+        .firstOrNull;
+    final int claimed = coupons.values.where(((String, String, bool) c) => c.$1 == id).length;
+    final DateTime now = clock();
+    final DateTime made = promoCreated[id]!;
+    return Promotion(
+      id: id,
+      businessId: owner,
+      kind: d.kind,
+      title: d.title.trim(),
+      description: d.description.trim(),
+      startsAt: d.startsAt,
+      endsAt: d.endsAt,
+      lat: d.lat ?? page.lat,
+      lng: d.lng ?? page.lng,
+      placeLabel: d.placeLabel,
+      atSite: d.lat == null,
+      couponText: d.couponText.trim(),
+      couponLimit: d.couponLimit,
+      couponsLeft: d.couponLimit == null ? null : (d.couponLimit! - claimed).clamp(0, 1 << 30),
+      businessName: page.displayName,
+      category: page.category,
+      businessAddress: page.address.label,
+      verified: badge(owner),
+      mine: owner == me,
+      myCoupon: mine?.key,
+      myCouponUsed: mine?.value.$3 ?? false,
+      canceled: stats && canceledPromos.contains(id),
+      claimed: stats ? claimed : 0,
+      redeemed: stats ? coupons.values.where(((String, String, bool) c) => c.$1 == id && c.$3).length : 0,
+      createdToday: stats && made.year == now.year && made.month == now.month && made.day == now.day,
+    );
+  }
+
+  bool _visible(String id) {
+    final DateTime now = clock();
+    final PromotionDraft d = drafts[id]!;
+    final String owner = promoOwner[id]!;
+    return !canceledPromos.contains(id) &&
+        d.endsAt.isAfter(now) &&
+        !d.startsAt.isAfter(now.add(const Duration(days: 7))) &&
+        _active(owner) &&
+        (pages[owner]?.published ?? false);
+  }
+
+  @override
+  Future<String> createPromotion(PromotionDraft d) async {
+    if (pages[me] == null) throw const BusinessFailure('Crea prima il profilo attività.');
+    if (!_active(me)) {
+      throw const BusinessFailure('Le promozioni sono una funzione Premium: attiva la prova o l\'abbonamento.');
+    }
+    final String? err = d.check(clock());
+    if (err != null) throw BusinessFailure(err);
+    final DateTime now = clock();
+    final int today = promoCreated.entries
+        .where((MapEntry<String, DateTime> e) =>
+            promoOwner[e.key] == me && e.value.year == now.year && e.value.month == now.month && e.value.day == now.day)
+        .length;
+    if (today >= PromotionRules.maxPerDay) throw const BusinessFailure('Hai già creato 5 promozioni oggi: riprova domani.');
+    final String id = 'promo${drafts.length + 1}';
+    drafts[id] = d;
+    promoOwner[id] = me;
+    promoCreated[id] = now;
+    return id;
+  }
+
+  @override
+  Future<void> cancelPromotion(String id) async => canceledPromos.add(id);
+
+  @override
+  Future<List<Promotion>> myPromotions() async => <Promotion>[
+    for (final String id in drafts.keys.toList().reversed)
+      if (promoOwner[id] == me) _promo(id, stats: true),
+  ];
+
+  @override
+  Future<List<Promotion>> promotionsNearby(double lat, double lng, {int radiusKm = 20}) async => <Promotion>[
+    for (final String id in drafts.keys)
+      if (_visible(id)) _promo(id),
+  ];
+
+  @override
+  Future<List<Promotion>> promotionsOf(String businessId) async => <Promotion>[
+    for (final String id in drafts.keys)
+      if (promoOwner[id] == businessId && _visible(id)) _promo(id),
+  ];
+
+  @override
+  Future<String> claimCoupon(String promotionId) async {
+    if (!_visible(promotionId)) throw const BusinessFailure('Promozione non disponibile.');
+    final PromotionDraft d = drafts[promotionId]!;
+    if (d.couponText.trim().isEmpty) throw const BusinessFailure('Questa promozione non ha coupon.');
+    if (promoOwner[promotionId] == me) throw const BusinessFailure('Non puoi prendere i coupon della tua attività.');
+    final String? have = _promo(promotionId).myCoupon;
+    if (have != null) return have;
+    final int taken = coupons.values.where(((String, String, bool) c) => c.$1 == promotionId).length;
+    if (d.couponLimit != null && taken >= d.couponLimit!) throw const BusinessFailure('Coupon esauriti.');
+    const String alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    final int n = ++_codes;
+    final String code = List<String>.generate(8, (int i) => alphabet[(n * 7 + i * 13) % 32]).join();
+    coupons[code] = (promotionId, me, false);
+    return code;
+  }
+
+  @override
+  Future<List<Promotion>> myCoupons() async => <Promotion>[
+    for (final (String, String, bool) c in coupons.values)
+      if (c.$2 == me) _promo(c.$1),
+  ];
+
+  @override
+  Future<CouponCheck> redeemCoupon(String code) async {
+    final String c = PromotionRules.normalizeCode(code);
+    final (String, String, bool)? found = coupons[c];
+    if (found == null || promoOwner[found.$1] != me) {
+      throw const BusinessFailure('Codice non valido per la tua attività.');
+    }
+    if (found.$3) throw const BusinessFailure('Coupon già usato.');
+    if (canceledPromos.contains(found.$1) || !drafts[found.$1]!.endsAt.isAfter(clock())) {
+      throw const BusinessFailure('Promozione finita.');
+    }
+    coupons[c] = (found.$1, found.$2, true);
+    final PromotionDraft d = drafts[found.$1]!;
+    return CouponCheck(
+      title: d.title,
+      couponText: d.couponText,
+      redeemed: coupons.values.where(((String, String, bool) x) => x.$1 == found.$1 && x.$3).length,
     );
   }
 
