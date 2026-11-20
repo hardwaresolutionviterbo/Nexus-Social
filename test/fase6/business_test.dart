@@ -324,9 +324,11 @@ void main() {
     await tester.tap(find.byKey(const ValueKey<String>('azienda_premium')));
     await tester.pumpAndSettle();
     expect(find.text('9,99 € al mese · i primi 7 giorni sono gratis'), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const ValueKey<String>('premium_pagamento_in_arrivo')));
     expect(find.byKey(const ValueKey<String>('premium_pagamento_in_arrivo')), findsOneWidget);
     expect(tester.widget<OutlinedButton>(find.byKey(const ValueKey<String>('premium_abbonati'))).onPressed, isNull,
         reason: 'niente pagamenti finti: Google Play arriva con la pubblicazione');
+    await tester.ensureVisible(find.byKey(const ValueKey<String>('premium_prova')));
     await tester.tap(find.byKey(const ValueKey<String>('premium_prova')));
     await tester.pumpAndSettle();
     expect(find.text('Prova gratuita attiva'), findsOneWidget);

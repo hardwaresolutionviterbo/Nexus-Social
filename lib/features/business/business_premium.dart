@@ -61,9 +61,11 @@ class _PremiumScreenState extends State<PremiumScreen> {
     final bool active = _sub.isActive(now);
     return Scaffold(
       appBar: AppBar(title: const Text('Piazly Premium')),
-      body: ListView(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.only(bottom: 32),
-        children: [
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
           Container(
             margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
             padding: const EdgeInsets.all(20),
@@ -202,6 +204,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
             ),
           ),
         ],
+        ),
       ),
     );
   }
