@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:nexus_social/core/theme/app_theme.dart';
 import 'package:nexus_social/features/business/business_models.dart';
+import 'package:nexus_social/features/business/business_premium.dart';
 import 'package:nexus_social/features/business/business_screens.dart';
 import 'package:nexus_social/features/map/map_location.dart';
 import 'package:nexus_social/features/map/map_screen.dart';
@@ -247,6 +248,19 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Verificata'), findsOneWidget);
 
+    // Approvata ma senza Premium: ancora niente badge.
+    await tester.pumpWidget(app(BusinessProfileScreen(repository: repo, id: bar, now: () => martedi)));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey<String>('badge_verificato')), findsNothing);
+
+    // L'amministratore attiva un mese di Premium.
+    await tester.pumpWidget(app(BusinessReviewScreen(repository: repo)));
+    await tester.pumpAndSettle();
+    expect(find.text('Premium non attivo'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey<String>('verifica_estendi_barcentrale')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Premium fino al'), findsOneWidget);
+
     await tester.pumpWidget(app(BusinessProfileScreen(repository: repo, id: bar, now: () => martedi)));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey<String>('badge_verificato')), findsOneWidget);
@@ -265,6 +279,7 @@ void main() {
         lat: 42.6851,
         lng: 12.1029,
         status: VerificationStatus.verified,
+        premiumUntil: DateTime(2027),
       );
     final FakeMap map = FakeMap(noticeSeen: true, access: LocationAccess.granted);
     await tester.pumpWidget(app(Scaffold(body: MapScreen(services: map.services, businesses: repo, now: () => martedi))));
@@ -285,5 +300,50 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(BusinessProfileScreen), findsOneWidget);
     expect(find.byKey(const ValueKey<String>('badge_verificato')), findsOneWidget);
+  });
+
+  testWidgets('Premium: prova gratuita di 7 giorni una volta sola, badge e scadenza', (WidgetTester tester) async {
+    tall(tester);
+    DateTime now = martedi;
+    final FakeBusinessRepository repo = FakeBusinessRepository(me: io)
+      ..clock = (() => now)
+      ..seed(
+        id: io,
+        username: 'anna.r',
+        name: 'Bar Centrale',
+        category: BusinessCategory.bar,
+        address: const BusinessAddress(street: 'Via Roma', civic: '12', city: 'Porano', cap: '05010', province: 'TR'),
+        lat: 42.6851,
+        lng: 12.1029,
+        status: VerificationStatus.verified,
+      );
+    await tester.pumpWidget(app(MyBusinessScreen(repository: repo, now: () => now)));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('9,99 € al mese, i primi 7 giorni gratis'), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const ValueKey<String>('azienda_premium')));
+    await tester.tap(find.byKey(const ValueKey<String>('azienda_premium')));
+    await tester.pumpAndSettle();
+    expect(find.text('9,99 € al mese · i primi 7 giorni sono gratis'), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('premium_pagamento_in_arrivo')), findsOneWidget);
+    expect(tester.widget<OutlinedButton>(find.byKey(const ValueKey<String>('premium_abbonati'))).onPressed, isNull,
+        reason: 'niente pagamenti finti: Google Play arriva con la pubblicazione');
+    await tester.tap(find.byKey(const ValueKey<String>('premium_prova')));
+    await tester.pumpAndSettle();
+    expect(find.text('Prova gratuita attiva'), findsOneWidget);
+    expect(find.textContaining('Fino al 24 nov 2026 (mancano 7 giorni)'), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('premium_prova')), findsNothing);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Prova gratuita attiva fino al 24 nov 2026'), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('badge_verificato')), findsOneWidget);
+
+    // Dopo 8 giorni: scaduto, niente badge, niente seconda prova.
+    now = martedi.add(const Duration(days: 8));
+    expect((await repo.page(io))!.verified, isFalse);
+    await tester.pumpWidget(app(PremiumScreen(repository: repo, me: await repo.mine(), now: () => now)));
+    await tester.pumpAndSettle();
+    expect(find.text('Premium scaduto'), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('premium_prova')), findsNothing);
+    await expectLater(repo.startTrial(), throwsA(isA<BusinessFailure>()));
   });
 }

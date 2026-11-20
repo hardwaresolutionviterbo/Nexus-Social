@@ -16,6 +16,7 @@ import '../places/place_search.dart';
 import '../profile/profile_form_screen.dart' show PickImage, pickFromGallery;
 import '../profile/profile_models.dart' show ProfileRules;
 import 'business_models.dart';
+import 'business_premium.dart';
 import 'business_repository.dart';
 
 /// Documento facoltativo: (byte, è un PDF?). Nei test: finto.
@@ -139,6 +140,15 @@ class _MyBusinessScreenState extends State<MyBusinessScreen> {
       ),
     );
     if (ok ?? false) await _load();
+  }
+
+  Future<void> _openPremium() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => PremiumScreen(repository: widget.repository, me: _me, now: widget.now),
+      ),
+    );
+    await _load();
   }
 
   Future<void> _document() async {
@@ -331,26 +341,60 @@ class _MyBusinessScreenState extends State<MyBusinessScreen> {
                             ],
                           ),
                         ),
-                      SoftCard(
-                        tint: PiazlyColors.violetSoft,
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Icon(Icons.workspace_premium_rounded, color: PiazlyColors.violet),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                'In arrivo: abbonamento Premium (9,99 € al mese, 7 giorni gratis), promozioni '
-                                'sulla Mappa e coupon con QR. Il badge «Verificato» richiederà la verifica e '
-                                'l\'abbonamento attivo.',
-                                style: theme.textTheme.bodySmall,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                      _PremiumCard(me: me, now: widget.now(), onTap: _openPremium),
                     ],
             ),
+    );
+  }
+}
+
+class _PremiumCard extends StatelessWidget {
+  const _PremiumCard({required this.me, required this.now, required this.onTap});
+
+  final MyBusiness me;
+  final DateTime now;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final BusinessSubscription s = me.subscription;
+    final bool active = s.isActive(now);
+    final String text = active
+        ? '${s.isTrial ? 'Prova gratuita attiva' : 'Premium attivo'} fino al ${shortDate(s.periodEnd!)}. '
+              '${me.verifiedBadge ? 'Il badge «Verificato» è visibile.' : 'Il badge arriva con la verifica dei dati.'}'
+        : s.periodEnd == null
+        ? 'Badge «Verificato», promozioni e coupon: ${BusinessSubscription.price} al mese, i primi 7 giorni gratis.'
+        : 'Premium scaduto il ${shortDate(s.periodEnd!)}: badge e promozioni non si vedono più.';
+    return SoftCard(
+      key: const ValueKey<String>('azienda_premium'),
+      tint: PiazlyColors.violetSoft,
+      child: InkWell(
+        onTap: onTap,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.workspace_premium_rounded, color: PiazlyColors.violet),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text('Piazly Premium', style: theme.textTheme.titleMedium),
+                      if (me.verifiedBadge) ...[const SizedBox(width: 8), const VerifiedBadge(small: true)],
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(text, style: theme.textTheme.bodySmall),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -373,7 +417,9 @@ class _StatusCard extends StatelessWidget {
       VerificationStatus.verified => (
         PiazlyColors.green,
         Icons.verified_rounded,
-        'Dati controllati da Piazly. Con l\'abbonamento attivo comparirà il badge «Verificato».',
+        me.verifiedBadge
+            ? 'Dati controllati da Piazly. Il badge «Verificato» è visibile.'
+            : 'Dati controllati da Piazly. Il badge «Verificato» compare con Premium attivo.',
       ),
       VerificationStatus.rejected => (
         const Color(0xFFE53935),
@@ -1425,6 +1471,20 @@ class _BusinessReviewScreenState extends State<BusinessReviewScreen> {
     }
   }
 
+  Future<void> _subscription(BusinessReviewItem it, {required bool extend}) async {
+    try {
+      if (extend) {
+        await widget.repository.adminExtendSubscription(it.id);
+      } else {
+        await widget.repository.adminStopSubscription(it.id);
+      }
+      await _load();
+      if (mounted) _toast(context, extend ? 'Premium prolungato di 1 mese.' : 'Premium fermato.');
+    } on BusinessFailure catch (f) {
+      if (mounted) _toast(context, f.message);
+    }
+  }
+
   Future<void> _document(BusinessReviewItem it) async {
     final String? path = it.documentPath;
     if (path == null) return;
@@ -1473,6 +1533,14 @@ class _BusinessReviewScreenState extends State<BusinessReviewScreen> {
                           ),
                           Text('@${it.username} · P.IVA ${it.vatNumber}'),
                           if (it.displayName.isNotEmpty) Text('${it.displayName} · ${it.city} (${it.province})'),
+                          Text(
+                            it.subscriptionEnd != null && it.subscriptionEnd!.isAfter(DateTime.now())
+                                ? 'Premium fino al ${shortDate(it.subscriptionEnd!)}'
+                                      '${it.subscriptionSource == 'trial' ? ' (prova)' : ''}'
+                                : 'Premium non attivo',
+                            key: ValueKey<String>('verifica_premium_${it.username}'),
+                            style: theme.textTheme.bodySmall,
+                          ),
                           const SizedBox(height: 8),
                           Wrap(
                             spacing: 8,
@@ -1489,6 +1557,17 @@ class _BusinessReviewScreenState extends State<BusinessReviewScreen> {
                                   key: ValueKey<String>('verifica_rifiuta_${it.username}'),
                                   onPressed: () => _decide(it, false),
                                   child: const Text('Rifiuta'),
+                                ),
+                              TextButton(
+                                key: ValueKey<String>('verifica_estendi_${it.username}'),
+                                onPressed: () => _subscription(it, extend: true),
+                                child: const Text('+1 mese Premium'),
+                              ),
+                              if (it.subscriptionEnd != null && it.subscriptionEnd!.isAfter(DateTime.now()))
+                                TextButton(
+                                  key: ValueKey<String>('verifica_ferma_${it.username}'),
+                                  onPressed: () => _subscription(it, extend: false),
+                                  child: const Text('Ferma Premium'),
                                 ),
                               if (it.documentPath != null)
                                 TextButton.icon(

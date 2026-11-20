@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:nexus_social/core/theme/app_theme.dart';
 import 'package:nexus_social/features/business/business_models.dart';
+import 'package:nexus_social/features/business/business_premium.dart';
 import 'package:nexus_social/features/business/business_screens.dart';
 import 'package:nexus_social/features/market/comuni_italia.dart';
 
@@ -104,6 +105,7 @@ FakeBusinessRepository seeded({VerificationStatus status = VerificationStatus.ve
     lat: 42.6851,
     lng: 12.1029,
     status: status,
+    premiumUntil: status == VerificationStatus.verified ? DateTime(2026, 12, 17) : null,
     hours: orari,
     phone: '0763 000000',
     bookingUrl: 'https://esempio.it/prenota',
@@ -166,5 +168,15 @@ void main() {
 
   testWidgets('aziende 5 · verifica degli amministratori', (tester) async {
     await shoot(tester, 'aziende_5_verifica', BusinessReviewScreen(repository: seeded(status: VerificationStatus.pending)));
+  });
+
+  testWidgets('aziende 6 · pagina Premium con la prova gratuita', (tester) async {
+    final FakeBusinessRepository repo = seeded(status: VerificationStatus.pending)..clock = (() => now);
+    await shoot(tester, 'aziende_6_premium', PremiumScreen(repository: repo, me: await repo.mine(), now: () => now));
+  });
+
+  testWidgets('aziende 7 · la mia attività con Premium e badge', (tester) async {
+    final FakeBusinessRepository repo = seeded()..clock = (() => now);
+    await shoot(tester, 'aziende_7_premium_attivo', MyBusinessScreen(repository: repo, now: () => now));
   });
 }

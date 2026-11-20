@@ -26,6 +26,14 @@ abstract class BusinessRepository {
 
   Future<Uint8List?> photo(String path);
 
+  /// Prova gratuita di 7 giorni (una sola volta per azienda e per partita IVA).
+  Future<BusinessSubscription> startTrial();
+
+  /// Solo amministratori: attiva o prolunga di [months] mesi, oppure ferma subito.
+  Future<void> adminExtendSubscription(String id, {int months = 1});
+
+  Future<void> adminStopSubscription(String id);
+
   /// Solo amministratori.
   Future<List<BusinessReviewItem>> reviewQueue();
 
@@ -220,6 +228,20 @@ class SupabaseBusinessRepository implements BusinessRepository {
     } catch (_) {
       return null;
     }
+  }
+
+  @override
+  Future<BusinessSubscription> startTrial() async =>
+      BusinessSubscription.fromJson(await _rpc('subscription_start_trial'));
+
+  @override
+  Future<void> adminExtendSubscription(String id, {int months = 1}) async {
+    await _rpc('subscription_admin_extend', <String, Object?>{'p_id': id, 'p_months': months.clamp(1, 12)});
+  }
+
+  @override
+  Future<void> adminStopSubscription(String id) async {
+    await _rpc('subscription_admin_stop', <String, Object?>{'p_id': id});
   }
 
   @override

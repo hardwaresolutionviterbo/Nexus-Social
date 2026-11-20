@@ -13,8 +13,22 @@ class FakeBusinessRepository implements BusinessRepository {
   final Map<String, BusinessPage> pages = <String, BusinessPage>{};
   final Map<String, String> usernames = <String, String>{};
   final Map<String, Uint8List> files = <String, Uint8List>{};
+  final Map<String, BusinessSubscription> subscriptions = <String, BusinessSubscription>{};
+  final Set<String> trialVats = <String>{};
+  DateTime Function() clock = DateTime.now;
   int _n = 0;
   double? askedLat;
+
+  bool _active(String id) => subscriptions[id]?.isActive(clock()) ?? false;
+
+  /// Badge: approvata e con Premium attivo.
+  bool badge(String id) => registered[id]?.status == VerificationStatus.verified && _active(id);
+
+  BusinessSubscription _sub(String id) {
+    final BusinessSubscription s = subscriptions[id] ?? const BusinessSubscription();
+    final bool used = trialVats.contains(registered[id]?.vatNumber);
+    return BusinessSubscription(periodEnd: s.periodEnd, source: s.source, trialUsed: used || s.trialUsed);
+  }
 
   @override
   Future<MyBusiness?> mine() async {
@@ -27,7 +41,41 @@ class FakeBusinessRepository implements BusinessRepository {
       reviewNote: b.reviewNote,
       hasDocument: b.hasDocument,
       page: pages[me],
+      verifiedBadge: badge(me),
+      subscription: _sub(me),
     );
+  }
+
+  @override
+  Future<BusinessSubscription> startTrial() async {
+    final MyBusiness? b = registered[me];
+    if (b == null) throw const BusinessFailure('Registra prima l\'azienda.');
+    if (_sub(me).trialUsed) throw const BusinessFailure('La prova gratuita è già stata usata.');
+    if (_active(me)) throw const BusinessFailure('L\'abbonamento è già attivo.');
+    trialVats.add(b.vatNumber);
+    subscriptions[me] = BusinessSubscription(
+      periodEnd: clock().add(const Duration(days: 7)),
+      source: 'trial',
+      trialUsed: true,
+    );
+    return _sub(me);
+  }
+
+  @override
+  Future<void> adminExtendSubscription(String id, {int months = 1}) async {
+    final DateTime now = clock();
+    final DateTime? end = subscriptions[id]?.periodEnd;
+    final DateTime from = end != null && end.isAfter(now) ? end : now;
+    subscriptions[id] = BusinessSubscription(
+      periodEnd: DateTime(from.year, from.month + months, from.day, from.hour, from.minute),
+      source: 'admin',
+    );
+  }
+
+  @override
+  Future<void> adminStopSubscription(String id) async {
+    final BusinessSubscription? s = subscriptions[id];
+    if (s != null) subscriptions[id] = BusinessSubscription(periodEnd: clock(), source: s.source);
   }
 
   @override
@@ -105,7 +153,7 @@ class FakeBusinessRepository implements BusinessRepository {
       hours: p.hours,
       photos: p.photos,
       published: p.published,
-      verified: registered[id]?.status == VerificationStatus.verified,
+      verified: badge(id),
       username: usernames[id] ?? '',
       mine: id == me,
     );
@@ -123,7 +171,7 @@ class FakeBusinessRepository implements BusinessRepository {
             category: p.category,
             lat: p.lat,
             lng: p.lng,
-            verified: registered[p.id]?.status == VerificationStatus.verified,
+            verified: badge(p.id),
           ),
     ];
   }
@@ -143,6 +191,8 @@ class FakeBusinessRepository implements BusinessRepository {
         displayName: pages[e.key]?.displayName ?? '',
         city: pages[e.key]?.address.city ?? '',
         province: pages[e.key]?.address.province ?? '',
+        subscriptionEnd: subscriptions[e.key]?.periodEnd,
+        subscriptionSource: subscriptions[e.key]?.source ?? '',
       ),
   ];
 
@@ -171,6 +221,7 @@ class FakeBusinessRepository implements BusinessRepository {
     required double lat,
     required double lng,
     VerificationStatus status = VerificationStatus.pending,
+    DateTime? premiumUntil,
     BusinessHours hours = const BusinessHours(),
     String description = '',
     String phone = '',
@@ -178,6 +229,7 @@ class FakeBusinessRepository implements BusinessRepository {
   }) {
     usernames[id] = username;
     registered[id] = MyBusiness(businessName: '$name S.r.l.', vatNumber: '12345678903', status: status);
+    if (premiumUntil != null) subscriptions[id] = BusinessSubscription(periodEnd: premiumUntil, source: 'admin');
     pages[id] = BusinessPage(
       id: id,
       displayName: name,

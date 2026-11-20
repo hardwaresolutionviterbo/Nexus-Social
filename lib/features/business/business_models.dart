@@ -267,6 +267,54 @@ class BusinessPin {
   String get initial => displayName.trim().isEmpty ? '?' : displayName.trim().characters.first.toUpperCase();
 }
 
+/// Abbonamento Premium (privato): prova di 7 giorni, attivato dall'admin o, più avanti, Google Play.
+class BusinessSubscription {
+  const BusinessSubscription({
+    this.periodEnd,
+    this.source = '',
+    this.autoRenew = false,
+    this.trialUsed = false,
+  });
+
+  /// Prezzo mostrato nell'app (piano, Fase 6).
+  static const String price = '9,99 €';
+  static const int trialDays = 7;
+
+  final DateTime? periodEnd;
+
+  /// 'trial', 'admin', 'google_play', 'app_store' (vuoto: mai attivato).
+  final String source;
+  final bool autoRenew;
+  final bool trialUsed;
+
+  bool isActive(DateTime now) => periodEnd != null && periodEnd!.isAfter(now);
+
+  bool get isTrial => source == 'trial';
+
+  /// Giorni rimasti (arrotondati per eccesso), 0 se scaduto.
+  int daysLeft(DateTime now) {
+    final DateTime? end = periodEnd;
+    if (end == null || !end.isAfter(now)) return 0;
+    return (end.difference(now).inMinutes / 1440).ceil();
+  }
+
+  static BusinessSubscription fromJson(Object? j) {
+    if (j is! Map) return const BusinessSubscription();
+    return BusinessSubscription(
+      periodEnd: DateTime.tryParse('${j['period_end'] ?? ''}')?.toLocal(),
+      source: j['source'] is String ? j['source'] as String : '',
+      autoRenew: j['auto_renew'] == true,
+      trialUsed: j['trial_used'] == true,
+    );
+  }
+}
+
+/// «20 nov 2026».
+String shortDate(DateTime d) {
+  const List<String> m = <String>['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'];
+  return '${d.day} ${m[d.month - 1]} ${d.year}';
+}
+
 /// I miei dati Azienda (privati: ragione sociale e partita IVA) e la mia pagina.
 class MyBusiness {
   const MyBusiness({
@@ -276,8 +324,13 @@ class MyBusiness {
     this.reviewNote = '',
     this.hasDocument = false,
     this.page,
+    this.verifiedBadge = false,
+    this.subscription = const BusinessSubscription(),
   });
 
+  /// Badge «Verificato»: approvata dall'admin e con l'abbonamento attivo.
+  final bool verifiedBadge;
+  final BusinessSubscription subscription;
   final String businessName;
   final String vatNumber;
   final VerificationStatus status;
@@ -292,6 +345,8 @@ class MyBusiness {
     reviewNote: '${j['review_note'] ?? ''}',
     hasDocument: j['has_document'] == true,
     page: j['page'] is Map<String, dynamic> ? BusinessPage.fromJson(j['page'] as Map<String, dynamic>) : null,
+    verifiedBadge: j['verified_badge'] == true,
+    subscription: BusinessSubscription.fromJson(j['subscription']),
   );
 }
 
@@ -339,7 +394,12 @@ class BusinessReviewItem {
     this.city = '',
     this.province = '',
     this.documentPath,
+    this.subscriptionEnd,
+    this.subscriptionSource = '',
   });
+
+  final DateTime? subscriptionEnd;
+  final String subscriptionSource;
 
   final String id;
   final String username;
@@ -361,5 +421,7 @@ class BusinessReviewItem {
     city: '${j['city'] ?? ''}',
     province: '${j['province'] ?? ''}',
     documentPath: j['document_path'] as String?,
+    subscriptionEnd: DateTime.tryParse('${j['subscription_end'] ?? ''}')?.toLocal(),
+    subscriptionSource: j['subscription_source'] is String ? j['subscription_source'] as String : '',
   );
 }

@@ -3016,6 +3016,7 @@ def check_business_phase6() -> None:
         "on conflict (user_id) do nothing;")
     s_queue, queue = rpc("business_review_queue", {}, tb)
     approve = rpc("business_review", {"p_id": UID_D, "p_approve": True, "p_note": "ok"}, tb)[0]
+    rpc("subscription_admin_extend", {"p_id": UID_D, "p_months": 1}, tb)  # badge: anche abbonamento (0035)
     verified = rpc("business_page_get", {"p_id": UID_D}, ta)[1]
     sql(f"delete from public.admin_users where user_id = '{UID_B}';")
     changed = rpc("business_register", {"p_business_name": "Bottega Verdi Srl", "p_vat_number": "12345678903"}, td)[0]
@@ -3034,6 +3035,60 @@ def check_business_phase6() -> None:
         f"update public.profiles set account_type = 'private' where id = '{UID_A}';")
     check("BZ5", "Un Privato maggiorenne può registrare l'attività e diventa Azienda",
           convert in (200, 204) and kind == "business", f"{convert}, {kind}")
+
+
+def check_subscriptions_phase6() -> None:
+    """AB · Abbonamento (Fase 6, Blocco 2): prova di 7 giorni, admin, badge solo se attivo."""
+    ta, tb, td = token(UID_A), token(UID_B), token(UID_D)
+    sql(f"delete from public.business_subscriptions where id = '{UID_D}'; "
+        f"delete from private.business_trials where used_by = '{UID_D}';")
+    sql(f"insert into public.admin_users (user_id, role) values ('{UID_B}', 'moderator') "
+        "on conflict (user_id) do nothing;")
+    rpc("business_review", {"p_id": UID_D, "p_approve": True}, tb)
+    before = rpc("business_page_get", {"p_id": UID_D}, ta)[1]
+    s_trial, trial = rpc("subscription_start_trial", {}, td)
+    after = rpc("business_page_get", {"p_id": UID_D}, ta)[1]
+    near = rpc("businesses_nearby", {"p_lat": 42.69, "p_lng": 12.10, "p_radius_km": 5}, ta)[1]
+    again = rpc("subscription_start_trial", {}, td)[0]
+    private_user = rpc("subscription_start_trial", {}, ta)[0]
+    check("AB1", "Approvata senza abbonamento: niente badge; prova di 7 giorni una sola volta",
+          isinstance(before, dict) and before.get("verified") is False and s_trial == 200
+          and isinstance(trial, dict) and trial.get("active") is True and trial.get("trial_used") is True
+          and isinstance(after, dict) and after.get("verified") is True
+          and any(r.get("id") == UID_D and r.get("verified") is True for r in near)
+          and again >= 400 and private_user >= 400,
+          f"{before}, {s_trial} {trial}, {after}, {again}, {private_user}")
+
+    others = rows(get(f"/rest/v1/business_subscriptions?select=*&id=eq.{UID_D}", ta))
+    mine = rows(get(f"/rest/v1/business_subscriptions?select=*&id=eq.{UID_D}", td))
+    forge = request("PATCH", f"/rest/v1/business_subscriptions?id=eq.{UID_D}", jwt=td,
+                    body={"current_period_end": "2099-01-01T00:00:00Z"})[0]
+    user_extend = rpc("subscription_admin_extend", {"p_id": UID_D, "p_months": 12}, td)[0]
+    end_now = sql(f"select current_period_end < now() + interval '8 days' from public.business_subscriptions "
+                  f"where id = '{UID_D}';")
+    check("AB2", "Abbonamento privato; l'azienda non può allungarselo da sola",
+          others == [] and len(mine) == 1 and forge >= 400 and user_extend >= 400 and end_now == "t",
+          f"{len(others)}, {len(mine)}, {forge}, {user_extend}, {end_now}")
+
+    sql(f"update public.business_subscriptions set current_period_end = now() - interval '1 second' "
+        f"where id = '{UID_D}';")
+    expired = rpc("business_page_get", {"p_id": UID_D}, ta)[1]
+    expired_mine = rpc("subscription_mine", {}, td)[1]
+    retry = rpc("subscription_start_trial", {}, td)[0]
+    extend = rpc("subscription_admin_extend", {"p_id": UID_D, "p_months": 1}, tb)[0]
+    extended = rpc("business_page_get", {"p_id": UID_D}, ta)[1]
+    stop = rpc("subscription_admin_stop", {"p_id": UID_D}, tb)[0]
+    stopped = rpc("business_page_get", {"p_id": UID_D}, ta)[1]
+    queue = rpc("business_review_queue", {}, tb)[1]
+    sql(f"delete from public.admin_users where user_id = '{UID_B}';")
+    check("AB3", "Alla scadenza il badge sparisce; l'admin può riattivare e fermare",
+          isinstance(expired, dict) and expired.get("verified") is False
+          and isinstance(expired_mine, dict) and expired_mine.get("active") is False and retry >= 400
+          and extend in (200, 204) and isinstance(extended, dict) and extended.get("verified") is True
+          and stop in (200, 204) and isinstance(stopped, dict) and stopped.get("verified") is False
+          and isinstance(queue, list) and any(r.get("id") == UID_D and r.get("subscription_source") == "admin"
+                                              for r in queue),
+          f"{expired}, {expired_mine}, {retry}, {extend}, {extended}, {stop}, {stopped}")
 
 
 def check_push_phase4() -> None:
@@ -3186,6 +3241,7 @@ def main() -> int:
     check_live_location_phase4()
     check_ai_limits_phase4()
     check_business_phase6()
+    check_subscriptions_phase6()
     failed = [r for r in results if not r[2]]
     print(f"{'Caso':6} {'Esito':9} Descrizione")
     for case, desc, ok, detail in results:
