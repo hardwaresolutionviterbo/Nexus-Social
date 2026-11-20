@@ -933,9 +933,10 @@ class _CouponRedeemScreenState extends State<CouponRedeemScreen> {
     super.dispose();
   }
 
-  Future<void> _check(String raw) async {
+  /// [fromCamera]: la fotocamera legge lo stesso QR molte volte al secondo: si controlla una volta.
+  Future<void> _check(String raw, {bool fromCamera = false}) async {
     final String code = PromotionRules.normalizeCode(raw);
-    if (_busy || (code == _last && _ok != null)) return;
+    if (_busy || (fromCamera && code == _last)) return;
     if (code.length != 8) {
       setState(() => _error = 'Il codice ha 8 caratteri.');
       return;
@@ -971,7 +972,7 @@ class _CouponRedeemScreenState extends State<CouponRedeemScreen> {
               borderRadius: BorderRadius.circular(20),
               child: SizedBox(
                 height: 300,
-                child: (widget.scanner ?? _realScanner)(context, (String v) => unawaited(_check(v))),
+                child: (widget.scanner ?? _realScanner)(context, (String v) => unawaited(_check(v, fromCamera: true))),
               ),
             )
           else

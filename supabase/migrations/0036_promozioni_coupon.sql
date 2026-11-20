@@ -104,9 +104,9 @@ revoke all on function private.promotion_json(public.promotions, text) from publ
 create or replace function public.promotion_create(
   p_kind text,
   p_title text,
-  p_description text,
   p_starts_at timestamptz,
   p_ends_at timestamptz,
+  p_description text default null,
   p_lat double precision default null,
   p_lng double precision default null,
   p_place_label text default null,
@@ -360,7 +360,7 @@ begin
 end;
 $$;
 
-revoke all on function public.promotion_create(text, text, text, timestamptz, timestamptz, double precision,
+revoke all on function public.promotion_create(text, text, timestamptz, timestamptz, text, double precision,
   double precision, text, text, integer) from public, anon;
 revoke all on function public.promotion_cancel(uuid) from public, anon;
 revoke all on function public.promotions_mine() from public, anon;
@@ -369,7 +369,7 @@ revoke all on function public.promotions_of(text) from public, anon;
 revoke all on function public.coupon_claim(uuid) from public, anon;
 revoke all on function public.coupons_mine() from public, anon;
 revoke all on function public.coupon_redeem(text) from public, anon;
-grant execute on function public.promotion_create(text, text, text, timestamptz, timestamptz, double precision,
+grant execute on function public.promotion_create(text, text, timestamptz, timestamptz, text, double precision,
   double precision, text, text, integer) to authenticated;
 grant execute on function public.promotion_cancel(uuid) to authenticated;
 grant execute on function public.promotions_mine() to authenticated;
