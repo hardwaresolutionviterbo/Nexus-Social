@@ -12,6 +12,7 @@ import '../places/place_search.dart';
 import 'business_models.dart';
 import 'business_repository.dart';
 import 'business_screens.dart';
+import 'promo_alerts.dart';
 import 'promotion_models.dart';
 
 const List<String> _giorni = <String>['lun', 'mar', 'mer', 'gio', 'ven', 'sab', 'dom'];
@@ -384,15 +385,19 @@ class PromotionsListScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Promozioni ed eventi')),
       body: rows.isEmpty
-          ? const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Text('Nessuna promozione qui intorno, per ora.', textAlign: TextAlign.center),
-              ),
+          ? const Column(
+              children: [
+                PromoAlertsTile(),
+                Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text('Nessuna promozione qui intorno, per ora.', textAlign: TextAlign.center),
+                ),
+              ],
             )
           : ListView(
               padding: const EdgeInsets.only(bottom: 24),
               children: [
+                const PromoAlertsTile(),
                 for (final (Promotion, double?) r in rows)
                   PromotionTile(
                     promotion: r.$1,
@@ -449,18 +454,22 @@ class _MyCouponsScreenState extends State<MyCouponsScreen> {
       body: items == null
           ? Center(child: _error != null ? Text(_error!) : const CircularProgressIndicator())
           : items.isEmpty
-          ? const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Text(
-                  'Non hai coupon. Li trovi nelle promozioni sulla Mappa (pulsante con l\'etichetta).',
-                  textAlign: TextAlign.center,
+          ? const Column(
+              children: [
+                PromoAlertsTile(),
+                Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text(
+                    'Non hai coupon. Li trovi nelle promozioni sulla Mappa (pulsante con l\'etichetta).',
+                    textAlign: TextAlign.center,
+                  ),
                 ),
-              ),
+              ],
             )
           : ListView(
               padding: const EdgeInsets.only(bottom: 24),
               children: [
+                const PromoAlertsTile(),
                 for (final Promotion p in items)
                   PromotionTile(
                     promotion: p,

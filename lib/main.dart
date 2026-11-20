@@ -14,9 +14,11 @@ import 'core/services/auth_gateway.dart';
 import 'core/services/backend_bootstrap.dart';
 import 'core/services/firebase_services.dart';
 import 'core/services/push_device_registry.dart';
+import 'core/services/push_notifications.dart';
 import 'core/services/supabase_push_backend.dart';
 import 'features/ai/ai_service.dart';
 import 'features/business/business_repository.dart';
+import 'features/business/promo_alerts.dart';
 import 'features/calls/call_log.dart';
 import 'features/calls/call_service.dart';
 import 'features/calls/webrtc_call_media.dart';
@@ -81,6 +83,10 @@ Future<void> main() async {
       Supabase.instance.client,
       uid: () => FirebaseAuth.instance.currentUser?.uid ?? '',
     );
+    // Avvisi delle promozioni vicine (Fase 6, Blocco 4): solo se accesi, con l'app aperta.
+    final PromoAlerts alerts = PromoAlerts(notify: PushNotifications.showPromotion, store: FilePromoAlertStore());
+    PromoAlertsRegistry.current = alerts;
+    PromoAlertsWatcher(alerts, BusinessRegistry.current!).start();
     // Piazly AI (Blocco 18): chat e Immagini IA con Cloudflare Workers AI, tramite la funzione `ia`.
     AiRegistry.current = AiService(
       server: SupabaseAiServer(Supabase.instance.client),
@@ -104,7 +110,10 @@ Future<void> main() async {
       isAdmin: profilesReady
           ? () async {
               try {
-                return await Supabase.instance.client.rpc('is_admin') == true;
+                final bool admin = await Supabase.instance.client.rpc('is_admin') == true;
+                // Le recensioni si possono togliere dalla scheda solo dagli amministratori.
+                BusinessRegistry.isAdmin = admin;
+                return admin;
               } catch (_) {
                 return false;
               }

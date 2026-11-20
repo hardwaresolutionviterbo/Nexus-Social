@@ -425,3 +425,72 @@ class BusinessReviewItem {
     subscriptionSource: j['subscription_source'] is String ? j['subscription_source'] as String : '',
   );
 }
+
+/// Recensione verificata (Fase 6, Blocco 4): la scrive solo chi ha usato un coupon in cassa.
+class BusinessReview {
+  const BusinessReview({
+    required this.id,
+    required this.author,
+    required this.rating,
+    required this.createdAt,
+    this.body = '',
+    this.reply = '',
+    this.mine = false,
+  });
+
+  final String id;
+
+  /// Nome pubblico dell'autore.
+  final String author;
+  final int rating;
+  final String body;
+  final String reply;
+  final DateTime createdAt;
+  final bool mine;
+
+  static BusinessReview fromJson(Map<String, dynamic> j) => BusinessReview(
+    id: '${j['id']}',
+    author: '${j['author'] ?? ''}',
+    rating: (j['rating'] as num?)?.toInt() ?? 0,
+    body: j['body'] is String ? j['body'] as String : '',
+    reply: j['reply'] is String ? j['reply'] as String : '',
+    createdAt: DateTime.tryParse('${j['created_at']}')?.toLocal() ?? DateTime(2000),
+    mine: j['mine'] == true,
+  );
+}
+
+class BusinessReviews {
+  const BusinessReviews({
+    this.average,
+    this.count = 0,
+    this.canReview = false,
+    this.ownerView = false,
+    this.items = const <BusinessReview>[],
+  });
+
+  final double? average;
+  final int count;
+
+  /// Posso scriverne una (cliente verificato, non titolare).
+  final bool canReview;
+
+  /// Sto guardando le recensioni della mia attività (posso rispondere).
+  final bool ownerView;
+  final List<BusinessReview> items;
+
+  BusinessReview? get mine => items.where((BusinessReview r) => r.mine).firstOrNull;
+
+  static BusinessReviews fromJson(Object? j) {
+    if (j is! Map) return const BusinessReviews();
+    return BusinessReviews(
+      average: (j['average'] as num?)?.toDouble(),
+      count: (j['count'] as num?)?.toInt() ?? 0,
+      canReview: j['can_review'] == true,
+      ownerView: j['mine_owner'] == true,
+      items: <BusinessReview>[
+        for (final Object? x in (j['items'] as List<dynamic>? ?? const <dynamic>[]))
+          if (x is Map<String, dynamic>) BusinessReview.fromJson(x),
+      ],
+    );
+  }
+}

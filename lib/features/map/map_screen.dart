@@ -7,6 +7,7 @@ import '../business/business_models.dart';
 import '../business/business_repository.dart';
 import '../business/business_promotions.dart';
 import '../business/business_screens.dart';
+import '../business/promo_alerts.dart';
 import '../business/promotion_models.dart';
 import '../profile/profile_form_screen.dart' show PickImage, pickFromGallery;
 import '../privacy/privacy_repository.dart';
@@ -355,6 +356,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       if (!mounted) return;
       setState(() => _promos = promos);
       await _handle?.showPromotions(promos, _openPromotion);
+      // Avvisi delle promozioni vicine (solo se accesi da chi usa l'app).
+      unawaited(PromoAlertsRegistry.current?.consider(promos, origin.latitude, origin.longitude));
     } on BusinessFailure {
       // Si riprova al prossimo spostamento.
     }

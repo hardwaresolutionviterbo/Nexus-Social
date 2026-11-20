@@ -192,6 +192,72 @@ class FakeBusinessRepository implements BusinessRepository {
     );
   }
 
+  // ---- Recensioni: (attività, autore) → (stelle, testo, risposta, nome pubblico)
+  final Map<(String, String), (int, String, String, String)> reviewsByKey =
+      <(String, String), (int, String, String, String)>{};
+  final Map<String, String> publicNames = <String, String>{};
+
+  bool _verifiedCustomer(String business, String user) => coupons.values.any(
+    ((String, String, bool) c) => c.$2 == user && c.$3 && promoOwner[c.$1] == business,
+  );
+
+  String _reviewId((String, String) k) => 'rev-${k.$1}-${k.$2}';
+
+  @override
+  Future<BusinessReviews> reviews(String businessId) async {
+    final List<MapEntry<(String, String), (int, String, String, String)>> mine = reviewsByKey.entries
+        .where((MapEntry<(String, String), (int, String, String, String)> e) => e.key.$1 == businessId)
+        .toList();
+    final List<BusinessReview> items = <BusinessReview>[
+      for (final MapEntry<(String, String), (int, String, String, String)> e in mine)
+        BusinessReview(
+          id: _reviewId(e.key),
+          author: e.value.$4,
+          rating: e.value.$1,
+          body: e.value.$2,
+          reply: e.value.$3,
+          createdAt: clock(),
+          mine: e.key.$2 == me,
+        ),
+    ];
+    return BusinessReviews(
+      average: items.isEmpty ? null : items.map((BusinessReview r) => r.rating).reduce((int a, int b) => a + b) / items.length,
+      count: items.length,
+      canReview: businessId != me && _verifiedCustomer(businessId, me),
+      ownerView: businessId == me,
+      items: items,
+    );
+  }
+
+  @override
+  Future<void> saveReview(String businessId, {required int rating, String body = ''}) async {
+    if (businessId == me) throw const BusinessFailure('Non puoi recensire la tua attività.');
+    if (!_verifiedCustomer(businessId, me)) {
+      throw const BusinessFailure('Puoi recensire solo dopo aver usato un suo coupon in cassa.');
+    }
+    final (int, String, String, String)? old = reviewsByKey[(businessId, me)];
+    reviewsByKey[(businessId, me)] = (rating, body.trim(), old?.$3 ?? '', publicNames[me] ?? 'Cliente');
+  }
+
+  @override
+  Future<void> deleteMyReview(String businessId) async => reviewsByKey.remove((businessId, me));
+
+  @override
+  Future<void> replyReview(String reviewId, String reply) async {
+    for (final (String, String) k in reviewsByKey.keys.toList()) {
+      if (_reviewId(k) == reviewId && k.$1 == me) {
+        final (int, String, String, String) v = reviewsByKey[k]!;
+        reviewsByKey[k] = (v.$1, v.$2, reply.trim(), v.$4);
+        return;
+      }
+    }
+    throw const BusinessFailure('Recensione non trovata.');
+  }
+
+  @override
+  Future<void> adminDeleteReview(String reviewId) async =>
+      reviewsByKey.removeWhere(((String, String) k, _) => _reviewId(k) == reviewId);
+
   @override
   Future<BusinessSubscription> startTrial() async {
     final MyBusiness? b = registered[me];

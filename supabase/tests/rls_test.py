@@ -3166,6 +3166,59 @@ def check_promotions_phase6() -> None:
           f"{len(canceled) if isinstance(canceled, list) else canceled}, {expired}")
 
 
+def check_reviews_phase6() -> None:
+    """RV · Recensioni verificate (Fase 6, Blocco 4): solo chi ha usato un coupon in cassa."""
+    ta, tb, td = token(UID_A), token(UID_B), token(UID_D)
+    for t, other in ((ta, UID_B), (tb, UID_A), (ta, UID_D), (td, UID_A)):
+        rpc("unblock_user", {"p_user_id": other}, t)
+    sql(f"delete from public.business_reviews where business_id = '{UID_D}';")
+    # Dal caso PR4: A ha usato in cassa un coupon di D; B no.
+    s_a = rpc("review_save", {"p_business_id": UID_D, "p_rating": 5, "p_body": "Ottima colazione"}, ta)[0]
+    s_b = rpc("review_save", {"p_business_id": UID_D, "p_rating": 1, "p_body": "Mai stato qui"}, tb)[0]
+    s_own = rpc("review_save", {"p_business_id": UID_D, "p_rating": 5, "p_body": "Siamo i migliori"}, td)[0]
+    s_bad = rpc("review_save", {"p_business_id": UID_D, "p_rating": 6, "p_body": ""}, ta)[0]
+    direct = request("POST", "/rest/v1/business_reviews", jwt=tb,
+                     body={"business_id": UID_D, "author_id": UID_B, "rating": 1})[0]
+    check("RV1", "Recensione solo da clienti verificati (coupon usato in cassa), non dal titolare",
+          s_a in (200, 204) and s_b >= 400 and s_own >= 400 and s_bad >= 400 and direct >= 400,
+          f"{s_a}, {s_b}, {s_own}, {s_bad}, {direct}")
+
+    seen_b = rpc("reviews_of", {"p_business_id": UID_D}, tb)[1]
+    seen_a = rpc("reviews_of", {"p_business_id": UID_D}, ta)[1]
+    text = json.dumps(seen_b)
+    check("RV2", "Media e numero per tutti; si vede il nome pubblico, mai l'identificativo",
+          isinstance(seen_b, dict) and seen_b.get("count") == 1 and float(seen_b.get("average")) == 5.0
+          and seen_b.get("can_review") is False and UID_A not in text
+          and isinstance(seen_a, dict) and seen_a.get("can_review") is True
+          and seen_a["items"][0].get("mine") is True,
+          f"{seen_b}, {seen_a}")
+
+    review_id = seen_a["items"][0]["id"] if isinstance(seen_a, dict) and seen_a.get("items") else None
+    s_reply = rpc("review_reply", {"p_review_id": review_id, "p_reply": "Grazie, a presto!"}, td)[0]
+    s_fake_reply = rpc("review_reply", {"p_review_id": review_id, "p_reply": "Risposta finta"}, ta)[0]
+    rpc("review_save", {"p_business_id": UID_D, "p_rating": 3, "p_body": "Buona ma lenta"}, ta)
+    after = rpc("reviews_of", {"p_business_id": UID_D}, tb)[1]
+    rpc("block_user", {"p_user_id": UID_A}, tb)
+    blocked = rpc("reviews_of", {"p_business_id": UID_D}, tb)[1]
+    rpc("unblock_user", {"p_user_id": UID_A}, tb)
+    check("RV3", "Risponde solo il titolare; la recensione si corregge; chi blocca non la vede",
+          s_reply in (200, 204) and s_fake_reply >= 400 and isinstance(after, dict)
+          and after.get("count") == 1 and float(after.get("average")) == 3.0
+          and after["items"][0].get("reply") == "Grazie, a presto!"
+          and isinstance(blocked, dict) and blocked.get("count") == 0,
+          f"{s_reply}, {s_fake_reply}, {after}, {blocked}")
+
+    user_delete = rpc("review_admin_delete", {"p_review_id": review_id}, ta)[0]
+    sql(f"insert into public.admin_users (user_id, role) values ('{UID_B}', 'moderator') "
+        "on conflict (user_id) do nothing;")
+    admin_delete = rpc("review_admin_delete", {"p_review_id": review_id}, tb)[0]
+    sql(f"delete from public.admin_users where user_id = '{UID_B}';")
+    gone = rpc("reviews_of", {"p_business_id": UID_D}, ta)[1]
+    check("RV4", "Solo un amministratore toglie le recensioni degli altri",
+          user_delete >= 400 and admin_delete in (200, 204) and isinstance(gone, dict) and gone.get("count") == 0,
+          f"{user_delete}, {admin_delete}, {gone}")
+
+
 def check_push_phase4() -> None:
     """U · Notifiche (Fase 4, Blocco 5): coda server, silenzia, non disturbare, mai i Mi piace."""
     ta, tb = token(UID_A), token(UID_B)
@@ -3318,6 +3371,7 @@ def main() -> int:
     check_business_phase6()
     check_subscriptions_phase6()
     check_promotions_phase6()
+    check_reviews_phase6()
     failed = [r for r in results if not r[2]]
     print(f"{'Caso':6} {'Esito':9} Descrizione")
     for case, desc, ok, detail in results:

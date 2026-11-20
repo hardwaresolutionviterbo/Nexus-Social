@@ -19,6 +19,7 @@ import 'business_models.dart';
 import 'business_premium.dart';
 import 'business_promotions.dart';
 import 'business_repository.dart';
+import 'business_reviews.dart';
 import 'promotion_models.dart';
 
 /// Documento facoltativo: (byte, è un PDF?). Nei test: finto.
@@ -1436,21 +1437,10 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
               ],
             ),
           ),
-          SoftCard(
-            tint: PiazlyColors.violetSoft,
-            child: Row(
-              children: [
-                const Icon(Icons.reviews_outlined, color: PiazlyColors.violet),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Recensioni verificate: in arrivo. Potrà scriverle solo chi è stato davvero cliente '
-                    '(per esempio usando un coupon).',
-                    style: theme.textTheme.bodySmall,
-                  ),
-                ),
-              ],
-            ),
+          BusinessReviewsSection(
+            repository: widget.repository,
+            businessId: p.id,
+            isAdmin: BusinessRegistry.isAdmin,
           ),
         ],
       ),

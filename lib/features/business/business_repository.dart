@@ -49,6 +49,18 @@ abstract class BusinessRepository {
   /// Il titolare convalida un coupon (dal QR o scritto a mano).
   Future<CouponCheck> redeemCoupon(String code);
 
+  // ---- Recensioni verificate (Blocco 4)
+  Future<BusinessReviews> reviews(String businessId);
+
+  Future<void> saveReview(String businessId, {required int rating, String body = ''});
+
+  Future<void> deleteMyReview(String businessId);
+
+  Future<void> replyReview(String reviewId, String reply);
+
+  /// Solo amministratori.
+  Future<void> adminDeleteReview(String reviewId);
+
   /// Prova gratuita di 7 giorni (una sola volta per azienda e per partita IVA).
   Future<BusinessSubscription> startTrial();
 
@@ -68,6 +80,9 @@ abstract class BusinessRepository {
 /// Quella dell'app (la imposta main.dart).
 abstract final class BusinessRegistry {
   static BusinessRepository? current;
+
+  /// Chi usa l'app è amministratore (il server lo ricontrolla sempre).
+  static bool isAdmin = false;
 }
 
 /// Foto ridotta a 1600 px, JPEG.
@@ -308,6 +323,30 @@ class SupabaseBusinessRepository implements BusinessRepository {
       couponText: '${j['coupon_text'] ?? ''}',
       redeemed: (j['redeemed'] as num?)?.toInt() ?? 0,
     );
+  }
+
+  @override
+  Future<BusinessReviews> reviews(String businessId) async =>
+      BusinessReviews.fromJson(await _rpc('reviews_of', <String, Object?>{'p_business_id': businessId}));
+
+  @override
+  Future<void> saveReview(String businessId, {required int rating, String body = ''}) async {
+    await _rpc('review_save', <String, Object?>{'p_business_id': businessId, 'p_rating': rating, 'p_body': body.trim()});
+  }
+
+  @override
+  Future<void> deleteMyReview(String businessId) async {
+    await _rpc('review_delete_mine', <String, Object?>{'p_business_id': businessId});
+  }
+
+  @override
+  Future<void> replyReview(String reviewId, String reply) async {
+    await _rpc('review_reply', <String, Object?>{'p_review_id': reviewId, 'p_reply': reply.trim()});
+  }
+
+  @override
+  Future<void> adminDeleteReview(String reviewId) async {
+    await _rpc('review_admin_delete', <String, Object?>{'p_review_id': reviewId});
   }
 
   @override
