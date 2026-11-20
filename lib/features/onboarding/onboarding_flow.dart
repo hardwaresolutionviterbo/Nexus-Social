@@ -859,77 +859,139 @@ class _FeatureTile extends StatelessWidget {
   );
 }
 
-/// Illustrazione della nuova schermata iniziale: una piccola mappa in prospettiva su un'onda
-/// viola, con il segnaposto arancione al centro e due viola.
+/// Hero premium Piazly: cielo viola, skyline italiano stilizzato e tricolore.
 class _WelcomeMapHero extends StatelessWidget {
   const _WelcomeMapHero();
 
   @override
   Widget build(BuildContext context) {
-    Widget pin(Color c, double size) => Icon(Icons.location_on_rounded, color: c, size: size, shadows: const <Shadow>[
-      Shadow(color: Color(0x55000000), blurRadius: 8, offset: Offset(0, 4)),
-    ]);
-    return SizedBox(
-      height: 230,
+    return Container(
+      height: 250,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(30),
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF100B45), Color(0xFF4B168C), Color(0xFFFF7B23)],
+        ),
+        boxShadow: const [
+          BoxShadow(color: Color(0x334F20B8), blurRadius: 22, offset: Offset(0, 10)),
+        ],
+      ),
       child: Stack(
-        alignment: Alignment.center,
         children: [
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(32),
-                gradient: const LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: <Color>[Color(0xFFF6F1FF), Color(0xFFE9DDFE)],
-                ),
-              ),
-            ),
-          ),
-          // La mappa: un quadrato inclinato con strade e isolati.
+          Positioned(top: -50, right: -35, child: Container(
+            width: 190, height: 190,
+            decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: 0.07)),
+          )),
+          Positioned(left: -45, top: 50, child: Container(
+            width: 150, height: 150,
+            decoration: BoxDecoration(shape: BoxShape.circle, color: AppColors.brandOrange.withValues(alpha: 0.12)),
+          )),
+          const Positioned.fill(child: CustomPaint(painter: _PiazlyTownPainter())),
           Positioned(
-            bottom: 18,
-            child: Transform(
-              alignment: Alignment.center,
-              transform: Matrix4.identity()
-                ..setEntry(3, 2, 0.0012)
-                ..rotateX(0.95)
-                ..rotateZ(0.78),
-              child: Container(
-                width: 190,
-                height: 190,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: const Color(0xFFB79CF7), width: 6),
-                  boxShadow: const <BoxShadow>[BoxShadow(color: Color(0x337C3AED), blurRadius: 24, offset: Offset(0, 12))],
+            left: 18, right: 18, top: 14,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 44, height: 44,
+                  decoration: BoxDecoration(
+                    gradient: AppColors.accentGradient(AppColors.brandOrange),
+                    borderRadius: BorderRadius.circular(15),
+                    boxShadow: [BoxShadow(color: AppColors.brandOrange.withValues(alpha: 0.45), blurRadius: 16)],
+                  ),
+                  child: const Center(child: Text('P', style: TextStyle(color: Colors.white, fontSize: 27, fontWeight: FontWeight.w900))),
                 ),
-                child: GridView.count(
-                  crossAxisCount: 4,
-                  padding: const EdgeInsets.all(10),
-                  mainAxisSpacing: 8,
-                  crossAxisSpacing: 8,
-                  physics: const NeverScrollableScrollPhysics(),
-                  children: <Widget>[
-                    for (int i = 0; i < 16; i++)
-                      DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: <int>{1, 6, 11, 12}.contains(i) ? const Color(0xFF6BCB77) : const Color(0xFFEDEFF5),
-                          borderRadius: BorderRadius.circular(5),
-                        ),
-                      ),
-                  ],
-                ),
+                const SizedBox(width: 10),
+                Text.rich(TextSpan(children: [
+                  const TextSpan(text: 'Piaz', style: TextStyle(color: Colors.white, fontSize: 34, fontWeight: FontWeight.w900)),
+                  TextSpan(text: 'ly', style: TextStyle(color: AppColors.brandOrange, fontSize: 34, fontWeight: FontWeight.w900)),
+                ])),
+              ],
+            ),
+          ),
+          Positioned(
+            top: 68, left: 0, right: 0,
+            child: Text('Il tuo mondo, vicino a te.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: Colors.white, fontWeight: FontWeight.w800,
+                shadows: const [Shadow(color: Color(0x77000000), blurRadius: 10)],
               ),
             ),
           ),
-          Positioned(top: 22, child: pin(AppColors.brandOrange, 96)),
-          Positioned(left: 70, top: 58, child: pin(PiazlyColors.violet, 44)),
-          Positioned(right: 70, top: 68, child: pin(PiazlyColors.violet, 40)),
+          Positioned(
+            bottom: 12, left: 0, right: 0,
+            child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+              _HeroPin(icon: Icons.shopping_cart_rounded, color: PiazlyColors.violet),
+              _HeroPin(icon: Icons.people_alt_rounded, color: AppColors.brandOrange),
+              _HeroPin(icon: Icons.chat_bubble_rounded, color: PiazlyColors.violet),
+            ]),
+          ),
         ],
       ),
     );
   }
+}
+
+class _HeroPin extends StatelessWidget {
+  const _HeroPin({required this.icon, required this.color});
+  final IconData icon;
+  final Color color;
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 46, height: 46,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle, color: color,
+      border: Border.all(color: Colors.white, width: 2),
+      boxShadow: [BoxShadow(color: color.withValues(alpha: 0.6), blurRadius: 18)],
+    ),
+    child: Icon(icon, color: Colors.white, size: 22),
+  );
+}
+
+class _PiazlyTownPainter extends CustomPainter {
+  const _PiazlyTownPainter();
+  @override
+  void paint(Canvas canvas, Size size) {
+    final ground = Paint()..shader = const LinearGradient(colors: [Color(0xFF17104B), Color(0xFF27105C)]).createShader(Offset.zero & size);
+    canvas.drawRect(Rect.fromLTWH(0, size.height * .54, size.width, size.height * .46), ground);
+    final glow = Paint()..color = const Color(0xFFFFB24A).withValues(alpha: .55)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 16);
+    canvas.drawCircle(Offset(size.width * .65, size.height * .62), 38, glow);
+    final buildings = Paint()..color = const Color(0xFF30215F);
+    final windows = Paint()..color = const Color(0xFFFFD27A);
+    for (int i = 0; i < 12; i++) {
+      final x = i * size.width / 12;
+      final h = 22.0 + (i % 4) * 13;
+      canvas.drawRect(Rect.fromLTWH(x, size.height * .68 - h, size.width / 12 + 2, h), buildings);
+      for (int j = 0; j < 3; j++) {
+        canvas.drawRect(Rect.fromLTWH(x + 4, size.height * .68 - h + 8 + j * 9, 3, 4), windows);
+      }
+    }
+    final tower = Rect.fromLTWH(size.width * .67, size.height * .40, 17, size.height * .29);
+    canvas.drawRect(tower, buildings);
+    final roof = Path()..moveTo(tower.left - 2, tower.top)..lineTo(tower.center.dx, tower.top - 18)..lineTo(tower.right + 2, tower.top)..close();
+    canvas.drawPath(roof, buildings);
+    final flag = Path()
+      ..moveTo(0, size.height * .77)
+      ..cubicTo(size.width * .22, size.height * .62, size.width * .38, size.height * .85, size.width * .54, size.height * .74)
+      ..cubicTo(size.width * .72, size.height * .63, size.width * .83, size.height * .82, size.width, size.height * .68);
+    canvas.drawPath(flag, Paint()..color = const Color(0xFF009246)..style = PaintingStyle.stroke..strokeWidth = 14);
+    final whiteFlag = Path()
+      ..moveTo(0, size.height * .79)
+      ..cubicTo(size.width * .22, size.height * .66, size.width * .38, size.height * .89, size.width * .54, size.height * .77)
+      ..cubicTo(size.width * .72, size.height * .67, size.width * .83, size.height * .86, size.width, size.height * .71);
+    canvas.drawPath(whiteFlag, Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 7);
+    final redFlag = Path()
+      ..moveTo(0, size.height * .82)
+      ..cubicTo(size.width * .22, size.height * .70, size.width * .38, size.height * .93, size.width * .54, size.height * .80)
+      ..cubicTo(size.width * .72, size.height * .71, size.width * .83, size.height * .90, size.width, size.height * .74);
+    canvas.drawPath(redFlag, Paint()..color = const Color(0xFFCE2B37)..style = PaintingStyle.stroke..strokeWidth = 5);
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _KindButton extends StatelessWidget {
