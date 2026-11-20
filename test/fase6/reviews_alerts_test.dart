@@ -72,6 +72,7 @@ void main() {
     await tester.pumpWidget(app(BusinessProfileScreen(repository: repo, id: bar, now: () => ora)));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.byKey(const ValueKey<String>('recensione_scrivi')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey<String>('recensione_scrivi')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey<String>('recensione_pubblica')));
@@ -94,6 +95,7 @@ void main() {
     expect(find.byKey(const ValueKey<String>('recensione_scrivi')), findsNothing);
     final Finder rispondi = find.textContaining('Rispondi');
     await tester.ensureVisible(rispondi.first);
+    await tester.pumpAndSettle();
     await tester.tap(rispondi.first);
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey<String>('recensione_risposta_testo')), 'Grazie, a presto!');
