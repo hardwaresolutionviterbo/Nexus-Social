@@ -168,7 +168,10 @@ class PromoAlerts extends ChangeNotifier {
       for (final Promotion p in promos)
         if (!p.mine && p.isLive(now) && !seen.contains(p.id))
           (p, _meters(lat, lng, p.lat, p.lng)),
-    ]..sort(((Promotion, double) a, (Promotion, double) b) => a.$2.compareTo(b.$2));
+    ]..sort(((Promotion, double) a, (Promotion, double) b) {
+        final int d = a.$2.compareTo(b.$2);
+        return d != 0 ? d : a.$1.id.compareTo(b.$1.id);
+      });
     for (final (Promotion, double) n in near) {
       if (n.$2 > _state.radiusM || sent >= PromoAlertState.maxPerDay) break;
       final Promotion p = n.$1;
