@@ -1,15 +1,19 @@
 # Piazly (ex Nexus Social)
 
 App **Flutter** per Android e iPhone. Contiene:
-- la **Mappa Sociale** con annunci e richieste vicino a te;
-- la **chat cifrata end-to-end**, con gruppi, foto, vocali e notifiche;
-- le sezioni **Scambia** e **Vendita**, con proposte e feedback;
-- profili **Privato** e **Azienda**, con privacy, blocchi e sicurezza dell'account.
+- la **Mappa Sociale** con annunci e richieste vicino a te, GPS in tempo reale facoltativo;
+- la **chat cifrata end-to-end** come WhatsApp: gruppi, foto, vocali, chiamate e videochiamate,
+  posizione, contatti, sondaggi, eventi, **Stati** di 24 ore e notifiche;
+- **Vendita** (con dentro Scambia e Regalo), con proposte e feedback;
+- profili **Privato** e **Azienda**, con privacy, blocchi e sicurezza dell'account;
+- le **Aziende**: profilo attività con sede fissa sulla Mappa, Premium, promozioni, coupon con QR
+  e recensioni verificate;
+- **Piazly AI**: assistente in chat e immagini create dall'IA.
 
 Si lavora a fasi e a blocchi. Alla fine di ogni blocco c'è un APK da provare sul telefono.
 Niente arriva in `main` né sul database reale senza l'autorizzazione del titolare.
 
-*Aggiornato il 19/11/2026.*
+*Aggiornato il 20/11/2026.*
 
 ## Stato del lavoro
 
@@ -21,7 +25,7 @@ Niente arriva in `main` né sul database reale senza l'autorizzazione del titola
 | 3 | Mappa Sociale 3D, annunci, annunci vicini e filtri, commenti, Mi piace, notifiche nell'app | **Completata, in `main`** | [`docs/fase3/`](docs/fase3/) |
 | 4 | Chat cifrata, allegati, gruppi, notifiche, backup, segnalazioni, chiamate e videochiamate (anche di gruppo), tempo reale | **Completata, in `main`** | [`docs/fase4/`](docs/fase4/) |
 | 5 | Scambia e Vendita: categorie, annunci, ricerca, proposte, feedback | **Completata, in `main`** | [`docs/fase5/`](docs/fase5/) |
-| 6 | Aziende, promozioni, abbonamento 9,99 €/mese | Da iniziare | |
+| 6 | Aziende, Premium (prova gratuita), promozioni, coupon con QR, recensioni verificate | **Completata, in `main`** (manca solo il pagamento con Google Play / App Store) | [`docs/fase6/`](docs/fase6/) |
 | 7 | Gestionale Admin dentro l'app | Da iniziare | |
 | 8 | Traduzione, gamification, ricerca avanzata | Da iniziare | |
 | 9 | Test, sicurezza, GDPR, beta chiusa | Da iniziare | |
@@ -30,6 +34,19 @@ Niente arriva in `main` né sul database reale senza l'autorizzazione del titola
 Il server funziona senza piano a pagamento (niente Blaze su Firebase). Firebase resta per
 l'accesso con SMS e per l'invio delle notifiche. Tutto il resto è su Supabase. Spiegazione in
 [`docs/server/`](docs/server/).
+
+## Fase 6 · Aziende (completata, tranne il pagamento)
+
+| Blocco | Contenuto | Stato | Esito |
+| --- | --- | --- | --- |
+| 1 | Registrazione Azienda (anche da Privato), profilo attività, sede fissa sulla Mappa, verifica dell'amministratore | In `main`, server attivo | [`BLOCCO1_ESITO.md`](docs/fase6/BLOCCO1_ESITO.md) |
+| 2 | Piazly Premium: prova gratuita di 7 giorni, attivazione dall'amministratore, badge «Verificato» legato a Premium | In `main`, server attivo | [`BLOCCO2_ESITO.md`](docs/fase6/BLOCCO2_ESITO.md) |
+| 3 | Promozioni ed eventi (5 al giorno, massimo 7 giorni, eventi fuori sede), mappa delle promozioni, Condividi, coupon con QR e clienti arrivati | In `main`, server attivo | [`BLOCCO3_ESITO.md`](docs/fase6/BLOCCO3_ESITO.md) |
+| 4 | Recensioni verificate (solo con coupon usato in cassa), avvisi delle promozioni vicine (con l'app aperta) | In `main`, server attivo | [`BLOCCO4_ESITO.md`](docs/fase6/BLOCCO4_ESITO.md) |
+
+Il pagamento vero dell'abbonamento (9,99 €/mese con Google Play e App Store) si collegherà quando
+ci sarà l'account Google Play Console: fino ad allora Premium si attiva con la prova gratuita o
+dagli amministratori.
 
 ## Fase 4 · Chat (completata)
 
@@ -45,13 +62,14 @@ l'accesso con SMS e per l'invio delle notifiche. Tutto il resto è su Supabase. 
 | 8 | Chiamate vocali e videochiamate (chat a due) | In `main` | [`BLOCCO8_ESITO.md`](docs/fase4/BLOCCO8_ESITO.md) |
 | 9 | Messaggi e chiamate in tempo reale | In `main` | [`BLOCCO9_ESITO.md`](docs/fase4/BLOCCO9_ESITO.md) |
 | 10 | Chiamata a tutto schermo, testo nelle notifiche, chiamate di gruppo | In `main` | [`BLOCCO10_ESITO.md`](docs/fase4/BLOCCO10_ESITO.md) |
-| 11 | Sezione «Chiamate», nomi come nella rubrica del telefono | Sul ramo `fase4/blocco11`, server attivo, da provare | [`BLOCCO11_ESITO.md`](docs/fase4/BLOCCO11_ESITO.md) |
-| 12 | «Online» e ultimo accesso, con la scelta in Privacy | Sul ramo `fase4/blocco12`, server attivo, da provare | [`BLOCCO12_ESITO.md`](docs/fase4/BLOCCO12_ESITO.md) |
-| 13 | Stati di 24 ore (testo, foto, video), chi li vede, «Visto da» | Sul ramo `fase4/blocco13`, server attivo, da provare | [`BLOCCO13_ESITO.md`](docs/fase4/BLOCCO13_ESITO.md) |
-| 14 | Correzioni del titolare (Profilo, Autorizzazioni, intestazione chat) e GPS in tempo reale | Sul ramo `fase4/blocco14`, server attivo, da provare | [`BLOCCO14_ESITO.md`](docs/fase4/BLOCCO14_ESITO.md) |
-| 15 | Nuova barra in basso: Chat, Stati, Mappa al centro, Vendita (con dentro Scambia), Profilo | Sul ramo `fase4/blocco15`, da provare | — |
-| 16 | Nuova grafica dai mockup del titolare: Chat, Chiamate, Stati, Mappa, Scambia & Vendi, I miei annunci, annuncio, Profilo, pagina iniziale | Sul ramo `fase4/blocco16`, da provare | — |
-| 17 | Numero di telefono nel Profilo, località degli annunci tra tutti i comuni d'Italia, nomi della rubrica anche al limite giornaliero | Sul ramo `fase4/blocco17`, da provare | — |
+| 11 | Sezione «Chiamate», nomi come nella rubrica del telefono | In `main` | [`BLOCCO11_ESITO.md`](docs/fase4/BLOCCO11_ESITO.md) |
+| 12 | «Online» e ultimo accesso, con la scelta in Privacy | In `main` | [`BLOCCO12_ESITO.md`](docs/fase4/BLOCCO12_ESITO.md) |
+| 13 | Stati di 24 ore (testo, foto, video), chi li vede, «Visto da» | In `main` | [`BLOCCO13_ESITO.md`](docs/fase4/BLOCCO13_ESITO.md) |
+| 14 | Correzioni del titolare (Profilo, Autorizzazioni, intestazione chat) e GPS in tempo reale | In `main` | [`BLOCCO14_ESITO.md`](docs/fase4/BLOCCO14_ESITO.md) |
+| 15 | Nuova barra in basso: Chat, Stati, Mappa al centro, Vendita (con dentro Scambia), Profilo | In `main` | — |
+| 16 | Nuova grafica dai mockup del titolare: Chat, Chiamate, Stati, Mappa, Scambia & Vendi, I miei annunci, annuncio, Profilo, pagina iniziale | In `main` | — |
+| 17 | Numero di telefono nel Profilo, località degli annunci tra tutti i comuni d'Italia, nomi della rubrica anche al limite giornaliero, info contatto | In `main` | — |
+| 18 | Graffetta come WhatsApp (posizione, contatto, sondaggio, evento, Immagini IA), «Condividi l'incontro» anche via SMS, luoghi suggeriti mentre si scrive, Piazly AI | In `main`, server attivo | [`BLOCCO18_ESITO.md`](docs/fase4/BLOCCO18_ESITO.md) |
 
 Le scelte tecniche della chat sono in [`docs/fase4/DECISIONI.md`](docs/fase4/DECISIONI.md).
 
@@ -62,21 +80,27 @@ Le scelte tecniche della chat sono in [`docs/fase4/DECISIONI.md`](docs/fase4/DEC
 | Firebase (piano Spark) | Accesso con SMS, invio delle notifiche (FCM) | Gratuito |
 | Supabase | Database, file, funzioni del server, tempo reale | Piano gratuito |
 | Cloudflare Realtime TURN | Ponte per chiamate e videochiamate quando i telefoni non si collegano direttamente | Gratis fino a 1.000 GB al mese, poi 0,05 $/GB |
+| Cloudflare Workers AI | Piazly AI (chat) e Immagini IA | Gratis fino a 10.000 «Neurons» al giorno, poi piano Workers Paid |
 | OpenFreeMap | Mappa | Gratuito |
+| Photon (OpenStreetMap) | Luoghi e indirizzi suggeriti mentre si scrive | Gratuito, da usare con moderazione |
 
 Le chiavi segrete stanno solo nei secret di Supabase, create dal titolare:
 - `FIREBASE_SERVICE_ACCOUNT`;
 - `CLOUDFLARE_TURN_KEY_ID`;
-- `CLOUDFLARE_TURN_API_TOKEN`.
+- `CLOUDFLARE_TURN_API_TOKEN`;
+- `CLOUDFLARE_AI_ACCOUNT_ID` e `CLOUDFLARE_AI_API_TOKEN`.
 
 Nel repository non ce n'è nessuna.
 
 ## Cosa resta da fare
 
 - **Grafica e funzioni mancanti:** le modifiche che il titolare indicherà dopo le prove.
-- **Fase 6:** aziende, promozioni e abbonamento.
-- **Fase 7:** il gestionale. Comprende la lettura delle segnalazioni delle chat, che oggi sono
-  già salvate sul server.
+- **Fase 6, pagamento:** abbonamento con Google Play e App Store, quando ci sarà l'account Google
+  Play Console (25 $ una volta). Avvisi delle promozioni anche con l'app chiusa: richiederebbero il
+  permesso «Consenti sempre» della posizione, da valutare con la pubblicazione.
+- **Fase 7:** il gestionale completo. Comprende la lettura delle segnalazioni delle chat, che oggi
+  sono già salvate sul server. Già presenti per gli amministratori: «Aziende da verificare»,
+  Premium manuale, rimozione delle recensioni, stato dei servizi.
 - **Fasi 8–10:** traduzione, gamification, test finali, GDPR, beta e pubblicazione.
 - **iPhone:** chiamata a tutto schermo (CallKit) e testo nelle notifiche (Notification Service
   Extension), da fare con le build iOS.
@@ -91,8 +115,8 @@ Nel repository non ce n'è nessuna.
 | Modifiche approvate al piano | [`docs/fase1/MODIFICHE_AL_PIANO.md`](docs/fase1/MODIFICHE_AL_PIANO.md) |
 | Piano e risultato di ogni blocco | `docs/faseN/PIANO_OPERATIVO.md` e `docs/faseN/BLOCCOn_ESITO.md` |
 | Bozze legali (privacy, termini, regole), **non ancora verificate da un professionista** | [`docs/fase0/`](docs/fase0/) |
-| Schema del database e regole di sicurezza | [`supabase/migrations/`](supabase/migrations/): `0001`–`0029`, tutte applicate al database reale |
-| Funzioni del server | [`supabase/functions/`](supabase/functions/): `rubrica`, `notifiche` e `chiamate` |
+| Schema del database e regole di sicurezza | [`supabase/migrations/`](supabase/migrations/): `0001`–`0037`, tutte applicate al database reale |
+| Funzioni del server | [`supabase/functions/`](supabase/functions/): `rubrica`, `notifiche`, `chiamate` e `ia`, tutte pubblicate |
 | Test di sicurezza del database | [`supabase/tests/rls_test.py`](supabase/tests/rls_test.py), eseguiti su un database temporaneo (workflow Supabase RLS) |
 | Codice dell'app | [`lib/`](lib/), una cartella per sezione in `lib/features/` |
 | Test dell'app | [`test/`](test/), una cartella per fase |
@@ -107,11 +131,16 @@ lib/
   core/                  configurazione, servizi (Firebase, Supabase, notifiche), tema, componenti
   features/
     onboarding/          accesso con SMS e registrazione
-    shell/               barra in basso: Chat, Mappa, Scambia, Vendita, Profilo
-    chat/                chat cifrata, allegati, gruppi
+    shell/               barra in basso: Chat, Stati, Mappa, Vendita, Profilo
+    chat/                chat cifrata, allegati, gruppi, posizione, sondaggi, eventi
+    calls/               chiamate vocali e videochiamate
+    status/              Stati di 24 ore
+    business/            Aziende: profilo attività, Premium, promozioni, coupon, recensioni
+    ai/                  Piazly AI e Immagini IA
+    places/              luoghi e indirizzi suggeriti mentre si scrive
     notifications/       preferenze delle notifiche
     map/                 Mappa Sociale, annunci, commenti, notifiche nell'app
-    market/              Scambia e Vendita
+    market/              Vendita, Scambia e Regalo, comuni d'Italia
     profile/             profilo e profilo pubblico
     privacy/             privacy e persone bloccate
     security/            PIN e sblocco con impronta
@@ -129,7 +158,7 @@ docs/                    piani, esiti e decisioni di ogni fase
 ## Installare l'app sul telefono (senza PC)
 
 **GitHub Actions (Android).** `.github/workflows/android.yml` si esegue a ogni push su `main` o
-su un ramo di lavoro (`fase1/...`, `fase4/...`), oppure a mano. Esegue analisi, test e build.
+su un ramo di lavoro (`fase1/...` … `fase10/...`), oppure a mano. Esegue analisi, test e build.
 
 1. Apri **Actions → Android APK** e scegli l'esecuzione.
 2. In **Artifacts** scarica il file.
@@ -138,7 +167,7 @@ su un ramo di lavoro (`fase1/...`, `fase4/...`), oppure a mano. Esegue analisi, 
 Ogni APK è identificabile (regola R1):
 - **nome del file:** `nexus-social-<versione>+<build>-<commit>-<ramo>.apk`;
 - **riepilogo dell'esecuzione:** la stessa tabella;
-- **nell'app:** Profilo → Informazioni → Versione.
+- **nell'app (solo amministratori):** in fondo al Profilo, nella scheda dello stato dei servizi.
 
 Il numero di build è `numero esecuzione × 100 + tentativo`, quindi anche una riesecuzione produce
 un APK distinto.
@@ -174,6 +203,10 @@ griglia di circa 550 metri. La ricerca per distanza filtra sulla posizione reale
 distanze arrotondate a fasce di 250 metri, così non si può triangolare una persona. Il raggio è
 regolabile fino a 30 km e parte da 10 km.
 
+Il **GPS in tempo reale** è spento di default, temporaneo (15 minuti, 1 ora, 8 ore), revocabile e
+visibile solo alle persone scelte. La **sede di un'attività** è fissa e non dipende mai dal GPS del
+titolare. Gli **avvisi delle promozioni vicine** usano la posizione solo sul telefono.
+
 ## Scelte tecniche
 
 Le motivazioni iniziali sono in [`docs/ARCHITETTURA.md`](docs/ARCHITETTURA.md). Le scelte
@@ -181,7 +214,8 @@ principali:
 - un solo codice Flutter per Android e iPhone;
 - MapLibre con OpenFreeMap per la mappa 3D, senza chiavi a pagamento;
 - Firebase solo per l'accesso con SMS e per l'invio delle notifiche;
-- Supabase per tutto il resto: profili, annunci, mercato, rubrica e chat.
+- Supabase per tutto il resto: profili, annunci, mercato, rubrica, chat, aziende e promozioni;
+- Cloudflare per il ponte delle chiamate (TURN) e per Piazly AI (Workers AI).
 
 La chat è cifrata sul telefono con MLS (OpenMLS). Il server conserva i messaggi solo cifrati e
 li cancella dopo la consegna. Le decisioni sono in

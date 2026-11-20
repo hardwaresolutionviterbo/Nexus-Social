@@ -6,6 +6,9 @@ import 'package:nexus_social/core/theme/app_theme.dart';
 import 'package:nexus_social/features/business/business_models.dart';
 import 'package:nexus_social/features/business/business_promotions.dart';
 import 'package:nexus_social/features/business/promotion_models.dart';
+import 'package:nexus_social/features/map/latest_listings_screen.dart';
+import 'package:nexus_social/features/map/listing_models.dart';
+import 'package:nexus_social/features/map/listing_sheets.dart';
 import 'package:nexus_social/features/map/map_location.dart';
 import 'package:nexus_social/features/map/map_screen.dart';
 import 'package:nexus_social/features/market/comuni_italia.dart';
@@ -13,6 +16,7 @@ import 'package:nexus_social/features/places/place_search.dart';
 
 import '../support/fake_business.dart';
 import '../support/fake_comuni.dart';
+import '../support/fake_listings.dart';
 import '../support/fake_map.dart';
 
 const String cliente = 'utenteAnna000000000000000001';
@@ -240,5 +244,26 @@ void main() {
     repo.subscriptions.clear();
     expect(await repo.promotionsNearby(42.69, 12.10), isEmpty);
     expect(await repo.promotionsOf(bar), isEmpty);
+  });
+
+  testWidgets('«Ultimi annunci» › Promozioni mostra anche le promozioni delle attività', (WidgetTester tester) async {
+    tall(tester);
+    final FakeBusinessRepository repo = barConPremium();
+    await repo.createPromotion(offerta());
+    repo.me = cliente;
+    await tester.pumpWidget(app(LatestListingsScreen(
+      services: ListingSheetServices(listings: FakeListingRepository()..nearbyItems = <NearbyListing>[]),
+      origin: const GeoPoint(42.69, 12.10),
+      filters: const MapFilters(),
+      now: () => ora,
+      businesses: repo,
+    )));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Promozioni'));
+    await tester.pumpAndSettle();
+    expect(find.text('Colazione -20%'), findsOneWidget);
+    await tester.tap(find.text('Colazione -20%'));
+    await tester.pumpAndSettle();
+    expect(find.byType(PromotionDetailScreen), findsOneWidget);
   });
 }

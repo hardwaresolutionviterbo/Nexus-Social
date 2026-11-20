@@ -120,6 +120,8 @@ void main() {
       'lib/features/chat/chat_screen.dart',
       'lib/features/chat/chat_thread_screen.dart',
       'lib/features/map/comments_screen.dart',
+      // Fase 6: promozioni delle attività in «Ultimi annunci».
+      'lib/features/map/latest_listings_screen.dart',
       'lib/features/map/listing_form_screen.dart',
       'lib/features/map/listing_sheets.dart',
       'lib/features/map/listing_social_panel.dart',
