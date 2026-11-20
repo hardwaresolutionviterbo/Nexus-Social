@@ -41,6 +41,7 @@ PUBLIC_PROFILE_KEYS = {
     "avatar_thumb_path", "bio", "social_links", "rating_avg", "rating_count", "created_at",
 }
 VALID_VAT = "01234567897"  # partita IVA inventata con cifra di controllo corretta
+VALID_VAT_2 = "11111111115"  # un'altra partita IVA inventata valida
 JPEG = bytes.fromhex("ffd8ffe000104a46494600010100000100010000ffd9")  # JPEG minimo
 
 results: list[tuple[str, str, bool, str]] = []
@@ -2962,6 +2963,262 @@ def check_ai_limits_phase4() -> None:
           f"{user_try[0]}, {text}, {image}, {other[0]}")
 
 
+def check_business_phase6() -> None:
+    """BZ · Aziende (Fase 6, Blocco 1): pagina con sede fissa, dati privati, verifica dell'admin."""
+    ta, tb, td = token(UID_A), token(UID_B), token(UID_D)
+    for t, other in ((ta, UID_D), (td, UID_A)):
+        rpc("unblock_user", {"p_user_id": other}, t)
+    page = {
+        "p_display_name": "Bottega Verdi", "p_category": "negozio", "p_description": "Prova",
+        "p_street": "Via Roma", "p_civic": "12", "p_city": "Porano", "p_cap": "05010",
+        "p_province": "tr", "p_lat": 42.6851, "p_lng": 12.1029, "p_phone": "0763 000000",
+        "p_booking_url": "https://esempio.it/prenota",
+        "p_hours": {"1": [[420, 780], [960, 1200]], "5": [[1080, 1560]]},
+        "p_photos": [], "p_published": True,
+    }
+    saved, saved_body = rpc("business_page_save", page, td)
+    private_user = rpc("business_page_save", page, ta)[0]
+    abroad = rpc("business_page_save", {**page, "p_lat": 48.85, "p_lng": 2.35}, td)[0]
+    bad_hours = rpc("business_page_save", {**page, "p_hours": {"1": [[900, 600]]}}, td)[0]
+    bad_photo = rpc("business_page_save", {**page, "p_photos": [f"{UID_A}/foto-abcdefgh12.jpg"]}, td)[0]
+    anon = rpc("business_page_save", page, None)[0]
+    direct = request("POST", "/rest/v1/business_pages", jwt=td,
+                     body={"id": UID_D, "display_name": "x", "category": "bar", "street": "Via",
+                           "civic": "1", "city": "X", "cap": "00100", "province": "RM",
+                           "lat": 42.0, "lng": 12.0})[0]
+    check("BZ1", "Pagina attività solo per le Aziende, sede in Italia, orari e foto controllati",
+          saved in (200, 204) and private_user >= 400 and abroad >= 400 and bad_hours >= 400
+          and bad_photo >= 400 and anon >= 400 and direct >= 400,
+          f"{saved} {saved_body}, {private_user}, {abroad}, {bad_hours}, {bad_photo}, {anon}, {direct}")
+
+    s_get, got = rpc("business_page_get", {"p_id": UID_D}, ta)
+    s_near, near = rpc("businesses_nearby", {"p_lat": 42.69, "p_lng": 12.10, "p_radius_km": 5}, ta)
+    far = rpc("businesses_nearby", {"p_lat": 45.46, "p_lng": 9.19, "p_radius_km": 5}, ta)[1]
+    private_rows = rows(get(f"/rest/v1/business_private?select=*&id=eq.{UID_D}", ta))
+    text = json.dumps(got)
+    check("BZ2", "Insegna e sede pubbliche; ragione sociale e partita IVA restano private",
+          s_get == 200 and isinstance(got, dict) and got.get("province") == "TR"
+          and got.get("verified") is False and "Bottega Verdi Srl" not in text and VALID_VAT not in text
+          and s_near == 200 and [r.get("id") for r in near] == [UID_D] and far == [] and private_rows == [],
+          f"{s_get}, {s_near}, {len(near) if isinstance(near, list) else near}, {far}, {len(private_rows)}")
+
+    rpc("block_user", {"p_user_id": UID_D}, ta)
+    blocked_near = rpc("businesses_nearby", {"p_lat": 42.69, "p_lng": 12.10, "p_radius_km": 5}, ta)[1]
+    blocked_get = rpc("business_page_get", {"p_id": UID_D}, ta)[1]
+    rpc("unblock_user", {"p_user_id": UID_D}, ta)
+    check("BZ3", "Chi ha bloccato (o è bloccato) non vede la pagina né il segnaposto",
+          blocked_near == [] and blocked_get is None, f"{blocked_near}, {blocked_get}")
+
+    dup = rpc("business_register", {"p_business_name": "Copia Srl", "p_vat_number": VALID_VAT}, ta)[0]
+    user_review = rpc("business_review", {"p_id": UID_D, "p_approve": True}, ta)[0]
+    user_queue = rpc("business_review_queue", {}, ta)[0]
+    sql(f"insert into public.admin_users (user_id, role) values ('{UID_B}', 'moderator') "
+        "on conflict (user_id) do nothing;")
+    s_queue, queue = rpc("business_review_queue", {}, tb)
+    approve = rpc("business_review", {"p_id": UID_D, "p_approve": True, "p_note": "ok"}, tb)[0]
+    rpc("subscription_admin_extend", {"p_id": UID_D, "p_months": 1}, tb)  # badge: anche abbonamento (0035)
+    verified = rpc("business_page_get", {"p_id": UID_D}, ta)[1]
+    sql(f"delete from public.admin_users where user_id = '{UID_B}';")
+    changed = rpc("business_register", {"p_business_name": "Bottega Verdi Srl", "p_vat_number": "12345678903"}, td)[0]
+    after_change = rpc("business_page_get", {"p_id": UID_D}, ta)[1]
+    check("BZ4", "Solo un amministratore approva; cambiare partita IVA fa ripartire la verifica; IVA unica",
+          dup >= 400 and user_review >= 400 and user_queue >= 400 and s_queue == 200
+          and UID_D in [r.get("id") for r in queue] and approve in (200, 204)
+          and isinstance(verified, dict) and verified.get("verified") is True
+          and changed in (200, 204) and isinstance(after_change, dict) and after_change.get("verified") is False,
+          f"{dup}, {user_review}, {user_queue}, {s_queue}, {approve}, {verified}, {changed}")
+
+    convert = rpc("business_register", {"p_business_name": "Mario Rossi Bar", "p_vat_number": VALID_VAT_2}, ta)[0]
+    kind = sql(f"select account_type from public.profiles where id = '{UID_A}';")
+    sql("select set_config('nexus.internal', 'on', false); "
+        f"delete from public.business_private where id = '{UID_A}'; "
+        f"update public.profiles set account_type = 'private' where id = '{UID_A}';")
+    check("BZ5", "Un Privato maggiorenne può registrare l'attività e diventa Azienda",
+          convert in (200, 204) and kind == "business", f"{convert}, {kind}")
+
+
+def check_subscriptions_phase6() -> None:
+    """AB · Abbonamento (Fase 6, Blocco 2): prova di 7 giorni, admin, badge solo se attivo."""
+    ta, tb, td = token(UID_A), token(UID_B), token(UID_D)
+    sql(f"delete from public.business_subscriptions where id = '{UID_D}'; "
+        f"delete from private.business_trials where used_by = '{UID_D}';")
+    sql(f"insert into public.admin_users (user_id, role) values ('{UID_B}', 'moderator') "
+        "on conflict (user_id) do nothing;")
+    rpc("business_review", {"p_id": UID_D, "p_approve": True}, tb)
+    before = rpc("business_page_get", {"p_id": UID_D}, ta)[1]
+    s_trial, trial = rpc("subscription_start_trial", {}, td)
+    after = rpc("business_page_get", {"p_id": UID_D}, ta)[1]
+    near = rpc("businesses_nearby", {"p_lat": 42.69, "p_lng": 12.10, "p_radius_km": 5}, ta)[1]
+    again = rpc("subscription_start_trial", {}, td)[0]
+    private_user = rpc("subscription_start_trial", {}, ta)[0]
+    check("AB1", "Approvata senza abbonamento: niente badge; prova di 7 giorni una sola volta",
+          isinstance(before, dict) and before.get("verified") is False and s_trial == 200
+          and isinstance(trial, dict) and trial.get("active") is True and trial.get("trial_used") is True
+          and isinstance(after, dict) and after.get("verified") is True
+          and any(r.get("id") == UID_D and r.get("verified") is True for r in near)
+          and again >= 400 and private_user >= 400,
+          f"{before}, {s_trial} {trial}, {after}, {again}, {private_user}")
+
+    others = rows(get(f"/rest/v1/business_subscriptions?select=*&id=eq.{UID_D}", ta))
+    mine = rows(get(f"/rest/v1/business_subscriptions?select=*&id=eq.{UID_D}", td))
+    forge = request("PATCH", f"/rest/v1/business_subscriptions?id=eq.{UID_D}", jwt=td,
+                    body={"current_period_end": "2099-01-01T00:00:00Z"})[0]
+    user_extend = rpc("subscription_admin_extend", {"p_id": UID_D, "p_months": 12}, td)[0]
+    end_now = sql(f"select current_period_end < now() + interval '8 days' from public.business_subscriptions "
+                  f"where id = '{UID_D}';")
+    check("AB2", "Abbonamento privato; l'azienda non può allungarselo da sola",
+          others == [] and len(mine) == 1 and forge >= 400 and user_extend >= 400 and end_now == "t",
+          f"{len(others)}, {len(mine)}, {forge}, {user_extend}, {end_now}")
+
+    sql(f"update public.business_subscriptions set current_period_end = now() - interval '1 second' "
+        f"where id = '{UID_D}';")
+    expired = rpc("business_page_get", {"p_id": UID_D}, ta)[1]
+    expired_mine = rpc("subscription_mine", {}, td)[1]
+    retry = rpc("subscription_start_trial", {}, td)[0]
+    extend = rpc("subscription_admin_extend", {"p_id": UID_D, "p_months": 1}, tb)[0]
+    extended = rpc("business_page_get", {"p_id": UID_D}, ta)[1]
+    stop = rpc("subscription_admin_stop", {"p_id": UID_D}, tb)[0]
+    stopped = rpc("business_page_get", {"p_id": UID_D}, ta)[1]
+    queue = rpc("business_review_queue", {}, tb)[1]
+    sql(f"delete from public.admin_users where user_id = '{UID_B}';")
+    check("AB3", "Alla scadenza il badge sparisce; l'admin può riattivare e fermare",
+          isinstance(expired, dict) and expired.get("verified") is False
+          and isinstance(expired_mine, dict) and expired_mine.get("active") is False and retry >= 400
+          and extend in (200, 204) and isinstance(extended, dict) and extended.get("verified") is True
+          and stop in (200, 204) and isinstance(stopped, dict) and stopped.get("verified") is False
+          and isinstance(queue, list) and any(r.get("id") == UID_D and r.get("subscription_source") == "admin"
+                                              for r in queue),
+          f"{expired}, {expired_mine}, {retry}, {extend}, {extended}, {stop}, {stopped}")
+
+
+def check_promotions_phase6() -> None:
+    """PR · Promozioni e coupon (Fase 6, Blocco 3)."""
+    ta, tb, td = token(UID_A), token(UID_B), token(UID_D)
+    for t, other in ((ta, UID_D), (td, UID_A), (tb, UID_D), (td, UID_B)):
+        rpc("unblock_user", {"p_user_id": other}, t)
+    sql(f"delete from public.promotions where business_id = '{UID_D}'; "
+        f"update public.business_subscriptions set current_period_end = now() - interval '1 second' "
+        f"where id = '{UID_D}';")
+    start = sql("select to_char(now() at time zone 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"');")
+    end = sql("select to_char((now() + interval '2 days') at time zone 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"');")
+    too_long = sql("select to_char((now() + interval '8 days') at time zone 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"');")
+    offer = {"p_kind": "offerta", "p_title": "Colazione -20%", "p_description": "Solo oggi",
+             "p_starts_at": start, "p_ends_at": end, "p_coupon_text": "Sconto 20%", "p_coupon_limit": 1}
+    no_premium = rpc("promotion_create", offer, td)[0]
+    sql(f"insert into public.business_subscriptions (id, source, current_period_end) "
+        f"values ('{UID_D}', 'admin', now() + interval '1 month') on conflict (id) do update "
+        "set current_period_end = now() + interval '1 month';")
+    s_offer, offer_id = rpc("promotion_create", offer, td)
+    s_event = rpc("promotion_create", {"p_kind": "evento", "p_title": "Concerto in piazza", "p_starts_at": start,
+                                       "p_ends_at": end, "p_lat": 42.70, "p_lng": 12.11,
+                                       "p_place_label": "Piazza del Popolo, Orvieto"}, td)[0]
+    offer_elsewhere = rpc("promotion_create", {**offer, "p_lat": 42.70, "p_lng": 12.11}, td)[0]
+    week_plus = rpc("promotion_create", {**offer, "p_ends_at": too_long}, td)[0]
+    private_user = rpc("promotion_create", offer, ta)[0]
+    more = [rpc("promotion_create", {**offer, "p_title": f"Offerta {i}"}, td)[0] for i in range(4)]
+    check("PR1", "Promozioni solo con Premium, al massimo 7 giorni e 5 al giorno; luogo diverso solo per eventi",
+          no_premium >= 400 and s_offer == 200 and s_event == 200 and offer_elsewhere >= 400
+          and week_plus >= 400 and private_user >= 400 and more[:3] == [200, 200, 200] and more[3] >= 400,
+          f"{no_premium}, {s_offer}, {s_event}, {offer_elsewhere}, {week_plus}, {private_user}, {more}")
+
+    near = rpc("promotions_nearby", {"p_lat": 42.69, "p_lng": 12.10, "p_radius_km": 10}, ta)[1]
+    of_d = rpc("promotions_of", {"p_business_id": UID_D}, ta)[1]
+    direct = get("/rest/v1/promotions?select=*", ta)
+    rpc("block_user", {"p_user_id": UID_D}, ta)
+    blocked = rpc("promotions_nearby", {"p_lat": 42.69, "p_lng": 12.10, "p_radius_km": 10}, ta)[1]
+    rpc("unblock_user", {"p_user_id": UID_D}, ta)
+    event = [p for p in near if p.get("kind") == "evento"] if isinstance(near, list) else []
+    check("PR2", "Mappa delle promozioni: visibili a tutti tranne chi è bloccato; evento nel suo luogo",
+          isinstance(near, list) and len(near) == 5 and isinstance(of_d, list) and len(of_d) == 5
+          and (direct[0] >= 400 or rows(direct) == []) and blocked == []
+          and len(event) == 1 and event[0].get("at_site") is False and abs(event[0].get("lat", 0) - 42.70) < 1e-6,
+          f"{len(near) if isinstance(near, list) else near}, {direct[0]}, {blocked}, {event}")
+
+    s_claim, code = rpc("coupon_claim", {"p_promotion_id": offer_id}, ta)
+    again = rpc("coupon_claim", {"p_promotion_id": offer_id}, ta)[1]
+    sold_out = rpc("coupon_claim", {"p_promotion_id": offer_id}, tb)[0]
+    own = rpc("coupon_claim", {"p_promotion_id": offer_id}, td)[0]
+    mine = rpc("coupons_mine", {}, ta)[1]
+    check("PR3", "Coupon: uno a persona, codice stabile, limite rispettato, non per il titolare",
+          s_claim == 200 and isinstance(code, str) and len(code) == 8 and again == code
+          and sold_out >= 400 and own >= 400 and isinstance(mine, list)
+          and any(c.get("my_coupon") == code for c in mine),
+          f"{s_claim}, {again == code}, {sold_out}, {own}")
+
+    wrong_shop = rpc("coupon_redeem", {"p_code": code}, tb)[0]
+    s_ok, ok = rpc("coupon_redeem", {"p_code": f"PIAZLY-{code.lower()}"}, td)
+    twice = rpc("coupon_redeem", {"p_code": code}, td)[0]
+    stats = rpc("promotions_mine", {}, td)[1]
+    first = [p for p in stats if p.get("id") == offer_id] if isinstance(stats, list) else []
+    check("PR4", "Convalida solo dall'attività, una volta; conteggio clienti senza dire chi sono",
+          wrong_shop >= 400 and s_ok == 200 and isinstance(ok, dict) and ok.get("redeemed") == 1 and twice >= 400
+          and len(first) == 1 and first[0].get("claimed") == 1 and first[0].get("redeemed") == 1
+          and UID_A not in json.dumps(stats),
+          f"{wrong_shop}, {s_ok} {ok}, {twice}, {first}")
+
+    rpc("promotion_cancel", {"p_id": offer_id}, td)
+    canceled = rpc("promotions_of", {"p_business_id": UID_D}, ta)[1]
+    sql(f"update public.business_subscriptions set current_period_end = now() - interval '1 second' "
+        f"where id = '{UID_D}';")
+    expired = rpc("promotions_nearby", {"p_lat": 42.69, "p_lng": 12.10, "p_radius_km": 10}, ta)[1]
+    check("PR5", "Promozione annullata sparisce; senza Premium spariscono tutte",
+          isinstance(canceled, list) and len(canceled) == 4 and expired == [],
+          f"{len(canceled) if isinstance(canceled, list) else canceled}, {expired}")
+
+
+def check_reviews_phase6() -> None:
+    """RV · Recensioni verificate (Fase 6, Blocco 4): solo chi ha usato un coupon in cassa."""
+    ta, tb, td = token(UID_A), token(UID_B), token(UID_D)
+    for t, other in ((ta, UID_B), (tb, UID_A), (ta, UID_D), (td, UID_A)):
+        rpc("unblock_user", {"p_user_id": other}, t)
+    sql(f"delete from public.business_reviews where business_id = '{UID_D}';")
+    # Dal caso PR4: A ha usato in cassa un coupon di D; B no.
+    s_a = rpc("review_save", {"p_business_id": UID_D, "p_rating": 5, "p_body": "Ottima colazione"}, ta)[0]
+    s_b = rpc("review_save", {"p_business_id": UID_D, "p_rating": 1, "p_body": "Mai stato qui"}, tb)[0]
+    s_own = rpc("review_save", {"p_business_id": UID_D, "p_rating": 5, "p_body": "Siamo i migliori"}, td)[0]
+    s_bad = rpc("review_save", {"p_business_id": UID_D, "p_rating": 6, "p_body": ""}, ta)[0]
+    direct = request("POST", "/rest/v1/business_reviews", jwt=tb,
+                     body={"business_id": UID_D, "author_id": UID_B, "rating": 1})[0]
+    check("RV1", "Recensione solo da clienti verificati (coupon usato in cassa), non dal titolare",
+          s_a in (200, 204) and s_b >= 400 and s_own >= 400 and s_bad >= 400 and direct >= 400,
+          f"{s_a}, {s_b}, {s_own}, {s_bad}, {direct}")
+
+    seen_b = rpc("reviews_of", {"p_business_id": UID_D}, tb)[1]
+    seen_a = rpc("reviews_of", {"p_business_id": UID_D}, ta)[1]
+    text = json.dumps(seen_b)
+    check("RV2", "Media e numero per tutti; si vede il nome pubblico, mai l'identificativo",
+          isinstance(seen_b, dict) and seen_b.get("count") == 1 and float(seen_b.get("average")) == 5.0
+          and seen_b.get("can_review") is False and UID_A not in text
+          and isinstance(seen_a, dict) and seen_a.get("can_review") is True
+          and seen_a["items"][0].get("mine") is True,
+          f"{seen_b}, {seen_a}")
+
+    review_id = seen_a["items"][0]["id"] if isinstance(seen_a, dict) and seen_a.get("items") else None
+    s_reply = rpc("review_reply", {"p_review_id": review_id, "p_reply": "Grazie, a presto!"}, td)[0]
+    s_fake_reply = rpc("review_reply", {"p_review_id": review_id, "p_reply": "Risposta finta"}, ta)[0]
+    rpc("review_save", {"p_business_id": UID_D, "p_rating": 3, "p_body": "Buona ma lenta"}, ta)
+    after = rpc("reviews_of", {"p_business_id": UID_D}, tb)[1]
+    rpc("block_user", {"p_user_id": UID_A}, tb)
+    blocked = rpc("reviews_of", {"p_business_id": UID_D}, tb)[1]
+    rpc("unblock_user", {"p_user_id": UID_A}, tb)
+    check("RV3", "Risponde solo il titolare; la recensione si corregge; chi blocca non la vede",
+          s_reply in (200, 204) and s_fake_reply >= 400 and isinstance(after, dict)
+          and after.get("count") == 1 and float(after.get("average")) == 3.0
+          and after["items"][0].get("reply") == "Grazie, a presto!"
+          and isinstance(blocked, dict) and blocked.get("count") == 0,
+          f"{s_reply}, {s_fake_reply}, {after}, {blocked}")
+
+    user_delete = rpc("review_admin_delete", {"p_review_id": review_id}, ta)[0]
+    sql(f"insert into public.admin_users (user_id, role) values ('{UID_B}', 'moderator') "
+        "on conflict (user_id) do nothing;")
+    admin_delete = rpc("review_admin_delete", {"p_review_id": review_id}, tb)[0]
+    sql(f"delete from public.admin_users where user_id = '{UID_B}';")
+    gone = rpc("reviews_of", {"p_business_id": UID_D}, ta)[1]
+    check("RV4", "Solo un amministratore toglie le recensioni degli altri",
+          user_delete >= 400 and admin_delete in (200, 204) and isinstance(gone, dict) and gone.get("count") == 0,
+          f"{user_delete}, {admin_delete}, {gone}")
+
+
 def check_push_phase4() -> None:
     """U · Notifiche (Fase 4, Blocco 5): coda server, silenzia, non disturbare, mai i Mi piace."""
     ta, tb = token(UID_A), token(UID_B)
@@ -3111,6 +3368,10 @@ def main() -> int:
     check_statuses_phase4()
     check_live_location_phase4()
     check_ai_limits_phase4()
+    check_business_phase6()
+    check_subscriptions_phase6()
+    check_promotions_phase6()
+    check_reviews_phase6()
     failed = [r for r in results if not r[2]]
     print(f"{'Caso':6} {'Esito':9} Descrizione")
     for case, desc, ok, detail in results:

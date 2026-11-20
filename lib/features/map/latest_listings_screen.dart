@@ -1,6 +1,10 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../business/business_models.dart' show BusinessFailure;
+import '../business/business_promotions.dart';
+import '../business/business_repository.dart';
+import '../business/promotion_models.dart';
 import 'listing_form_screen.dart' show ListingPhotoView;
 import 'listing_models.dart';
 import 'listing_repository.dart';
@@ -16,8 +20,12 @@ class LatestListingsScreen extends StatefulWidget {
     required this.origin,
     required this.filters,
     this.now = DateTime.now,
+    this.businesses,
   });
 
+  /// Promozioni delle attività (Fase 6) nella scheda «Promozioni»; se manca si usa
+  /// [BusinessRegistry.current].
+  final BusinessRepository? businesses;
   final ListingSheetServices services;
 
   /// Posizione attuale del telefono; null se non consentita.
@@ -33,6 +41,9 @@ class _LatestListingsScreenState extends State<LatestListingsScreen> {
   late MapFilters _filters = widget.filters;
   final Map<ListingTab, List<NearbyListing>?> _items = <ListingTab, List<NearbyListing>?>{};
   final Map<ListingTab, String?> _errors = <ListingTab, String?>{};
+  List<Promotion> _business = const <Promotion>[];
+
+  BusinessRepository? get _biz => widget.businesses ?? BusinessRegistry.current;
 
   @override
   void initState() {
@@ -43,6 +54,24 @@ class _LatestListingsScreenState extends State<LatestListingsScreen> {
   void _loadAll() {
     for (final ListingTab tab in ListingTab.values) {
       _load(tab);
+    }
+    _loadBusiness();
+  }
+
+  /// Promozioni ed eventi delle attività (Fase 6, Blocco 3) entro il raggio scelto.
+  Future<void> _loadBusiness() async {
+    final BusinessRepository? repo = _biz;
+    final GeoPoint? origin = widget.origin;
+    if (repo == null || origin == null) return;
+    try {
+      final List<Promotion> p = await repo.promotionsNearby(
+        origin.latitude,
+        origin.longitude,
+        radiusKm: _filters.radiusKm.clamp(1, 50),
+      );
+      if (mounted) setState(() => _business = p);
+    } on BusinessFailure {
+      // Restano gli annunci della Mappa.
     }
   }
 
@@ -128,7 +157,8 @@ class _LatestListingsScreenState extends State<LatestListingsScreen> {
     if (error != null) return _Empty(icon: Icons.cloud_off_rounded, text: error);
     final List<NearbyListing>? items = _items[tab];
     if (items == null) return const Center(child: CircularProgressIndicator());
-    if (items.isEmpty) {
+    final List<Promotion> business = tab == ListingTab.promotions ? _business : const <Promotion>[];
+    if (items.isEmpty && business.isEmpty) {
       return _Empty(
         icon: tab == ListingTab.promotions ? Icons.storefront_outlined : Icons.map_outlined,
         text: tab == ListingTab.promotions
@@ -141,10 +171,23 @@ class _LatestListingsScreenState extends State<LatestListingsScreen> {
       onRefresh: () => _load(tab),
       child: ListView.separated(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-        itemCount: items.length,
+        itemCount: business.length + items.length,
         separatorBuilder: (_, _) => const SizedBox(height: 10),
         itemBuilder: (BuildContext context, int i) {
-          final NearbyListing l = items[i];
+          if (i < business.length) {
+            final Promotion p = business[i];
+            return PromotionTile(
+              key: ValueKey<String>('ultimi_promo_${p.id}'),
+              promotion: p,
+              now: now,
+              onTap: () => Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(
+                  builder: (_) => PromotionDetailScreen(repository: _biz!, promotion: p, now: widget.now),
+                ),
+              ),
+            );
+          }
+          final NearbyListing l = items[i - business.length];
           return Card(
             margin: EdgeInsets.zero,
             child: InkWell(

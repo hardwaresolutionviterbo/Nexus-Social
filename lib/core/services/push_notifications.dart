@@ -265,6 +265,12 @@ abstract final class PushNotifications {
     return id.hashCode & 0x7fffffff;
   }
 
+  /// Avviso di una promozione vicina (Fase 6): notifica locale, creata sul telefono.
+  static Future<void> showPromotion(int id, String title, String body) async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    await _local.show(id: 800000 + id % 100000, title: title, body: body, notificationDetails: _details);
+  }
+
   /// Notifica locale usata solo dalla diagnostica per verificare canale e icona.
   static Future<void> showLocalTest() async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;

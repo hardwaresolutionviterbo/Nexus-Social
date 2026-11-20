@@ -4,6 +4,11 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/config/app_config.dart';
 import '../../core/services/backend_bootstrap.dart';
 import '../../core/theme/app_theme.dart';
+import '../business/business_repository.dart';
+import '../business/business_promotions.dart';
+import '../business/business_screens.dart';
+import '../map/map_surface.dart' show MapLibreSurface;
+import '../places/place_search.dart' show PlaceRegistry;
 import '../market/market_repository.dart';
 import '../market/market_models.dart';
 import '../../core/widgets/piazly_ui.dart';
@@ -213,6 +218,36 @@ class ProfileScreen extends StatelessWidget {
             subtitle: 'Anteprima di come ti vedono gli altri',
             onTap: () => _openPreview(context),
           ),
+          if (BusinessRegistry.current case final BusinessRepository biz)
+            MenuCard(
+              key: const ValueKey<String>('apri_mia_attivita'),
+              icon: Icons.storefront_outlined,
+              color: const Color(0xFFF97316),
+              title: me.isBusiness ? 'La mia attività' : 'Hai un\'attività?',
+              subtitle: me.isBusiness
+                  ? 'Profilo attività, sede sulla Mappa e verifica'
+                  : 'Registrala: sede sulla Mappa, orari e promozioni',
+              onTap: () => Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(
+                  builder: (_) => MyBusinessScreen(
+                    repository: biz,
+                    surface: MapLibreSurface.builder,
+                    lookup: PlaceRegistry.online,
+                  ),
+                ),
+              ).then((_) => onProfileChanged?.call()),
+            ),
+          if (BusinessRegistry.current case final BusinessRepository biz)
+            MenuCard(
+              key: const ValueKey<String>('apri_miei_coupon'),
+              icon: Icons.confirmation_number_outlined,
+              color: const Color(0xFFDB2777),
+              title: 'I miei coupon',
+              subtitle: 'Quelli presi dalle promozioni, con il QR da mostrare',
+              onTap: () => Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(builder: (_) => MyCouponsScreen(repository: biz)),
+              ),
+            ),
           if (privacy != null)
             MenuCard(
               key: const ValueKey<String>('apri_privacy'),
@@ -270,6 +305,19 @@ class ProfileScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (BusinessRegistry.current case final BusinessRepository biz) ...[
+                const SizedBox(height: AppSpacing.md),
+                MenuCard(
+                  key: const ValueKey<String>('apri_verifica_aziende'),
+                  icon: Icons.verified_user_outlined,
+                  color: const Color(0xFF1D9BF0),
+                  title: 'Aziende da verificare',
+                  subtitle: 'Solo amministratori: approva o rifiuta',
+                  onTap: () => Navigator.of(context).push<void>(
+                    MaterialPageRoute<void>(builder: (_) => BusinessReviewScreen(repository: biz)),
+                  ),
+                ),
+              ],
               const SizedBox(height: AppSpacing.md),
               SectionCard(
                 child: Column(

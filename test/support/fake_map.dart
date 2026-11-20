@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:material_ui/material_ui.dart';
+import 'package:nexus_social/features/business/business_models.dart';
+import 'package:nexus_social/features/business/promotion_models.dart';
 import 'package:nexus_social/features/map/listing_models.dart';
 import 'package:nexus_social/features/map/live_location.dart';
 import 'package:nexus_social/features/map/map_location.dart';
@@ -121,6 +123,28 @@ class FakeMapHandle implements MapSurfaceHandle {
   }
 
   void tapPerson(String id) => _onPerson?.call(id);
+
+  List<BusinessPin> businesses = const <BusinessPin>[];
+  ValueChanged<String>? _onBusiness;
+
+  @override
+  Future<void> showBusinesses(List<BusinessPin> businesses, ValueChanged<String> onTap) async {
+    this.businesses = businesses;
+    _onBusiness = onTap;
+  }
+
+  void tapBusiness(String id) => _onBusiness?.call(id);
+
+  List<Promotion> promotions = const <Promotion>[];
+  ValueChanged<String>? _onPromo;
+
+  @override
+  Future<void> showPromotions(List<Promotion> promotions, ValueChanged<String> onTap) async {
+    this.promotions = promotions;
+    _onPromo = onTap;
+  }
+
+  void tapPromotion(String id) => _onPromo?.call(id);
 }
 
 class FakeMapSurface extends StatefulWidget {

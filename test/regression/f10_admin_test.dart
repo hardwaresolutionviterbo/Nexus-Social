@@ -103,6 +103,10 @@ void main() {
     expect(users, <String>[
       // Blocco 18: Piazly AI (chat e Immagini IA).
       'lib/features/ai/ai_screens.dart',
+      // Fase 6: Aziende.
+      'lib/features/business/business_promotions.dart',
+      'lib/features/business/business_reviews.dart',
+      'lib/features/business/business_screens.dart',
       'lib/features/calls/call_screen.dart',
       'lib/features/calls/calls_list.dart',
       'lib/features/chat/chat_backup_screen.dart',
@@ -116,6 +120,8 @@ void main() {
       'lib/features/chat/chat_screen.dart',
       'lib/features/chat/chat_thread_screen.dart',
       'lib/features/map/comments_screen.dart',
+      // Fase 6: promozioni delle attività in «Ultimi annunci».
+      'lib/features/map/latest_listings_screen.dart',
       'lib/features/map/listing_form_screen.dart',
       'lib/features/map/listing_sheets.dart',
       'lib/features/map/listing_social_panel.dart',
