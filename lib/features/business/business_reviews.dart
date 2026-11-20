@@ -85,30 +85,10 @@ class _BusinessReviewsSectionState extends State<BusinessReviewsSection> {
   }
 
   Future<void> _reply(BusinessReview r) async {
-    final TextEditingController c = TextEditingController(text: r.reply);
     final String? text = await showDialog<String>(
       context: context,
-      builder: (BuildContext ctx) => AlertDialog(
-        title: const Text('Rispondi alla recensione'),
-        content: TextField(
-          key: const ValueKey<String>('recensione_risposta_testo'),
-          controller: c,
-          maxLength: 300,
-          minLines: 2,
-          maxLines: 4,
-          decoration: const InputDecoration(hintText: 'Grazie per…'),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Annulla')),
-          FilledButton(
-            key: const ValueKey<String>('recensione_risposta_invia'),
-            onPressed: () => Navigator.of(ctx).pop(c.text),
-            child: const Text('Pubblica'),
-          ),
-        ],
-      ),
+      builder: (BuildContext ctx) => _ReplyDialog(initial: r.reply),
     );
-    c.dispose();
     if (text == null) return;
     try {
       await widget.repository.replyReview(r.id, text);
@@ -220,6 +200,47 @@ class _BusinessReviewsSectionState extends State<BusinessReviewsSection> {
       ),
     );
   }
+}
+
+/// Risposta del titolare (il campo vive quanto la finestra, anche durante la chiusura).
+class _ReplyDialog extends StatefulWidget {
+  const _ReplyDialog({required this.initial});
+
+  final String initial;
+
+  @override
+  State<_ReplyDialog> createState() => _ReplyDialogState();
+}
+
+class _ReplyDialogState extends State<_ReplyDialog> {
+  late final TextEditingController _c = TextEditingController(text: widget.initial);
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Rispondi alla recensione'),
+    content: TextField(
+      key: const ValueKey<String>('recensione_risposta_testo'),
+      controller: _c,
+      maxLength: 300,
+      minLines: 2,
+      maxLines: 4,
+      decoration: const InputDecoration(hintText: 'Grazie per…'),
+    ),
+    actions: [
+      TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Annulla')),
+      FilledButton(
+        key: const ValueKey<String>('recensione_risposta_invia'),
+        onPressed: () => Navigator.of(context).pop(_c.text),
+        child: const Text('Pubblica'),
+      ),
+    ],
+  );
 }
 
 class ReviewFormScreen extends StatefulWidget {
