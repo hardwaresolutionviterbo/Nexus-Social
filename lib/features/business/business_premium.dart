@@ -189,7 +189,10 @@ class _PremiumScreenState extends State<PremiumScreen> {
                     key: const ValueKey<String>('premium_abbonati'),
                     onPressed: null,
                     icon: const Icon(Icons.shopping_bag_outlined),
-                    label: const Text('Abbonati con Google Play · ${BusinessSubscription.price}/mese'),
+                    label: const Text(
+                      'Abbonati · ${BusinessSubscription.price}/mese',
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                   const SizedBox(height: 6),
                   Text(

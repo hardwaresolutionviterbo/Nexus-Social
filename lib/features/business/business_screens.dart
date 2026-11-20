@@ -380,10 +380,13 @@ class _PremiumCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Text('Piazly Premium', style: theme.textTheme.titleMedium),
-                      if (me.verifiedBadge) ...[const SizedBox(width: 8), const VerifiedBadge(small: true)],
+                      if (me.verifiedBadge) const VerifiedBadge(small: true),
                     ],
                   ),
                   const SizedBox(height: 4),
