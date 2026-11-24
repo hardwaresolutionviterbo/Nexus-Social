@@ -171,6 +171,13 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
 
   @override
   Widget build(BuildContext context) {
+    if (_step == _Step.welcome) {
+      return _WelcomePage(
+        error: _error,
+        onPrivate: () => _chooseKind(AccountKind.private),
+        onBusiness: () => _chooseKind(AccountKind.business),
+      );
+    }
     final ThemeData theme = Theme.of(context);
     final bool isDark = theme.brightness == Brightness.dark;
     final _StepView view = _view(theme);
@@ -245,93 +252,8 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     final Color muted = theme.colorScheme.onSurfaceVariant;
     switch (_step) {
       case _Step.welcome:
-        return _StepView(
-          body: [
-            const FadeSlideIn(child: _WelcomeMapHero()),
-            const SizedBox(height: 26),
-            FadeSlideIn(
-              delay: 0.12,
-              child: Text.rich(
-                TextSpan(
-                  children: [
-                    const TextSpan(text: 'Il tuo mondo,\n'),
-                    const TextSpan(
-                      text: 'vicino a te.',
-                      style: TextStyle(color: AppColors.brandOrangeDeep),
-                    ),
-                  ],
-                ),
-                style: theme.textTheme.headlineLarge?.copyWith(height: 1.08, fontWeight: FontWeight.w800),
-              ),
-            ),
-            // Sottolineatura arancione sotto «vicino a te».
-            FadeSlideIn(
-              delay: 0.14,
-              child: Container(
-                margin: const EdgeInsets.only(top: 4, left: 2),
-                width: 160,
-                height: 5,
-                decoration: BoxDecoration(
-                  gradient: AppColors.orangeGradient,
-                  borderRadius: BorderRadius.circular(5),
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            FadeSlideIn(
-              delay: 0.18,
-              child: Text(
-                'Chatta con chi conosci, scopri persone ed eventi sulla Mappa Sociale, '
-                'scambia e vendi nella tua zona.',
-                style: theme.textTheme.bodyMedium?.copyWith(color: muted),
-              ),
-            ),
-            const SizedBox(height: 16),
-            const FadeSlideIn(
-              delay: 0.24,
-              child: Row(
-                children: [
-                  _FeatureTile(icon: Icons.lock_rounded, label: 'Chat\ncifrate', color: PiazlyColors.violet),
-                  SizedBox(width: 10),
-                  _FeatureTile(icon: Icons.map_outlined, label: 'Mappa\nSociale', color: AppColors.brandBlue),
-                  SizedBox(width: 10),
-                  _FeatureTile(icon: Icons.swap_horiz_rounded, label: 'Scambia\ne vendi', color: AppColors.brandOrange),
-                ],
-              ),
-            ),
-          ],
-          actions: [
-            _KindButton(
-              primary: true,
-              icon: Icons.person_rounded,
-              title: 'Registrati come Privato',
-              detail: 'Chat, Mappa Social, scambi e vendita tra privati',
-              onTap: () => _chooseKind(AccountKind.private),
-            ),
-            const SizedBox(height: 10),
-            _KindButton(
-              icon: Icons.storefront_rounded,
-              title: 'Registrati come Azienda',
-              detail: 'Per attività commerciali · solo maggiorenni',
-              onTap: () => _chooseKind(AccountKind.business),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.shield_rounded, size: 15, color: muted),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Text(
-                    'Il tuo numero resta privato. Sempre.',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodySmall?.copyWith(color: muted),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        );
+        // Disegnata da _WelcomePage (schermata a tutto schermo).
+        return const _StepView(body: <Widget>[]);
 
       case _Step.birthDate:
         return _StepView(
@@ -829,29 +751,306 @@ class _InfoRow extends StatelessWidget {
 }
 
 /// Riquadro della schermata iniziale: icona e due parole, su fondo tenue.
-class _FeatureTile extends StatelessWidget {
-  const _FeatureTile({required this.icon, required this.label, required this.color});
+/// Schermata iniziale (grafica del titolare, 24/11/2026): paesaggio al tramonto con logo e motto,
+/// le tre funzioni principali, i due pulsanti di registrazione e l'onda viola in fondo.
+class _WelcomePage extends StatelessWidget {
+  const _WelcomePage({required this.onPrivate, required this.onBusiness, this.error});
+
+  final VoidCallback onPrivate;
+  final VoidCallback onBusiness;
+  final String? error;
+
+  static const Color _page = Color(0xFFF5F2FC);
+  static const Color _ink = Color(0xFF17123A);
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: Scaffold(
+        backgroundColor: _page,
+        body: CustomScrollView(
+          slivers: [
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const _WelcomeHero(),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(22, 6, 22, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        FadeSlideIn(
+                          delay: 0.1,
+                          child: Text(
+                            'Chatta, scopri persone ed eventi sulla Mappa Sociale, '
+                            'scambia e vendi nella tua zona.',
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              color: _ink,
+                              fontWeight: FontWeight.w600,
+                              height: 1.3,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        const FadeSlideIn(
+                          delay: 0.16,
+                          child: Row(
+                            children: [
+                              _WelcomeTile(
+                                icon: Icons.chat_bubble_outline_rounded,
+                                label: 'Chat\ncifrate',
+                                color: PiazlyColors.violet,
+                                tint: Color(0xFFEDE6FE),
+                              ),
+                              SizedBox(width: 10),
+                              _WelcomeTile(
+                                icon: Icons.map_outlined,
+                                label: 'Mappa\nSociale',
+                                color: AppColors.brandBlue,
+                                tint: Color(0xFFE2EFFE),
+                              ),
+                              SizedBox(width: 10),
+                              _WelcomeTile(
+                                icon: Icons.swap_horiz_rounded,
+                                label: 'Scambia\ne vendi',
+                                color: AppColors.brandOrange,
+                                tint: Color(0xFFFEEEE0),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        FadeSlideIn(
+                          delay: 0.22,
+                          child: _KindButton(
+                            primary: true,
+                            icon: Icons.person_rounded,
+                            title: 'Registrati come Privato',
+                            detail: 'Chat, Mappa Sociale, scambi e vendite tra privati',
+                            onTap: onPrivate,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        FadeSlideIn(
+                          delay: 0.26,
+                          child: _KindButton(
+                            icon: Icons.storefront_rounded,
+                            title: 'Registrati come Azienda',
+                            detail: 'Per attività commerciali · solo maggiorenni',
+                            onTap: onBusiness,
+                          ),
+                        ),
+                        if (error != null) ...[
+                          const SizedBox(height: 12),
+                          _ErrorBox(message: error!),
+                        ],
+                        const SizedBox(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.verified_user_rounded, size: 22, color: PiazlyColors.violet),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text.rich(
+                                const TextSpan(
+                                  children: [
+                                    TextSpan(text: 'Il tuo numero resta '),
+                                    TextSpan(
+                                      text: 'privato. Sempre.',
+                                      style: TextStyle(color: PiazlyColors.violetDeep, fontWeight: FontWeight.w800),
+                                    ),
+                                  ],
+                                ),
+                                textAlign: TextAlign.center,
+                                style: theme.textTheme.bodyMedium?.copyWith(color: _ink),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Spacer(),
+                  const SizedBox(height: 18),
+                  const _WelcomeWave(),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Parte alta: cielo viola, logo, motto e la foto del paese con i segnaposto e il tricolore.
+class _WelcomeHero extends StatelessWidget {
+  const _WelcomeHero();
+
+  @override
+  Widget build(BuildContext context) {
+    final double top = MediaQuery.paddingOf(context).top;
+    final double width = MediaQuery.sizeOf(context).width;
+    // La foto è 922 × 444: si adatta alla larghezza del telefono.
+    final double photo = width * 444 / 922;
+    const double band = 128;
+    return SizedBox(
+      height: top + band + photo - 26,
+      child: Stack(
+        children: [
+          // Cielo: dal viola notte ai colori del tramonto della foto.
+          const Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: <Color>[Color(0xFF1E0B4F), Color(0xFF3B1A8C), Color(0xFF6A2BA0)],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: photo,
+            child: ShaderMask(
+              blendMode: BlendMode.dstIn,
+              shaderCallback: (Rect r) => const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: <Color>[Color(0x00000000), Color(0xFF000000)],
+                stops: <double>[0, 0.22],
+              ).createShader(r),
+              child: Image.asset(
+                'assets/images/benvenuto.jpg',
+                fit: BoxFit.cover,
+                width: width,
+                height: photo,
+                excludeFromSemantics: true,
+                errorBuilder: (_, _, _) => const SizedBox.shrink(),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            top: top + 14,
+            child: const FadeSlideIn(
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      NexusMark(size: 62),
+                      SizedBox(width: 14),
+                      _WelcomeWordmark(),
+                    ],
+                  ),
+                  SizedBox(height: 12),
+                  Text(
+                    'Il tuo mondo, vicino a te.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 25,
+                      fontWeight: FontWeight.w800,
+                      fontStyle: FontStyle.italic,
+                      letterSpacing: -0.3,
+                      shadows: <Shadow>[Shadow(color: Color(0x66000000), blurRadius: 10, offset: Offset(0, 2))],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// «Piazly» grande, bianco con «ly» arancione sfumato.
+class _WelcomeWordmark extends StatelessWidget {
+  const _WelcomeWordmark();
+
+  @override
+  Widget build(BuildContext context) {
+    const TextStyle style = TextStyle(
+      fontSize: 46,
+      fontWeight: FontWeight.w900,
+      fontStyle: FontStyle.italic,
+      letterSpacing: -1,
+      height: 1,
+      color: Colors.white,
+      shadows: <Shadow>[Shadow(color: Color(0x55000000), blurRadius: 12, offset: Offset(0, 3))],
+    );
+    return Semantics(
+      label: 'Piazly',
+      child: ExcludeSemantics(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Piaz', style: style),
+            ShaderMask(
+              blendMode: BlendMode.srcIn,
+              shaderCallback: (Rect r) => const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: <Color>[Color(0xFFFFB020), AppColors.brandOrangeDeep],
+              ).createShader(r),
+              child: const Text('ly', style: style),
+            ),
+            const SizedBox(width: 4),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WelcomeTile extends StatelessWidget {
+  const _WelcomeTile({required this.icon, required this.label, required this.color, required this.tint});
 
   final IconData icon;
   final String label;
   final Color color;
+  final Color tint;
 
   @override
   Widget build(BuildContext context) => Expanded(
     child: Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 6),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(18),
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: <Color>[tint, Color.alphaBlend(Colors.white.withValues(alpha: 0.45), tint)],
+        ),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Colors.white, width: 2),
+        boxShadow: <BoxShadow>[
+          BoxShadow(color: color.withValues(alpha: 0.12), blurRadius: 16, offset: const Offset(0, 6)),
+        ],
       ),
       child: Column(
         children: [
-          Icon(icon, color: color, size: 26),
-          const SizedBox(height: 4),
+          Icon(icon, color: color, size: 38),
+          const SizedBox(height: 6),
           Text(
             label,
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700, height: 1.15),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: _WelcomePage._ink,
+              fontWeight: FontWeight.w700,
+              height: 1.15,
+            ),
           ),
         ],
       ),
@@ -859,77 +1058,60 @@ class _FeatureTile extends StatelessWidget {
   );
 }
 
-/// Illustrazione della nuova schermata iniziale: una piccola mappa in prospettiva su un'onda
-/// viola, con il segnaposto arancione al centro e due viola.
-class _WelcomeMapHero extends StatelessWidget {
-  const _WelcomeMapHero();
+/// Onda viola in fondo alla schermata.
+class _WelcomeWave extends StatelessWidget {
+  const _WelcomeWave();
 
   @override
-  Widget build(BuildContext context) {
-    Widget pin(Color c, double size) => Icon(Icons.location_on_rounded, color: c, size: size, shadows: const <Shadow>[
-      Shadow(color: Color(0x55000000), blurRadius: 8, offset: Offset(0, 4)),
-    ]);
-    return SizedBox(
-      height: 230,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(32),
-                gradient: const LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: <Color>[Color(0xFFF6F1FF), Color(0xFFE9DDFE)],
-                ),
-              ),
-            ),
-          ),
-          // La mappa: un quadrato inclinato con strade e isolati.
-          Positioned(
-            bottom: 18,
-            child: Transform(
-              alignment: Alignment.center,
-              transform: Matrix4.identity()
-                ..setEntry(3, 2, 0.0012)
-                ..rotateX(0.95)
-                ..rotateZ(0.78),
-              child: Container(
-                width: 190,
-                height: 190,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: const Color(0xFFB79CF7), width: 6),
-                  boxShadow: const <BoxShadow>[BoxShadow(color: Color(0x337C3AED), blurRadius: 24, offset: Offset(0, 12))],
-                ),
-                child: GridView.count(
-                  crossAxisCount: 4,
-                  padding: const EdgeInsets.all(10),
-                  mainAxisSpacing: 8,
-                  crossAxisSpacing: 8,
-                  physics: const NeverScrollableScrollPhysics(),
-                  children: <Widget>[
-                    for (int i = 0; i < 16; i++)
-                      DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: <int>{1, 6, 11, 12}.contains(i) ? const Color(0xFF6BCB77) : const Color(0xFFEDEFF5),
-                          borderRadius: BorderRadius.circular(5),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Positioned(top: 22, child: pin(AppColors.brandOrange, 96)),
-          Positioned(left: 70, top: 58, child: pin(PiazlyColors.violet, 44)),
-          Positioned(right: 70, top: 68, child: pin(PiazlyColors.violet, 40)),
-        ],
-      ),
+  Widget build(BuildContext context) => SizedBox(
+    height: 64 + MediaQuery.paddingOf(context).bottom,
+    width: double.infinity,
+    child: const CustomPaint(painter: _WavePainter()),
+  );
+}
+
+class _WavePainter extends CustomPainter {
+  const _WavePainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final double w = size.width;
+    final double h = size.height;
+    Path wave(double y0, double amp) => Path()
+      ..moveTo(0, y0)
+      ..cubicTo(w * 0.25, y0 - amp, w * 0.55, y0 + amp, w, y0 - amp * 0.6)
+      ..lineTo(w, h)
+      ..lineTo(0, h)
+      ..close();
+    final Rect rect = Offset.zero & size;
+    canvas.drawPath(
+      wave(h * 0.30, 16),
+      Paint()
+        ..shader = const LinearGradient(
+          colors: <Color>[Color(0x55C4B5FD), Color(0x88A78BFA), Color(0x55C4B5FD)],
+        ).createShader(rect),
+    );
+    canvas.drawPath(
+      wave(h * 0.48, 14),
+      Paint()
+        ..shader = const LinearGradient(
+          colors: <Color>[PiazlyColors.violet, Color(0xFF9F67FF), PiazlyColors.violetDeep],
+        ).createShader(rect),
+    );
+    // Riflesso chiaro sul bordo dell'onda.
+    canvas.drawPath(
+      Path()
+        ..moveTo(0, h * 0.48)
+        ..cubicTo(w * 0.25, h * 0.48 - 14, w * 0.55, h * 0.48 + 14, w, h * 0.48 - 14 * 0.6),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..color = const Color(0xCCFFFFFF),
     );
   }
+
+  @override
+  bool shouldRepaint(covariant _WavePainter oldDelegate) => false;
 }
 
 class _KindButton extends StatelessWidget {
@@ -980,28 +1162,34 @@ class _KindButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(22),
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
             child: Row(
               children: [
                 Container(
-                  width: 44,
-                  height: 44,
+                  width: 54,
+                  height: 54,
                   decoration: BoxDecoration(
                     color: primary
                         ? Colors.white.withValues(alpha: 0.22)
                         : AppColors.brandOrange.withValues(alpha: 0.14),
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(16),
                   ),
-                  child: Icon(icon, color: primary ? Colors.white : AppColors.brandOrange),
+                  child: Icon(icon, size: 30, color: primary ? Colors.white : AppColors.brandOrange),
                 ),
-                const SizedBox(width: 14),
+                // Linea sottile tra icona e testo, come nella grafica del titolare.
+                Container(
+                  width: 1.5,
+                  height: 40,
+                  margin: const EdgeInsets.symmetric(horizontal: 14),
+                  color: primary ? Colors.white.withValues(alpha: 0.45) : theme.colorScheme.outline,
+                ),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         title,
-                        style: theme.textTheme.titleMedium?.copyWith(color: fg),
+                        style: theme.textTheme.titleMedium?.copyWith(color: fg, fontWeight: FontWeight.w800),
                       ),
                       const SizedBox(height: 2),
                       Text(
@@ -1015,7 +1203,8 @@ class _KindButton extends StatelessWidget {
                     ],
                   ),
                 ),
-                Icon(Icons.arrow_forward_rounded, color: fg),
+                const SizedBox(width: 8),
+                Icon(Icons.arrow_forward_rounded, size: 28, color: primary ? fg : PiazlyColors.violet),
               ],
             ),
           ),

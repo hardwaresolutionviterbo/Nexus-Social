@@ -71,3 +71,5 @@ flutter:
     - docs/fase0/BOZZA_REGOLE_COMMUNITY.md
     # Comuni d'Italia (ISTAT) con il centro di ciascuno, per la località degli annunci.
     - assets/data/comuni_italia.json
+    # Schermata iniziale: paesaggio al tramonto con i segnaposto (immagine del titolare).
+    - assets/images/benvenuto.jpg
