@@ -147,8 +147,8 @@ class FakeModerationRepository implements ModerationRepository {
   }
 }
 
-AdminPerson samplePerson({String id = 'u1', String username = 'luca.r', DateTime? bannedUntil}) =>
-    AdminPerson(id: id, username: username, name: 'Luca R.', bannedUntil: bannedUntil);
+AdminPerson samplePerson({String id = 'u1', String username = 'luca.r', String name = 'Luca R.', DateTime? bannedUntil}) =>
+    AdminPerson(id: id, username: username, name: name, bannedUntil: bannedUntil);
 
 AdminReport sampleListingReport({String id = 'r-annuncio', AdminPerson? author}) => AdminReport(
   kind: ReportKind.listing,
@@ -171,7 +171,7 @@ AdminReport sampleCommentReport({String id = 'r-commento'}) => AdminReport(
   lastAt: DateTime(2026, 11, 24, 8),
   text: 'Guadagna 500 € al giorno, link in bio!',
   contextTitle: 'Calcetto stasera?',
-  author: samplePerson(id: 'u2', username: 'promo.facile'),
+  author: samplePerson(id: 'u2', username: 'promo.facile', name: 'Promo F.'),
 );
 
 AdminReport sampleChatReport({String id = 'r-chat'}) => AdminReport(
@@ -185,5 +185,5 @@ AdminReport sampleChatReport({String id = 'r-chat'}) => AdminReport(
     ReportedMessage(text: 'Rispondi!', fromReporter: false, at: DateTime(2026, 11, 23, 21, 50)),
     ReportedMessage(text: 'Lasciami stare, grazie.', fromReporter: true, at: DateTime(2026, 11, 23, 21, 52)),
   ],
-  author: samplePerson(id: 'u3', username: 'marco.b'),
+  author: samplePerson(id: 'u3', username: 'marco.b', name: 'Marco B.'),
 );

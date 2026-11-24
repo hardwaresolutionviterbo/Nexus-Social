@@ -20,8 +20,8 @@ FakeAdminRepository withQueue() {
   final FakeAdminRepository repo = FakeAdminRepository();
   repo.open.addAll(<AdminReport>[sampleListingReport(), sampleCommentReport(), sampleChatReport()]);
   repo.addUser(samplePerson(), reportsOpen: 1);
-  repo.addUser(samplePerson(id: 'u2', username: 'promo.facile'));
-  repo.addUser(samplePerson(id: 'u3', username: 'marco.b'));
+  repo.addUser(samplePerson(id: 'u2', username: 'promo.facile', name: 'Promo F.'));
+  repo.addUser(samplePerson(id: 'u3', username: 'marco.b', name: 'Marco B.'));
   return repo;
 }
 
