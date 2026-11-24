@@ -46,7 +46,7 @@ visibile. Il titolare può cambiarle.
 
 ## Server
 
-Migrazione `0038_gestionale.sql`:
+Migrazione `0038_gestionale.sql`, **applicata al database reale il 24/11/2026** con l'autorizzazione del titolare (0 differenze tra anon e authenticated, estensione http rimossa):
 - tabella `moderation_notices` (avvisi, accessibile solo tramite le funzioni) e
   `private.moderation_log` (storico, solo amministratori);
 - trigger di blocco per chi è bannato;

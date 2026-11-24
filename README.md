@@ -115,7 +115,7 @@ Nel repository non ce n'è nessuna.
 | Modifiche approvate al piano | [`docs/fase1/MODIFICHE_AL_PIANO.md`](docs/fase1/MODIFICHE_AL_PIANO.md) |
 | Piano e risultato di ogni blocco | `docs/faseN/PIANO_OPERATIVO.md` e `docs/faseN/BLOCCOn_ESITO.md` |
 | Bozze legali (privacy, termini, regole), **non ancora verificate da un professionista** | [`docs/fase0/`](docs/fase0/) |
-| Schema del database e regole di sicurezza | [`supabase/migrations/`](supabase/migrations/): `0001`–`0037`, tutte applicate al database reale |
+| Schema del database e regole di sicurezza | [`supabase/migrations/`](supabase/migrations/): `0001`–`0038`, tutte applicate al database reale |
 | Funzioni del server | [`supabase/functions/`](supabase/functions/): `rubrica`, `notifiche`, `chiamate` e `ia`, tutte pubblicate |
 | Test di sicurezza del database | [`supabase/tests/rls_test.py`](supabase/tests/rls_test.py), eseguiti su un database temporaneo (workflow Supabase RLS) |
 | Codice dell'app | [`lib/`](lib/), una cartella per sezione in `lib/features/` |
