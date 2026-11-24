@@ -4,9 +4,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:nexus_social/app.dart';
 import 'package:nexus_social/core/theme/app_theme.dart';
+import 'package:nexus_social/features/admin/admin_models.dart';
 import 'package:nexus_social/features/admin/admin_screen.dart';
 
 import '../support/app_helpers.dart';
+import '../support/fake_admin.dart';
 
 /// F10 · Anteprima admin: solo anteprima, non raggiungibile, nessun percorso alternativo.
 /// I controlli lato server (E1-E8 di TEST_SUPABASE_RLS.md, regole Firestore) sono
@@ -20,19 +22,23 @@ void main() {
 
   String rel(File file) => file.path.replaceAll('\\', '/');
 
-  testWidgets('F10 · l\'anteprima admin non ha pulsanti né azioni attive', (
+  // Fase 7: l'anteprima è diventata il gestionale vero. Chi non è amministratore vede solo
+  // «Area riservata», senza pulsanti né azioni; il server ricontrolla ogni richiesta (GS1).
+  testWidgets('F10 · chi non è amministratore non ha pulsanti né azioni nel gestionale', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
-      MaterialApp(theme: AppTheme.light, home: const Scaffold(body: AdminScreen())),
+      MaterialApp(
+        theme: AppTheme.light,
+        home: AdminScreen(repository: FakeAdminRepository(accessState: const AdminAccess())),
+      ),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Gestionale Admin'), findsOneWidget);
+    expect(find.text('Area riservata'), findsOneWidget);
+    expect(find.text('Segnalazioni'), findsNothing);
     expect(find.byType(InkWell), findsNothing);
-    expect(find.byType(IconButton), findsNothing);
     expect(find.byWidgetPredicate((Widget w) => w is ButtonStyleButton), findsNothing);
-    expect(find.byType(GestureDetector), findsNothing);
   });
 
   testWidgets('F10 · nessuna scheda, né la campanella, porta all\'anteprima admin', (
@@ -44,19 +50,20 @@ void main() {
     for (final String label in sectionMarkers.keys) {
       await openSection(tester, label);
       expect(find.byType(AdminScreen), findsNothing, reason: label);
-      expect(find.text('Gestionale Admin'), findsNothing, reason: label);
+      expect(find.text('Gestionale'), findsNothing, reason: label);
     }
     await tester.tap(find.byTooltip('Notifiche'));
     await tester.pumpAndSettle();
     expect(find.byType(AdminScreen), findsNothing);
   });
 
-  test('F10 · nel codice AdminScreen non è aperta da nessun altro punto', () {
+  // Fase 7: il gestionale si apre solo dalla sezione del Profilo riservata agli amministratori.
+  test('F10 · nel codice AdminScreen si apre solo dal Profilo (sezione amministratori)', () {
     final List<String> users = <String>[
       for (final File file in dartSources())
-        if (file.readAsStringSync().contains('AdminScreen')) rel(file),
-    ];
-    expect(users, <String>['lib/features/admin/admin_screen.dart']);
+        if (file.readAsStringSync().contains('AdminScreen(')) rel(file),
+    ]..sort();
+    expect(users, <String>['lib/features/admin/admin_screen.dart', 'lib/features/profile/profile_screen.dart']);
   });
 
   test('F10 · nessuna rotta con nome o link interno che apra schermate', () {
@@ -101,6 +108,11 @@ void main() {
         if (file.readAsStringSync().contains('Navigator.')) rel(file),
     ]..sort();
     expect(users, <String>[
+      // Fase 7: gestionale (solo amministratori con PIN) e avvisi del Team Piazly.
+      'lib/features/admin/admin_reports.dart',
+      'lib/features/admin/admin_screen.dart',
+      'lib/features/admin/admin_users.dart',
+      'lib/features/admin/moderation_gate.dart',
       // Blocco 18: Piazly AI (chat e Immagini IA).
       'lib/features/ai/ai_screens.dart',
       // Fase 6: Aziende.

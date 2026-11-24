@@ -4,6 +4,8 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/config/app_config.dart';
 import '../../core/services/backend_bootstrap.dart';
 import '../../core/theme/app_theme.dart';
+import '../admin/admin_repository.dart';
+import '../admin/admin_screen.dart';
 import '../business/business_repository.dart';
 import '../business/business_promotions.dart';
 import '../business/business_screens.dart';
@@ -305,6 +307,25 @@ class ProfileScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (AdminRegistry.current case final AdminRepository admin) ...[
+                const SizedBox(height: AppSpacing.md),
+                MenuCard(
+                  key: const ValueKey<String>('apri_gestionale'),
+                  icon: Icons.admin_panel_settings_outlined,
+                  color: AppColors.brandViolet,
+                  title: 'Gestionale',
+                  subtitle: 'Solo amministratori: segnalazioni, utenti, aziende',
+                  onTap: () => Navigator.of(context).push<void>(
+                    MaterialPageRoute<void>(
+                      builder: (_) => AdminScreen(
+                        repository: admin,
+                        biometric: AdminRegistry.biometric,
+                        business: BusinessRegistry.current,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
               if (BusinessRegistry.current case final BusinessRepository biz) ...[
                 const SizedBox(height: AppSpacing.md),
                 MenuCard(

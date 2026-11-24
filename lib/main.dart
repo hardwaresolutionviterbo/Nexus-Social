@@ -16,6 +16,7 @@ import 'core/services/firebase_services.dart';
 import 'core/services/push_device_registry.dart';
 import 'core/services/push_notifications.dart';
 import 'core/services/supabase_push_backend.dart';
+import 'features/admin/admin_repository.dart';
 import 'features/ai/ai_service.dart';
 import 'features/business/business_repository.dart';
 import 'features/business/promo_alerts.dart';
@@ -78,6 +79,10 @@ Future<void> main() async {
       server: SupabaseLiveLocationServer(Supabase.instance.client),
       location: const GeolocatorDeviceLocation(),
     );
+    // Gestionale (Fase 7): per gli amministratori; ban e avvisi per tutti.
+    AdminRegistry.current = SupabaseAdminRepository(Supabase.instance.client);
+    AdminRegistry.biometric = DeviceBiometricLock();
+    ModerationRegistry.current = SupabaseModerationRepository(Supabase.instance.client);
     // Aziende (Fase 6): profilo attività con sede fissa e verifica.
     BusinessRegistry.current = SupabaseBusinessRepository(
       Supabase.instance.client,

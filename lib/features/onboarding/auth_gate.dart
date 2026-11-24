@@ -5,6 +5,8 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/services/auth_gateway.dart';
 import '../../core/services/backend_bootstrap.dart';
 import '../../core/widgets/nexus_ui.dart';
+import '../admin/admin_repository.dart';
+import '../admin/moderation_gate.dart';
 import '../chat/chat_service.dart';
 import '../contacts/contacts_auto_sync.dart';
 import '../contacts/contacts_sync.dart';
@@ -330,10 +332,15 @@ class _AuthGateState extends State<AuthGate> {
               isAdmin: widget.isAdmin,
               phone: widget.gateway.currentPhone,
             );
+            // Fase 7: account sospeso e avvisi del Team Piazly.
+            final ModerationRepository? moderation = ModerationRegistry.current;
+            final Widget moderated = moderation == null
+                ? shell
+                : ModerationGate(repository: moderation, onSignOut: _signOut, child: shell);
             final ContactsRepository? contacts = widget.contacts;
             final Widget synced = contacts == null
-                ? shell
-                : ContactsAutoSync(repository: contacts, child: shell);
+                ? moderated
+                : ContactsAutoSync(repository: contacts, child: moderated);
             final BiometricLock? lock = widget.biometricLock;
             return lock == null ? synced : AppLockGate(lock: lock, child: synced);
         }
