@@ -13,7 +13,7 @@ App **Flutter** per Android e iPhone. Contiene:
 Si lavora a fasi e a blocchi. Alla fine di ogni blocco c'è un APK da provare sul telefono.
 Niente arriva in `main` né sul database reale senza l'autorizzazione del titolare.
 
-*Aggiornato il 20/11/2026.*
+*Aggiornato il 24/11/2026.*
 
 ## Stato del lavoro
 
@@ -26,7 +26,7 @@ Niente arriva in `main` né sul database reale senza l'autorizzazione del titola
 | 4 | Chat cifrata, allegati, gruppi, notifiche, backup, segnalazioni, chiamate e videochiamate (anche di gruppo), tempo reale | **Completata, in `main`** | [`docs/fase4/`](docs/fase4/) |
 | 5 | Scambia e Vendita: categorie, annunci, ricerca, proposte, feedback | **Completata, in `main`** | [`docs/fase5/`](docs/fase5/) |
 | 6 | Aziende, Premium (prova gratuita), promozioni, coupon con QR, recensioni verificate | **Completata, in `main`** (manca solo il pagamento con Google Play / App Store) | [`docs/fase6/`](docs/fase6/) |
-| 7 | Gestionale Admin dentro l'app | Da iniziare | |
+| 7 | Gestionale Admin dentro l'app | **In corso**: Blocco 1 sul ramo `fase7/blocco1` | [`docs/fase7/`](docs/fase7/) |
 | 8 | Traduzione, gamification, ricerca avanzata | Da iniziare | |
 | 9 | Test, sicurezza, GDPR, beta chiusa | Da iniziare | |
 | 10 | Pubblicazione e lancio | Da iniziare | |
