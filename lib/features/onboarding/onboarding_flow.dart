@@ -249,7 +249,6 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   }
 
   _StepView _view(ThemeData theme) {
-    final Color muted = theme.colorScheme.onSurfaceVariant;
     switch (_step) {
       case _Step.welcome:
         // Disegnata da _WelcomePage (schermata a tutto schermo).
@@ -802,7 +801,7 @@ class _WelcomePage extends StatelessWidget {
                           child: Row(
                             children: [
                               _WelcomeTile(
-                                icon: Icons.chat_bubble_outline_rounded,
+                                icon: Icons.textsms_outlined,
                                 label: 'Chat\ncifrate',
                                 color: PiazlyColors.violet,
                                 tint: Color(0xFFEDE6FE),
@@ -938,6 +937,22 @@ class _WelcomeHero extends StatelessWidget {
               ),
             ),
           ),
+          // Raccordo morbido tra la foto e la pagina chiara.
+          const Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 34,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: <Color>[Color(0x00F5F2FC), _WelcomePage._page],
+                ),
+              ),
+            ),
+          ),
           Positioned(
             left: 0,
             right: 0,
@@ -948,7 +963,7 @@ class _WelcomeHero extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      NexusMark(size: 62),
+                      _WelcomeMark(),
                       SizedBox(width: 14),
                       _WelcomeWordmark(),
                     ],
@@ -974,6 +989,42 @@ class _WelcomeHero extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Logo «P» della schermata iniziale: dal viola all'arancione, con un alone luminoso.
+class _WelcomeMark extends StatelessWidget {
+  const _WelcomeMark();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 64,
+    height: 64,
+    alignment: Alignment.center,
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: <Color>[Color(0xFF8B3DFF), Color(0xFFD13FD0), AppColors.brandOrange],
+        stops: <double>[0, 0.55, 1],
+      ),
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: Colors.white.withValues(alpha: 0.35), width: 1.5),
+      boxShadow: const <BoxShadow>[
+        BoxShadow(color: Color(0x99FF7A1A), blurRadius: 22, offset: Offset(2, 6)),
+        BoxShadow(color: Color(0x887C3AED), blurRadius: 22, offset: Offset(-2, 2)),
+      ],
+    ),
+    child: const Text(
+      'P',
+      style: TextStyle(
+        color: Colors.white,
+        fontSize: 40,
+        fontWeight: FontWeight.w900,
+        fontStyle: FontStyle.italic,
+        height: 1,
+      ),
+    ),
+  );
 }
 
 /// «Piazly» grande, bianco con «ly» arancione sfumato.
