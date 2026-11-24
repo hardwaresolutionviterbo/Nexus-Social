@@ -3219,6 +3219,120 @@ def check_reviews_phase6() -> None:
           f"{user_delete}, {admin_delete}, {gone}")
 
 
+def check_admin_phase7() -> None:
+    """GS · Gestionale (Fase 7, Blocco 1): accesso con PIN, segnalazioni, avvisi e ban."""
+    ta, tb, td = token(UID_A), token(UID_B), token(UID_D)
+    dev_b = "gestionaleB_" + "c" * 32
+    for t, other in ((ta, UID_D), (td, UID_A), (ta, UID_B), (tb, UID_A)):
+        rpc("unblock_user", {"p_user_id": other}, t)
+    s_l, listing = rpc("create_listing", {"p_kind": "social", "p_title": "Annuncio da moderare",
+                                          "p_description": "", "p_lat": 41.9, "p_lon": 12.49}, ta)
+    _, comment = rpc("add_listing_comment", {"p_listing": listing, "p_body": "Commento da moderare"}, ta)
+    rep_l = rpc("report_listing", {"p_listing": listing, "p_reason": "truffa",
+                                   "p_details": "Chiede un anticipo"}, td)[0]
+    rep_c = rpc("report_comment", {"p_comment": comment, "p_reason": "spam"}, td)[0]
+    assert s_l == 200 and rep_l in (200, 204) and rep_c in (200, 204), f"{s_l}, {rep_l}, {rep_c}"
+
+    # GS1 · Solo un amministratore con il PIN attivo entra nel gestionale.
+    user_access = rpc("admin_access", {}, ta)[1]
+    user_queue = rpc("admin_reports", {}, ta)[0]
+    user_search = rpc("admin_users_search", {"p_query": "utente"}, ta)[0]
+    anon_queue = rpc("admin_reports", {}, None)[0]
+    sql(f"insert into public.admin_users (user_id, role) values ('{UID_B}', 'moderator') "
+        "on conflict (user_id) do nothing;")
+    nopin_access = rpc("admin_access", {}, tb)[1]
+    nopin_queue = rpc("admin_reports", {}, tb)[0]
+    pin = rpc("set_pin", {"p_new_pin": "735193"}, tb, dev_b)[0]
+    pin_access = rpc("admin_access", {}, tb, dev_b)[1]
+    other_phone = rpc("admin_reports", {}, tb)[0]
+    direct = [rows(get(f"/rest/v1/{t}?select=*", tb)) for t in ("moderation_notices", "user_moderation")]
+    check("GS1", "Gestionale solo per amministratori con PIN, dal telefono verificato",
+          user_access == {"admin": False} and user_queue >= 400 and user_search >= 400 and anon_queue >= 400
+          and isinstance(nopin_access, dict) and nopin_access.get("pin") is False and nopin_queue >= 400
+          and pin in (200, 204) and isinstance(pin_access, dict) and pin_access.get("pin") is True
+          and other_phone >= 400 and direct == [[], []],
+          f"{user_access}, {user_queue}, {user_search}, {anon_queue}, {nopin_access}, {nopin_queue}, "
+          f"{pin}, {pin_access}, {other_phone}, {direct}")
+
+    # GS2 · Coda: contenuto, motivo e autore; mai chi ha segnalato.
+    s_q, queue = rpc("admin_reports", {}, tb, dev_b)
+    by_id = {r.get("id"): r for r in queue} if isinstance(queue, list) else {}
+    it_l, it_c = by_id.get(listing) or {}, by_id.get(comment) or {}
+    text = json.dumps([it_l, it_c])
+    check("GS2", "Coda delle segnalazioni con contenuto, motivo e autore, senza chi ha segnalato",
+          s_q == 200 and it_l.get("kind") == "listing" and it_l.get("reasons") == ["truffa"]
+          and (it_l.get("preview") or {}).get("title") == "Annuncio da moderare"
+          and (it_l.get("author") or {}).get("id") == UID_A and it_l.get("details") == ["Chiede un anticipo"]
+          and it_c.get("kind") == "comment" and (it_c.get("preview") or {}).get("text") == "Commento da moderare"
+          and UID_D not in text,
+          f"{s_q}, {it_l}, {it_c}")
+
+    # GS3 · Elimina l'annuncio, ignora il commento: la persona riceve l'avviso.
+    user_resolve = rpc("admin_report_resolve", {"p_kind": "listing", "p_id": listing, "p_action": "remove"}, ta)[0]
+    rm = rpc("admin_report_resolve", {"p_kind": "listing", "p_id": listing, "p_action": "remove"}, tb, dev_b)[0]
+    ig = rpc("admin_report_resolve", {"p_kind": "comment", "p_id": comment, "p_action": "ignore"}, tb, dev_b)[0]
+    bad_warn = rpc("admin_report_resolve", {"p_kind": "comment", "p_id": comment, "p_action": "warn",
+                                            "p_message": ""}, tb, dev_b)[0]
+    state = sql(f"select status from public.listings where id = '{listing}';")
+    rep_states = sql("select string_agg(distinct status::text, ',' order by status::text) from public.reports "
+                     f"where target_id in ('{listing}', '{comment}');")
+    after = rpc("admin_reports", {}, tb, dev_b)[1]
+    mine = rpc("my_moderation", {}, ta)[1]
+    kinds = [n.get("kind") for n in (mine or {}).get("notices", [])]
+    check("GS3", "Elimina l'annuncio o ignora la segnalazione; la coda si svuota; avviso alla persona",
+          user_resolve >= 400 and rm in (200, 204) and ig in (200, 204) and bad_warn >= 400
+          and state == "removed" and rep_states == "dismissed,resolved"
+          and isinstance(after, list) and listing not in [r.get("id") for r in after]
+          and kinds == ["removed"] and UID_B not in json.dumps(mine),
+          f"{user_resolve}, {rm}, {ig}, {bad_warn}, {state}, {rep_states}, {kinds}")
+
+    # GS4 · Ban: niente nuovi contenuti, motivo visibile; sblocco.
+    ban_user = rpc("admin_ban_user", {"p_user": UID_D, "p_days": 7, "p_reason": "Prova"}, ta)[0]
+    ban_admin = rpc("admin_ban_user", {"p_user": UID_B, "p_days": 7, "p_reason": "Prova"}, tb, dev_b)[0]
+    bad_days = rpc("admin_ban_user", {"p_user": UID_A, "p_days": 3, "p_reason": "Prova"}, tb, dev_b)[0]
+    ban = rpc("admin_ban_user", {"p_user": UID_A, "p_days": 7, "p_reason": "Annunci ingannevoli"}, tb, dev_b)[0]
+    banned_listing = rpc("create_listing", {"p_kind": "social", "p_title": "Durante il ban",
+                                            "p_description": "", "p_lat": 41.9, "p_lon": 12.49}, ta)[0]
+    _, other = rpc("create_listing", {"p_kind": "social", "p_title": "Annuncio di D",
+                                      "p_description": "", "p_lat": 41.9, "p_lon": 12.49}, td)
+    banned_comment = rpc("add_listing_comment", {"p_listing": other, "p_body": "Durante il ban"}, ta)[0]
+    during = rpc("my_moderation", {}, ta)[1] or {}
+    unban_user = rpc("admin_unban_user", {"p_user": UID_A}, ta)[0]
+    unban = rpc("admin_unban_user", {"p_user": UID_A}, tb, dev_b)[0]
+    s_again, again = rpc("create_listing", {"p_kind": "social", "p_title": "Dopo lo sblocco",
+                                            "p_description": "", "p_lat": 41.9, "p_lon": 12.49}, ta)
+    check("GS4", "Ban di 1, 7, 30 giorni o definitivo: niente annunci o commenti; motivo visibile; sblocco",
+          ban_user >= 400 and ban_admin >= 400 and bad_days >= 400 and ban == 200
+          and banned_listing >= 400 and banned_comment >= 400
+          and during.get("banned_until") is not None and during.get("ban_reason") == "Annunci ingannevoli"
+          and unban_user >= 400 and unban in (200, 204) and s_again == 200,
+          f"{ban_user}, {ban_admin}, {bad_days}, {ban}, {banned_listing}, {banned_comment}, {during}, "
+          f"{unban_user}, {unban}, {s_again}")
+
+    # GS5 · Scheda utente con lo storico; avvisi letti; nessun dato privato.
+    warn = rpc("admin_warn_user", {"p_user": UID_A, "p_message": "Usa titoli chiari, grazie"}, tb, dev_b)[0]
+    s_d, detail = rpc("admin_user_detail", {"p_user": UID_A}, tb, dev_b)
+    actions = [h.get("action") for h in (detail or {}).get("history", [])]
+    uname = sql(f"select username from public.profiles where id = '{UID_A}';")
+    s_s, found = rpc("admin_users_search", {"p_query": uname}, tb, dev_b)
+    before = len((rpc("my_moderation", {}, ta)[1] or {}).get("notices", []))
+    rpc("moderation_notices_read", {}, ta)
+    after_read = (rpc("my_moderation", {}, ta)[1] or {}).get("notices")
+    private_text = json.dumps([detail, found])
+    check("GS5", "Scheda utente con storico delle azioni; avvisi letti; nessun dato privato",
+          warn in (200, 204) and s_d == 200 and actions[:5] == ["warn", "unban", "ban", "ignore", "remove"]
+          and s_s == 200 and isinstance(found, list) and UID_A in [r.get("id") for r in found]
+          and before >= 4 and after_read == [] and "Mario Rossi" not in private_text
+          and "birth" not in private_text and "phone" not in private_text,
+          f"{warn}, {s_d}, {actions}, {s_s}, {found}, {before}, {after_read}")
+
+    rpc("close_my_listing", {"p_id": other}, td)
+    rpc("close_my_listing", {"p_id": again}, ta)
+    sql(f"delete from public.admin_users where user_id = '{UID_B}'; "
+        f"delete from private.trusted_devices where user_id = '{UID_B}'; "
+        f"delete from private.account_security where id = '{UID_B}';")
+
+
 def check_push_phase4() -> None:
     """U · Notifiche (Fase 4, Blocco 5): coda server, silenzia, non disturbare, mai i Mi piace."""
     ta, tb = token(UID_A), token(UID_B)
@@ -3372,6 +3486,7 @@ def main() -> int:
     check_subscriptions_phase6()
     check_promotions_phase6()
     check_reviews_phase6()
+    check_admin_phase7()
     failed = [r for r in results if not r[2]]
     print(f"{'Caso':6} {'Esito':9} Descrizione")
     for case, desc, ok, detail in results:
